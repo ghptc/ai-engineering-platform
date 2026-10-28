@@ -13,6 +13,7 @@ import {
   Statistic,
   Alert,
   Select,
+  Input,
 } from "antd";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -50,6 +51,7 @@ export function Executions() {
           "Implementing",
           "RunningTests",
           "AwaitingHumanApproval",
+          "AwaitingHumanInput",
           "Completed",
           "Failed",
           "Paused",
@@ -104,6 +106,7 @@ export function ExecutionDetail() {
   useLiveEvents(run.data?.projectId);
   const events = useApi<Page<Entry>>("/runs/" + id + "/events?limit=500");
   const artifacts = useApi<Page<Entry>>("/runs/" + id + "/artifacts?limit=500");
+  const [answer, setAnswer] = useState("");
   const [artifact, setArtifact] = useState<Entry>();
   const { message } = App.useApp();
   const client = useQueryClient();
@@ -115,6 +118,22 @@ export function ExecutionDetail() {
     },
     onError: (e) => message.error(e.message),
   });
+  const pendingQuestion = run.data?.humanInputs?.find(
+    (question) => !question.response,
+  );
+  const respond = useMutation({
+    mutationFn: () =>
+      api(
+        `/runs/${id}/clarifications/${pendingQuestion!.id}/response`,
+        "POST",
+        { content: answer },
+      ),
+    onSuccess: () => {
+      setAnswer("");
+      void client.invalidateQueries();
+    },
+    onError: (error) => message.error(error.message),
+  });
   const stage = run.data?.currentStage;
   const runnable =
     stage &&
@@ -124,6 +143,7 @@ export function ExecutionDetail() {
       "Paused",
       "Cancelled",
       "AwaitingHumanApproval",
+      "AwaitingHumanInput",
     ].includes(stage);
   return (
     <QueryState loading={run.isLoading} error={run.error}>
@@ -146,14 +166,28 @@ export function ExecutionDetail() {
                     Resume
                   </Button>
                 )}
-                {stage === "Failed" && (
-                  <Button
-                    type="primary"
-                    onClick={() => control.mutate("retry")}
-                  >
-                    Retry stage
-                  </Button>
-                )}
+                {stage === "Failed" &&
+                  run.data.failureReason?.startsWith(
+                    "Human clarification required:",
+                  ) && (
+                    <Button
+                      type="primary"
+                      onClick={() => control.mutate("clarifications/recover")}
+                    >
+                      Recover clarification
+                    </Button>
+                  )}
+                {stage === "Failed" &&
+                  !run.data.failureReason?.startsWith(
+                    "Human clarification required:",
+                  ) && (
+                    <Button
+                      type="primary"
+                      onClick={() => control.mutate("retry")}
+                    >
+                      Retry stage
+                    </Button>
+                  )}
                 {!["Completed", "Cancelled"].includes(stage || "") && (
                   <Button danger onClick={() => control.mutate("cancel")}>
                     Cancel
@@ -166,10 +200,64 @@ export function ExecutionDetail() {
             <Alert
               type="error"
               showIcon
-              title="Stage failed"
+              title={`Execution failed at ${run.data.resumeStage ?? "unknown stage"}`}
               description={run.data.failureReason}
               style={{ marginBottom: 24 }}
             />
+          )}
+          {stage === "AwaitingHumanInput" && pendingQuestion && (
+            <Card
+              title="Human clarification required"
+              style={{ marginBottom: 24 }}
+            >
+              <Typography.Paragraph>
+                {pendingQuestion.agentRole} paused {pendingQuestion.stage}.
+                Answering resumes this execution from that checkpoint.
+              </Typography.Paragraph>
+              {pendingQuestion.questions.map((question, index) => (
+                <Typography.Paragraph key={index}>
+                  {question}
+                </Typography.Paragraph>
+              ))}
+              <Input.TextArea
+                aria-label="Execution clarification response"
+                value={answer}
+                onChange={(event) => setAnswer(event.target.value)}
+                maxLength={20000}
+                rows={4}
+              />
+              <Button
+                type="primary"
+                loading={respond.isPending}
+                disabled={!answer.trim()}
+                onClick={() => respond.mutate()}
+                style={{ marginTop: 12 }}
+              >
+                Send response and resume
+              </Button>
+            </Card>
+          )}
+          {!!run.data.humanInputs?.length && (
+            <Card title="Clarification history" style={{ marginBottom: 24 }}>
+              {run.data.humanInputs.map((question) => (
+                <div key={question.id}>
+                  <Typography.Paragraph>
+                    <strong>
+                      {question.agentRole} · {question.stage}
+                    </strong>{" "}
+                    · {new Date(question.requestedAt).toLocaleString()}
+                  </Typography.Paragraph>
+                  <Typography.Paragraph>
+                    {question.questions.join("\n")}
+                  </Typography.Paragraph>
+                  <Typography.Paragraph>
+                    {question.response
+                      ? `Owner: ${question.response}`
+                      : "Awaiting owner response"}
+                  </Typography.Paragraph>
+                </div>
+              ))}
+            </Card>
           )}
           <div className="metrics">
             <Card>

@@ -139,6 +139,8 @@ api.MapPost("/projects/{id}/runs", async (string id, HttpContext ctx, PlatformSe
 });
 api.MapGet("/projects/{id}/runs", async (string id, IPlatformStore store, int? offset, int? limit, string? status, CancellationToken ct) => new Page<ExecutionRun>(await store.RunsAsync(id == "all" ? null : id, Offset(offset), Limit(limit), ct, status), Offset(offset), Limit(limit)));
 api.MapGet("/runs/{id}", (string id, PlatformService s, CancellationToken ct) => s.RunAsync(id, ct));
+api.MapPost("/runs/{id}/clarifications/recover", async (string id, PlatformService service, CancellationToken ct) => Results.Ok(await service.RecoverClarificationAsync(id, ct)));
+api.MapPost("/runs/{id}/clarifications/{requestId}/response", async (string id, string requestId, ContentInput input, PlatformService service, CancellationToken ct) => Results.Accepted($"/api/v1/runs/{id}", await service.RespondAsync(id, requestId, input.Content, ct)));
 api.MapGet("/runs/{id}/events", (string id, long? after, int? offset, int? limit, IPlatformStore store, CancellationToken ct) => Records("event", null, id, null, after ?? 0, offset, limit, store, ct));
 api.MapGet("/runs/{id}/artifacts", (string id, int? offset, int? limit, IPlatformStore store, CancellationToken ct) => Records("artifact", null, id, null, 0, offset, limit, store, ct));
 foreach (var action in new[] { "pause", "resume", "cancel", "retry" }) { var captured = action; api.MapPost("/runs/{id}/" + action, (string id, PlatformService service, CancellationToken ct) => service.ControlAsync(id, captured, ct)); }

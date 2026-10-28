@@ -173,3 +173,18 @@ Use `TEST_MONGODB_CONNECTION_STRING` to point integration tests at a separate di
 Live OpenAI and GitHub installation access still require owner credentials. The local Docker backend has real integration tests; these are separate from a live-agent success. See the verification report for what was actually run. Repository sandbox workloads and controlled Git CLI transfers are performed by the included host daemon over a Unix socket, or optionally by an external executor. Pull-request webhooks update tracked state; unsupported event types are retained and marked ignored. Large histories are paged; the UI currently loads bounded pages. Scheduling runs one stage at a time per worker. Each run freezes its project/repository configuration; connect the repository before starting, and start a new run for repository changes. Context building is bounded, and exceptionally large tasks must be split. Artifacts are text/JSON/diff records, not large binary blob storage. No automatic merge or unlimited next-cycle execution is enabled.
 
 Milestone 8 architecture and verification: [ADR 004](backend/docs/architecture/004-local-docker-executor.md), [local runtime verification](backend/docs/milestone-8-verification.md).
+
+### Human clarification and conversation scope
+
+When an executing agent returns `BLOCKED`, the run waits in `AwaitingHumanInput`. Open its execution page, review the question and use **Send response and resume**. The owner response is saved on that run and passed to the agent at the paused checkpoint. Costs, retries, iteration/tool limits and the original wall-clock deadline remain in force. Project conversation replies are advisory and do not resume runs or authorize delivery.
+
+For a pre-fix run failed with “Human clarification required”, use **Recover clarification**, then answer on the same execution page. This verifies the saved blocked task and preserves exhausted retry counts. Other failures retain normal bounded stage retry. No completed stages are restarted and no new execution is created. See [ADR 005](backend/docs/architecture/005-execution-clarification.md) for diagnosis and persistence details.
+
+Additional owner-authenticated APIs:
+
+- `POST /api/v1/runs/{id}/clarifications/{requestId}/response` with `{ "content": "owner response" }` (202).
+- `POST /api/v1/runs/{id}/clarifications/recover` for a verified legacy clarification failure (200).
+
+Both use the existing authentication, same-origin header and mutation rate limits. Repeated identical responses are idempotent; conflicting/stale answers return 409. Requests and answers remain available in `GET /api/v1/runs/{id}` and persisted `HumanInputRequested` / `HumanInputReceived` events.
+
+The [clarification verification report](backend/docs/clarification-verification.md) records the confirmed root cause, regression commands and real OpenAI evidence. An expired legacy run must be cancelled and explicitly replaced; recovery never resets its deadline.

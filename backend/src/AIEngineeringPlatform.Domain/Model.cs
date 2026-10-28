@@ -1,6 +1,6 @@
 namespace AIEngineeringPlatform.Domain;
 
-public enum RunStage { Pending, Analyzing, Planning, PreparingContext, Implementing, GeneratingTests, RunningTests, Validating, Reviewing, AwaitingHumanApproval, PreparingDelivery, Completed, Failed, Paused, Cancelled }
+public enum RunStage { Pending, Analyzing, Planning, PreparingContext, Implementing, GeneratingTests, RunningTests, Validating, Reviewing, AwaitingHumanApproval, PreparingDelivery, Completed, Failed, Paused, Cancelled, AwaitingHumanInput }
 public enum AgentRole { BusinessAnalyst, Architect, BackendEngineer, FrontendEngineer, TestEngineer, QAEngineer, CodeReviewer }
 public enum ArtifactType { Requirements, ArchitectureDecision, DevelopmentContext, CodeDiff, TestReport, ValidationReport, CodeReview, PullRequest, Commit, ExecutionLog, NextContext }
 public sealed record ExecutionPolicy(int MaxIterations = 5, int MaxToolCalls = 30, int MaxDurationMinutes = 60, decimal MaxBudgetUsd = 5, int MaxRetries = 2, bool RequireHumanApprovalForMerge = true, bool ReviewBeforeCommit = true)
@@ -33,6 +33,7 @@ public sealed record Project
         ExecutionPolicy.Validate();
     }
 }
+public sealed record HumanInputRequest(string Id, RunStage Stage, AgentRole AgentRole, string[] Questions, DateTimeOffset RequestedAt, string? Response = null, DateTimeOffset? RespondedAt = null, string? RespondedBy = null);
 public sealed record ExecutionRun
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
@@ -40,6 +41,8 @@ public sealed record ExecutionRun
     public string IdempotencyKey { get; init; } = "";
     public string[] RequirementIds { get; init; } = [];
     public Project? ProjectSnapshot { get; init; }
+    public HumanInputRequest[] HumanInputs { get; init; } = [];
+    public int ContextRevision { get; init; }
     public RunStage CurrentStage { get; init; } = RunStage.Pending;
     public RunStage ResumeStage { get; init; } = RunStage.Pending;
     public string Status => CurrentStage.ToString();
@@ -55,12 +58,12 @@ public sealed record ExecutionRun
     public long Version { get; init; }
     public string? LeaseOwner { get; init; }
     public DateTimeOffset LeaseExpiry { get; init; }
-    public bool IsRunnable => CurrentStage is not (RunStage.Completed or RunStage.Failed or RunStage.Paused or RunStage.Cancelled or RunStage.AwaitingHumanApproval);
+    public bool IsRunnable => CurrentStage is not (RunStage.Completed or RunStage.Failed or RunStage.Paused or RunStage.Cancelled or RunStage.AwaitingHumanApproval or RunStage.AwaitingHumanInput);
     public ExecutionRun Transition(RunStage target, string? reason = null)
     {
-        var control = IsRunnable && target is RunStage.Paused or RunStage.Cancelled or RunStage.Failed;
-        var resume = CurrentStage is RunStage.Paused or RunStage.Failed && target == ResumeStage;
-        var cancel = CurrentStage is RunStage.Paused or RunStage.Failed or RunStage.AwaitingHumanApproval && target == RunStage.Cancelled;
+        var control = IsRunnable && target is RunStage.Paused or RunStage.Cancelled or RunStage.Failed or RunStage.AwaitingHumanInput;
+        var resume = CurrentStage is RunStage.Paused or RunStage.Failed or RunStage.AwaitingHumanInput && target == ResumeStage;
+        var cancel = CurrentStage is RunStage.Paused or RunStage.Failed or RunStage.AwaitingHumanApproval or RunStage.AwaitingHumanInput && target == RunStage.Cancelled;
         var forward = (CurrentStage, target) switch
         {
             (RunStage.Pending, RunStage.Analyzing) or (RunStage.Analyzing, RunStage.Planning) or
@@ -68,11 +71,13 @@ public sealed record ExecutionRun
             (RunStage.Implementing, RunStage.GeneratingTests) or (RunStage.GeneratingTests, RunStage.RunningTests) or
             (RunStage.RunningTests, RunStage.Validating) or (RunStage.Validating, RunStage.Reviewing) or
             (RunStage.Reviewing, RunStage.AwaitingHumanApproval) or (RunStage.AwaitingHumanApproval, RunStage.PreparingDelivery) or
-            (RunStage.PreparingDelivery, RunStage.Completed) => true,
+            (RunStage.PreparingDelivery, RunStage.Completed) or (RunStage.Failed, RunStage.AwaitingHumanInput) => true,
             (RunStage.RunningTests or RunStage.Validating or RunStage.Reviewing or RunStage.PreparingDelivery, RunStage.Implementing) => true,
             _ => false
         };
         if (!control && !resume && !cancel && !forward) throw new InvalidOperationException($"Transition {CurrentStage} → {target} is not permitted.");
+        if (CurrentStage == RunStage.AwaitingHumanInput && resume && HumanInputs.LastOrDefault()?.Response is null) throw new InvalidOperationException("Answer the pending clarification before resuming.");
+        if (target == RunStage.AwaitingHumanInput && (HumanInputs.LastOrDefault() is not { Response: null } question || question.Stage != (CurrentStage == RunStage.Failed ? ResumeStage : CurrentStage))) throw new InvalidOperationException("A pending clarification must match the execution checkpoint.");
         var correction = target == RunStage.Implementing && CurrentStage is RunStage.RunningTests or RunStage.Validating or RunStage.Reviewing or RunStage.PreparingDelivery;
         if (correction && Iteration >= Policy.MaxIterations) throw new InvalidOperationException("Maximum development iterations reached.");
         if (resume && CurrentStage == RunStage.Failed && RetryCount >= Policy.MaxRetries) throw new InvalidOperationException("Maximum retries reached.");

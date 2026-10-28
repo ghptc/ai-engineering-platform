@@ -18,7 +18,7 @@ export function Status({ value }: { value: string }) {
     ? "green"
     : /Failed|Rejected|REQUEST_CHANGES|Cancelled/.test(value)
       ? "red"
-      : /Paused|Approval|Pending/.test(value)
+      : /Paused|Approval|Pending|AwaitingHumanInput/.test(value)
         ? "gold"
         : "blue";
   return <Tag color={color}>{value.replace(/([a-z])([A-Z])/g, "$1 $2")}</Tag>;

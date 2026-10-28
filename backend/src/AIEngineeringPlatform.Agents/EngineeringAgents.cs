@@ -8,12 +8,19 @@ public sealed class EngineeringAgent(AgentRole role, ILanguageModelProvider prov
     public async Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct)
     {
         if (!context.Definition.Enabled || context.Definition.Role != Role) throw new InvalidOperationException("Agent is disabled or role does not match.");
-        var result = await provider.ExecuteAsync(context, ct);
+        ModelExecutionResult result;
+        try { result = await provider.ExecuteAsync(context, ct); }
+        catch (Exception exception) when (exception is System.Text.Json.JsonException or KeyNotFoundException)
+        {
+            throw new InvalidOperationException($"Agent {Role} returned malformed structured output. Check the configured model/schema and retry this stage with corrected context.", exception);
+        }
         if (string.IsNullOrWhiteSpace(result.Output.Summary) || result.Output.Decision is not ("CONTINUE" or "APPROVE" or "COMMENT" or "REQUEST_CHANGES" or "BLOCKED")) throw new InvalidOperationException("Invalid structured agent result.");
+        if (result.Output.ToolCalls is null || result.Output.AcceptanceCriteria is null || result.Output.Evidence is null || result.Output.Assumptions is null) throw new InvalidOperationException("Structured agent result is missing required arrays.");
         if (result.Output.ToolCalls.Any(x => !context.Definition.AllowedTools.Contains(x.Name))) throw new InvalidOperationException("Agent requested an unauthorized tool.");
         if (result.Output.ToolCalls.Length == 0 && result.Output.Decision != "BLOCKED")
         {
             if (Role == AgentRole.BusinessAnalyst && result.Output.Requirements is not { Length: > 0 }) throw new InvalidOperationException("Business analysis requires a structured backlog.");
+            if (Role == AgentRole.BusinessAnalyst && result.Output.Requirements!.Any(x => string.IsNullOrWhiteSpace(x.Title) || string.IsNullOrWhiteSpace(x.Description) || x.AcceptanceCriteria is not { Length: > 0 } || x.AcceptanceCriteria.Any(string.IsNullOrWhiteSpace) || x.Priority is < 1 or > 5)) throw new InvalidOperationException("Business analysis contains invalid requirements or acceptance criteria.");
             if (Role == AgentRole.Architect && result.Output.ArchitectureDecisions is not { Length: > 0 }) throw new InvalidOperationException("Architecture requires structured decisions.");
             if (Role == AgentRole.QAEngineer && result.Output.Checks is not { Length: > 0 }) throw new InvalidOperationException("QA requires structured checks and evidence.");
         }

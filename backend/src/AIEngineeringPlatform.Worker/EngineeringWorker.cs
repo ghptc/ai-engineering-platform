@@ -46,7 +46,7 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                     var current = await store.GetRunAsync(run.Id, stoppingToken);
                     if (current is { IsRunnable: true } && current.LeaseOwner == owner)
                     {
-                        var safeReason = exception is ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : "Stage failed; inspect operational diagnostics using the run identifier.";
+                        var safeReason = exception is ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : $"Execution stage {current.CurrentStage} failed ({exception.GetType().Name}). Inspect diagnostics for run {current.Id}.";
                         var failed = current.Transition(RunStage.Failed, safeReason);
                         if (await store.SaveRunAsync(failed, current.Version, owner, stoppingToken) && (exception is HttpRequestException or TimeoutException or TaskCanceledException) && current.RetryCount < current.Policy.MaxRetries)
                         {

@@ -85,6 +85,11 @@ public sealed class MongoPlatformStore : IPlatformStore
             replacement.Outbox.Add(TransitionEvent(run with { Version = expectedVersion + 1 }, "StageChanged", previous.Stage + " → " + run.Status));
             if (run.CurrentStage is RunStage.Completed or RunStage.Failed) replacement.Outbox.Add(TransitionEvent(run with { Version = expectedVersion + 1 }, run.CurrentStage == RunStage.Completed ? "RunCompleted" : "RunFailed", run.FailureReason ?? run.Status));
         }
+        if (previous.Stage != run.Status && run.CurrentStage == RunStage.AwaitingHumanInput)
+            replacement.Outbox.Add(TransitionEvent(run with { Version = expectedVersion + 1 }, "HumanInputRequested", JsonSerializer.Serialize(run.HumanInputs.Last())));
+        var oldRun = DecodeRun(previous);
+        if (run.ContextRevision > oldRun.ContextRevision)
+            replacement.Outbox.Add(TransitionEvent(run with { Version = expectedVersion + 1 }, "HumanInputReceived", JsonSerializer.Serialize(run.HumanInputs.Last())));
         return (await runs.ReplaceOneAsync(filter, replacement, cancellationToken: ct)).MatchedCount == 1;
     }
     public async Task<bool> RenewLeaseAsync(string id, string owner, CancellationToken ct) => (await runs.UpdateOneAsync(x => x.Id == id && x.Owner == owner && x.LeaseExpiry > DateTime.UtcNow, Builders<RunDocument>.Update.Set(x => x.LeaseExpiry, DateTime.UtcNow.AddMinutes(2)), cancellationToken: ct)).MatchedCount == 1;

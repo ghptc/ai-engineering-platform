@@ -7,8 +7,14 @@ namespace AIEngineeringPlatform.Orchestration;
 
 public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService service, ContextBuilder contextBuilder, IEnumerable<IEngineeringAgent> agents, IEnumerable<IAgentTool> tools, IExecutionSandbox sandbox)
 {
+    private sealed class HumanInputPendingException : Exception { }
     private static string Key(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     public async Task ProcessAsync(ExecutionRun run, string owner, CancellationToken ct)
+    {
+        try { await ProcessCoreAsync(run, owner, ct); }
+        catch (HumanInputPendingException) { /* Durable checkpoint; worker releases its lease. */ }
+    }
+    private async Task ProcessCoreAsync(ExecutionRun run, string owner, CancellationToken ct)
     {
         run.CheckLimits(DateTimeOffset.UtcNow);
         var project = run.ProjectSnapshot ?? await service.ProjectAsync(run.ProjectId, ct);
@@ -135,7 +141,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
         async Task UpsertRecordAsync(RecordEntry record) { if (await store.GetRecordAsync(record.Kind, record.Id, ct) == null) await store.AppendAsync(record, ct); }
         async Task ArtifactAsync(string suffix, ArtifactType type, string content)
         {
-            var id = Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/artifact/{suffix}");
+            var id = Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/context-{run.ContextRevision}/retry-{run.RetryCount}/artifact/{suffix}");
             if (await store.GetRecordAsync("artifact", id, ct) != null) return;
             await store.AppendAsync(new() { Id = id, Kind = "artifact", ProjectId = project.Id, RunId = run.Id, Name = type.ToString(), Content = content, Metadata = new() { ["sha256"] = Key(content), ["stage"] = run.Status, ["format"] = suffix == "actual-diff" ? "diff" : "json" } }, ct);
             await service.EventAsync(run, "ArtifactCreated", JsonSerializer.Serialize(new { id, type = type.ToString() }), ct);
@@ -182,7 +188,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             {
                 await CheckOwnershipAsync();
                 if (context.Length > 240000) throw new InvalidOperationException("Agent context exceeds its bound; split the task or inspect narrower repository content.");
-                var taskId = Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/{role}/{turn}");
+                var taskId = Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/context-{run.ContextRevision}/retry-{run.RetryCount}/{role}/{turn}");
                 var saved = await store.GetRecordAsync("task", taskId, ct);
                 ModelExecutionResult response;
                 if (saved != null) response = JsonSerializer.Deserialize<ModelExecutionResult>(saved.Content)!;
@@ -208,7 +214,16 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                     await store.AppendAsync(new() { Id = messageId, Kind = "message", ProjectId = project.Id, RunId = run.Id, ConversationId = conversationId, Name = role.ToString(), Content = JsonSerializer.Serialize(result), Metadata = new() { ["responseId"] = response.ResponseId } }, ct);
                     await service.EventAsync(run, "AgentMessageCreated", JsonSerializer.Serialize(new { messageId, role = role.ToString() }), ct);
                 }
-                if (result.Decision == "BLOCKED") throw new InvalidOperationException("Human clarification required: " + result.Summary);
+                if (result.Decision == "BLOCKED")
+                {
+                    if (run.HumanInputs.Length >= 10) throw new InvalidOperationException("Clarification request limit reached (10). Cancel and split the task.");
+                    await ArtifactAsync(role + "-clarification", artifactType, JsonSerializer.Serialize(result));
+                    var questions = result.OpenQuestions is { Length: > 0 } ? result.OpenQuestions : [result.Summary];
+                    var question = new HumanInputRequest(Key(taskId + "/clarification"), run.CurrentStage, role, questions, DateTimeOffset.UtcNow);
+                    var waiting = (run with { HumanInputs = [.. run.HumanInputs, question] }).Transition(RunStage.AwaitingHumanInput);
+                    if (!await store.SaveRunAsync(waiting, run.Version, owner, ct)) throw new ConcurrencyException();
+                    throw new HumanInputPendingException();
+                }
                 if (result.ToolCalls.Length == 0) { await ArtifactAsync(role.ToString(), artifactType, JsonSerializer.Serialize(result)); return result; }
                 for (var i = 0; i < result.ToolCalls.Length; i++)
                 {

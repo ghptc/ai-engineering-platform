@@ -25,7 +25,19 @@ export interface Project {
     defaultBranch: string;
   };
 }
+export interface HumanInputRequest {
+  id: string;
+  stage: string;
+  agentRole: string;
+  questions: string[];
+  requestedAt: string;
+  response?: string;
+  respondedAt?: string;
+  respondedBy?: string;
+}
 export interface Run {
+  humanInputs?: HumanInputRequest[];
+  contextRevision?: number;
   policy: Policy;
   id: string;
   projectId: string;

@@ -7,7 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { App, ConfigProvider } from "antd";
 import { Projects } from "../src/features/projects/Projects";
 import { Approvals } from "../src/features/reviews/Approvals";
@@ -15,7 +15,7 @@ import { ConversationPanel } from "../src/features/conversations/Conversations";
 import { ExecutionDetail } from "../src/features/executions/Executions";
 import { api, ApiError } from "../src/services/api";
 vi.mock("../src/hooks/useLiveEvents", () => ({ useLiveEvents: () => {} }));
-function wrapper(element: React.ReactNode) {
+function wrapper(element: React.ReactNode, path = "/") {
   return render(
     <QueryClientProvider
       client={
@@ -24,7 +24,7 @@ function wrapper(element: React.ReactNode) {
         })
       }
     >
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>
         <ConfigProvider wave={{ disabled: true }}>
           <App>{element}</App>
         </ConfigProvider>
@@ -201,5 +201,78 @@ describe("execution boundaries", () => {
     expect(screen.getByText("/ $2")).toBeInTheDocument();
     expect(screen.getByText("7 / 25")).toBeInTheDocument();
     expect(screen.getByText("15 minutes")).toBeInTheDocument();
+  });
+});
+
+describe("execution clarification", () => {
+  it("answers only the displayed execution question and offers no generic resume", async () => {
+    vi.mocked(fetch).mockImplementation((url, options) =>
+      respond(
+        options?.method === "POST"
+          ? {}
+          : String(url).includes("/events") ||
+              String(url).includes("/artifacts")
+            ? { items: [] }
+            : {
+                id: "run",
+                projectId: "project",
+                currentStage: "AwaitingHumanInput",
+                resumeStage: "Analyzing",
+                iteration: 1,
+                retryCount: 0,
+                cost: 0.01,
+                tokenUsage: 100,
+                toolCalls: 0,
+                humanInputs: [
+                  {
+                    id: "question",
+                    stage: "Analyzing",
+                    agentRole: "BusinessAnalyst",
+                    questions: ["Do you authorize this scope?"],
+                    requestedAt: new Date().toISOString(),
+                  },
+                ],
+              },
+      ),
+    );
+    wrapper(
+      <Routes>
+        <Route path="/executions/:id" element={<ExecutionDetail />} />
+      </Routes>,
+      "/executions/run",
+    );
+    expect(
+      await screen.findByText("Human clarification required"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Resume$/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Pause$/ }),
+    ).not.toBeInTheDocument();
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Execution clarification response" }),
+      { target: { value: "I authorize this scope." } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send response and resume" }),
+    );
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/v1/runs/run/clarifications/question/response",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ content: "I authorize this scope." }),
+        }),
+      ),
+    );
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.some(
+          ([url, options]) =>
+            options?.method === "POST" && String(url).includes("/projects/"),
+        ),
+    ).toBe(false);
   });
 });

@@ -4,6 +4,19 @@ namespace AIEngineeringPlatform.Domain.Tests;
 
 public class ExecutionTests
 {
+    [Fact]
+    public void ClarificationPreservesCheckpointAndDoesNotConsumeRetryOrIteration()
+    {
+        var request = new HumanInputRequest("question", RunStage.Planning, AgentRole.Architect, ["Confirm?"], DateTimeOffset.UtcNow);
+        var waiting = new ExecutionRun { CurrentStage = RunStage.Planning, HumanInputs = [request], Cost = 0.2m }.Transition(RunStage.AwaitingHumanInput);
+        Assert.False(waiting.IsRunnable); Assert.Equal(RunStage.Planning, waiting.ResumeStage);
+        Assert.Throws<InvalidOperationException>(() => waiting.Transition(RunStage.Planning));
+        var resumed = (waiting with { HumanInputs = [request with { Response = "Confirmed" }] }).Transition(waiting.ResumeStage);
+        Assert.Equal(0, resumed.RetryCount); Assert.Equal(1, resumed.Iteration); Assert.Equal(0.2m, resumed.Cost);
+        Assert.Equal(waiting.StartedAt, resumed.StartedAt);
+        Assert.Equal(RunStage.Cancelled, waiting.Transition(RunStage.Cancelled).CurrentStage);
+        Assert.Throws<InvalidOperationException>(() => (resumed with { Cost = 5 }).CheckLimits(DateTimeOffset.UtcNow));
+    }
     [Fact] public void CannotSkipQualityGates() => Assert.Throws<InvalidOperationException>(() => new ExecutionRun().Transition(RunStage.Completed));
     [Fact]
     public void PauseResumesCorrectStage()

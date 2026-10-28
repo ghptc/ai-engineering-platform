@@ -201,7 +201,8 @@ export function ConversationPanel({
               Save as project context
             </Button>
             <Typography.Text type="secondary">
-              Saved context is processed when an execution starts.
+              Conversation-only advice does not advance an execution. Answer
+              pending clarification on its execution page.
             </Typography.Text>
           </Space>
         </div>

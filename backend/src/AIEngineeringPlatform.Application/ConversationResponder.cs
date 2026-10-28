@@ -32,7 +32,7 @@ public sealed class ConversationResponder(IPlatformStore store, PlatformService 
         var result = await provider.ExecuteAsync(new(project, run, context, definition), ct);
         if (result.Output.ToolCalls.Length > 0 || string.IsNullOrWhiteSpace(result.Output.Summary)) throw new InvalidOperationException("Conversation response requested unavailable tools or has no message.");
         await store.AppendAsync(new() { Id = "usage-" + responseId, Kind = "usage", ProjectId = project.Id, ConversationId = conversationId, Name = definition.Model, Content = JsonSerializer.Serialize(result) }, ct);
-        var entry = new RecordEntry { Id = responseId, Kind = "message", ProjectId = project.Id, ConversationId = conversationId, Name = "BusinessAnalyst", Content = JsonSerializer.Serialize(result.Output), Metadata = new() { ["responseId"] = result.ResponseId, ["inReplyTo"] = last.Id } };
+        var entry = new RecordEntry { Id = responseId, Kind = "message", ProjectId = project.Id, ConversationId = conversationId, Name = "BusinessAnalyst", Content = JsonSerializer.Serialize(result.Output), Metadata = new() { ["responseId"] = result.ResponseId, ["inReplyTo"] = last.Id, ["scope"] = "ConversationOnly" } };
         await store.AppendAsync(entry, ct);
         await publisher.PublishAsync(entry, ct);
         return entry;

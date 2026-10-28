@@ -37,6 +37,39 @@ public sealed class PlatformService(IPlatformStore store, IExecutionPublisher pu
         // The persistence boundary atomically commits the transition event to its outbox.
         return await RunAsync(id, ct);
     }
+    public async Task<ExecutionRun> RecoverClarificationAsync(string id, CancellationToken ct)
+    {
+        var run = await RunAsync(id, ct);
+        if (run.CurrentStage == RunStage.AwaitingHumanInput) return run;
+        if (run.CurrentStage != RunStage.Failed || run.FailureReason?.StartsWith("Human clarification required:", StringComparison.Ordinal) != true) throw new InvalidOperationException("Only a legacy human-clarification failure can be recovered as input.");
+        var tasks = await store.RecordsAsync("task", run.ProjectId, run.Id, null, 0, 0, 1000, ct);
+        var task = tasks.LastOrDefault() ?? throw new InvalidOperationException("No persisted agent task supports this clarification.");
+        var result = JsonSerializer.Deserialize<ModelExecutionResult>(task.Content)?.Output ?? throw new InvalidOperationException("Clarification task output is invalid.");
+        if (result.Decision != "BLOCKED" || !Enum.TryParse<AgentRole>(task.Name, out var role) || string.IsNullOrWhiteSpace(result.Summary)) throw new InvalidOperationException("The last persisted task is not a blocked agent result.");
+        var stage = role switch { AgentRole.BusinessAnalyst => RunStage.Analyzing, AgentRole.Architect => RunStage.Planning, AgentRole.BackendEngineer or AgentRole.FrontendEngineer => RunStage.Implementing, AgentRole.TestEngineer => RunStage.GeneratingTests, AgentRole.QAEngineer => RunStage.Validating, AgentRole.CodeReviewer => RunStage.Reviewing, _ => throw new InvalidOperationException("Unknown agent checkpoint.") };
+        if (run.ResumeStage != stage) throw new InvalidOperationException("Blocked task does not match the failed stage.");
+        var request = new HumanInputRequest("recovered-" + task.Id, stage, role, result.OpenQuestions is { Length: > 0 } ? result.OpenQuestions : [result.Summary], DateTimeOffset.UtcNow);
+        var waiting = (run with { HumanInputs = [.. run.HumanInputs, request] }).Transition(RunStage.AwaitingHumanInput);
+        if (!await store.SaveRunAsync(waiting, run.Version, null, ct)) throw new ConcurrencyException();
+        return await RunAsync(id, ct);
+    }
+    public async Task<ExecutionRun> RespondAsync(string id, string requestId, string content, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(content) || content.Length > 20000) throw new ArgumentException("Clarification must contain 1–20000 characters.");
+        var run = await RunAsync(id, ct);
+        var question = run.HumanInputs.SingleOrDefault(x => x.Id == requestId) ?? throw new KeyNotFoundException("Clarification request not found in this execution.");
+        if (question.Response != null)
+        {
+            if (question.Response == content) return run; // Safe replay; never create another execution.
+            throw new ConcurrencyException();
+        }
+        if (run.CurrentStage != RunStage.AwaitingHumanInput || run.HumanInputs.Last().Id != requestId) throw new InvalidOperationException("Execution is not awaiting this clarification.");
+        run.CheckLimits(DateTimeOffset.UtcNow);
+        var answered = question with { Response = content, RespondedAt = DateTimeOffset.UtcNow, RespondedBy = "Owner" };
+        var next = (run with { HumanInputs = run.HumanInputs.Select(x => x.Id == requestId ? answered : x).ToArray(), ContextRevision = run.ContextRevision + 1 }).Transition(run.ResumeStage);
+        if (!await store.SaveRunAsync(next, run.Version, null, ct)) throw new ConcurrencyException();
+        return await RunAsync(id, ct);
+    }
     public async Task<RecordEntry> EventAsync(ExecutionRun run, string name, string content, CancellationToken ct)
     {
         var entry = new RecordEntry { Kind = "event", ProjectId = run.ProjectId, RunId = run.Id, Name = name, Content = content };
@@ -72,7 +105,7 @@ public sealed class ContextBuilder(IPlatformStore store)
         memory = memory.TakeLast(30).ToArray();
         var requirements = await store.RecordsAsync("requirement", project.Id, null, null, 0, 0, 100, ct);
         var messages = await store.RecordsAsync("message", project.Id, null, null, 0, 0, 1000, ct);
-        messages = messages.TakeLast(20).ToArray();
+        messages = messages.Where(x => x.Name == "Client" && x.RunId == null).TakeLast(20).ToArray();
         var superseded = requirements.Select(x => x.Metadata.GetValueOrDefault("supersedes")).Where(x => x != null).ToHashSet();
         requirements = requirements.Where(x => !superseded.Contains(x.Id)).ToArray();
         var context = JsonSerializer.Serialize(new
@@ -83,6 +116,8 @@ public sealed class ContextBuilder(IPlatformStore store)
             project.TechnologyStack,
             project.RepositoryConnection,
             run.Iteration,
+            run.ContextRevision,
+            ExecutionClarifications = run.HumanInputs,
             SelectedRequirementIds = run.RequirementIds,
             Requirements = requirements,
             Memory = memory,
