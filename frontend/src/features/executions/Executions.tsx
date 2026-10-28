@@ -182,6 +182,11 @@ export function ExecutionDetail() {
               <Statistic
                 title="Development iteration"
                 value={run.data.iteration}
+                suffix={
+                  run.data.policy
+                    ? `/ ${run.data.policy.maxIterations}`
+                    : undefined
+                }
               />
             </Card>
             <Card>
@@ -192,10 +197,37 @@ export function ExecutionDetail() {
                 title="Estimated cost"
                 prefix="$"
                 value={run.data.cost}
+                suffix={
+                  run.data.policy
+                    ? `/ $${run.data.policy.maxBudgetUsd}`
+                    : undefined
+                }
                 precision={4}
               />
             </Card>
           </div>
+          <Card size="small" style={{ marginBottom: 24 }}>
+            <Descriptions
+              size="small"
+              items={[
+                {
+                  key: "tools",
+                  label: "Tool calls",
+                  children: `${run.data.toolCalls} / ${run.data.policy?.maxToolCalls ?? "—"}`,
+                },
+                {
+                  key: "time",
+                  label: "Time limit",
+                  children: `${run.data.policy?.maxDurationMinutes ?? "—"} minutes`,
+                },
+                {
+                  key: "retry",
+                  label: "Stage retries",
+                  children: `${run.data.retryCount} / ${run.data.policy?.maxRetries ?? "—"}`,
+                },
+              ]}
+            />
+          </Card>
           <Tabs
             items={[
               {

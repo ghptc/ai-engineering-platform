@@ -43,4 +43,11 @@ public class UseCaseTests
         var text = await new ContextBuilder(store).BuildAsync(new Project { Name = "Project", OriginalContext = "Acceptance: save data" }, new ExecutionRun(), default);
         Assert.Contains("Acceptance: save data", text); Assert.Contains("verified tool evidence", text);
     }
+    [Fact]
+    public void PublishedReviewContainsActionableFindingsWithoutInventedInlinePositions()
+    {
+        var review = new AgentResult("Fix the failing contract.", "REQUEST_CHANGES", [], ["tests-1"], [], [], "", Findings: [new("High", "Feature.cs", 999, "Missing validation", "Validate the request before writing.")]);
+        var markdown = ReviewMarkdown.Format(review);
+        Assert.Contains("High", markdown); Assert.Contains("Feature.cs", markdown); Assert.Contains("Validate the request", markdown); Assert.DoesNotContain("999", markdown);
+    }
 }

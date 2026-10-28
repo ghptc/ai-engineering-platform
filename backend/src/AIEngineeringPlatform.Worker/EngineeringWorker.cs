@@ -20,6 +20,14 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                 {
                     await store.InitializeAsync(stoppingToken);
                     if ((await store.AgentsAsync(stoppingToken)).Count == 0) foreach (var definition in AgentCatalog.Defaults(configuration["OPENAI_DEFAULT_MODEL"] ?? "")) await store.SaveAgentAsync(definition, stoppingToken);
+                    foreach (var definition in await store.AgentsAsync(stoppingToken))
+                    {
+                        if (definition.Role is not (AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.TestEngineer)) continue;
+                        var tools = definition.AllowedTools.Union(new[] { "RunCommand", "RunTests" }).ToArray();
+                        if (tools.Length == definition.AllowedTools.Length) continue;
+                        await store.AppendAsync(new() { Kind = "instructionVersion", Name = definition.Id, Content = System.Text.Json.JsonSerializer.Serialize(definition), Metadata = new() { ["migration"] = "milestone-8-isolated-profiles" } }, stoppingToken);
+                        await store.SaveAgentAsync(definition with { AllowedTools = tools, InstructionVersion = definition.InstructionVersion + 1 }, stoppingToken);
+                    }
                     initialized = true;
                 }
                 foreach (var entry in await store.FlushOutboxAsync(stoppingToken)) await publisher.PublishAsync(entry, stoppingToken);
@@ -40,7 +48,8 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                     {
                         var safeReason = exception is ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : "Stage failed; inspect operational diagnostics using the run identifier.";
                         var failed = current.Transition(RunStage.Failed, safeReason);
-                        if (await store.SaveRunAsync(failed, current.Version, owner, stoppingToken) && (exception is HttpRequestException or TimeoutException or TaskCanceledException) && current.RetryCount < current.Policy.MaxRetries) {
+                        if (await store.SaveRunAsync(failed, current.Version, owner, stoppingToken) && (exception is HttpRequestException or TimeoutException or TaskCanceledException) && current.RetryCount < current.Policy.MaxRetries)
+                        {
                             await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, current.RetryCount + 1)), stoppingToken);
                             var retryable = await store.GetRunAsync(run.Id, stoppingToken);
                             if (retryable?.CurrentStage == RunStage.Failed && retryable.LeaseOwner == owner && retryable.Version == current.Version + 1) await store.SaveRunAsync(retryable.Transition(retryable.ResumeStage), retryable.Version, owner, stoppingToken);

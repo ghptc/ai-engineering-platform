@@ -28,13 +28,23 @@ export function Settings() {
       />
       <div className="metrics">
         {[
-          ["OpenAI", status.data?.openAIConfigured],
-          ["GitHub App", status.data?.githubConfigured],
-          ["Secure sandbox", status.data?.sandboxConfigured],
-        ].map(([label, ready]) => (
-          <Card key={String(label)} title={label}>
-            <Tag color={ready ? "green" : "gold"}>
-              {ready ? "Configured" : "Configuration required"}
+          { label: "OpenAI", configured: status.data?.openAIConfigured },
+          { label: "GitHub App", configured: status.data?.githubConfigured },
+          {
+            label: `Sandbox (${status.data?.sandboxProvider ?? "Remote"})`,
+            configured: status.data?.sandboxConfigured,
+            ready: status.data?.sandboxReady,
+          },
+        ].map(({ label, configured, ready }) => (
+          <Card key={label} title={label}>
+            <Tag color={configured && ready !== false ? "green" : "gold"}>
+              {ready === true
+                ? "Ready"
+                : ready === false && configured
+                  ? "Configured; executor unavailable"
+                  : configured
+                    ? "Configured"
+                    : "Configuration required"}
             </Tag>
           </Card>
         ))}

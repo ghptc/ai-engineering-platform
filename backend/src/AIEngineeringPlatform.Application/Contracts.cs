@@ -43,9 +43,10 @@ public sealed record ModelExecutionResult(AgentResult Output, string ResponseId,
 public interface ILanguageModelProvider { Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct); }
 public interface IEngineeringAgent { AgentRole Role { get; } Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct); }
 public sealed record ToolResult(bool Success, string Output, string? EvidenceId = null, string? WorkspaceRevision = null);
+public sealed class SandboxExecutionLimits { public int TimeoutSeconds { get; set; } = 120; public int CpuLimit { get; set; } = 1; public int MemoryMb { get; set; } = 1024; public int OutputLimitBytes { get; set; } = 100000; }
 public sealed record SandboxRequest(string OperationId, string RunId, RepositoryConnection Repository, string Operation, JsonElement Arguments, int TimeoutSeconds = 60, int CpuLimit = 1, int MemoryMb = 512, int OutputLimitBytes = 100000, bool NetworkEnabled = false, long Fence = 0, string? LeaseOwner = null);
 public sealed record SandboxResponse(bool Success, string Output, string EvidenceId, int? ExitCode, string WorkspaceId, string? DiffHash = null);
-public interface IExecutionSandbox { bool Configured { get; } Task<SandboxResponse> ExecuteAsync(SandboxRequest request, CancellationToken ct); }
+public interface IExecutionSandbox { bool Configured { get; } Task<bool> IsReadyAsync(CancellationToken ct) => Task.FromResult(Configured); Task<SandboxResponse> ExecuteAsync(SandboxRequest request, CancellationToken ct); }
 public interface IAgentTool { string Name { get; } Task<ToolResult> ExecuteAsync(AgentContext context, JsonElement arguments, string operationId, CancellationToken ct); }
 public interface ISourceControl
 {

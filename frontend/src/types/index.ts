@@ -26,6 +26,7 @@ export interface Project {
   };
 }
 export interface Run {
+  policy: Policy;
   id: string;
   projectId: string;
   currentStage: string;
@@ -75,6 +76,8 @@ export interface Page<T> {
 }
 export interface Settings {
   sandboxConfigured: boolean;
+  sandboxReady?: boolean;
+  sandboxProvider?: string;
   githubConfigured: boolean;
   openAIConfigured: boolean;
   authenticationMode: string;

@@ -61,7 +61,16 @@ public sealed class PlatformTests : IClassFixture<PlatformFactory>
         var approvals = await client.GetFromJsonAsync<Page<RecordEntry>>("/api/v1/approvals", Json); var approval = Assert.Single(approvals!.Items, x => x.RunId == run.Id);
         var decision = await client.PostAsJsonAsync($"/api/v1/approvals/{approval.Id}/decision", new { approve = true, reason = "Verified deterministic fixture" }); Assert.Equal(HttpStatusCode.Accepted, decision.StatusCode);
         await WaitAsync(client, run.Id, RunStage.Completed);
-        var events = await client.GetFromJsonAsync<Page<RecordEntry>>($"/api/v1/runs/{run.Id}/events?limit=500", Json); Assert.Contains(events!.Items, x => x.Name == "RunCompleted"); Assert.True(events.Items.Select(x => x.Sequence).SequenceEqual(events.Items.Select(x => x.Sequence).Order()));
+        // The transition and its outbox are atomic; delivery to the replay feed is asynchronous.
+        Page<RecordEntry>? events = null;
+        using var eventDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        do
+        {
+            events = await client.GetFromJsonAsync<Page<RecordEntry>>($"/api/v1/runs/{run.Id}/events?limit=500", Json, eventDeadline.Token);
+            if (events!.Items.Any(x => x.Name == "RunCompleted")) break;
+            await Task.Delay(50, eventDeadline.Token);
+        } while (true);
+        Assert.Contains(events.Items, x => x.Name == "RunCompleted"); Assert.True(events.Items.Select(x => x.Sequence).SequenceEqual(events.Items.Select(x => x.Sequence).Order()));
     }
     [Fact]
     public async Task MongoLeasesFenceStaleWorkersAndEnforceIdempotency()
@@ -90,7 +99,9 @@ public sealed class PlatformTests : IClassFixture<PlatformFactory>
     [InlineData("../secrets")]
     [InlineData("/etc/passwd")]
     [InlineData(".git/config")]
-    [InlineData("nested/../../escape")][InlineData(".env.production")][InlineData("secrets/app.pem")]
+    [InlineData("nested/../../escape")]
+    [InlineData(".env.production")]
+    [InlineData("secrets/app.pem")]
     public async Task ToolRejectsTraversal(string path)
     {
         var tool = new EngineeringTool("ReadFile", new DeterministicSandbox(), new DeterministicSourceControl(), factory.Services.GetRequiredService<IPlatformStore>());

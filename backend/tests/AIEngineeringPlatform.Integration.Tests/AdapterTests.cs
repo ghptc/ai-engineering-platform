@@ -59,13 +59,15 @@ public class AdapterTests
             return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(response), Encoding.UTF8, "application/json") };
         }
     }
-    [Fact] public async Task ArtifactToolDoesNotCollideWithItsInvocationCheckpoint() {
+    [Fact]
+    public async Task ArtifactToolDoesNotCollideWithItsInvocationCheckpoint()
+    {
         var store = NSubstitute.Substitute.For<IPlatformStore>();
-        var tool = new EngineeringTool("SaveArtifact",new DeterministicSandbox(),new DeterministicSourceControl(),store);
-        var definition = new AgentDefinition("a",AgentRole.Architect,"a","","test","",[],["SaveArtifact"]);
-        var result = await tool.ExecuteAsync(new(new Project(),new ExecutionRun(),"",definition),JsonSerializer.SerializeToElement(new { content = "Verified design" }),"operation-id",default);
-        Assert.Equal("artifact-operation-id",result.EvidenceId);
-        await store.Received().AppendAsync(NSubstitute.Arg.Is<RecordEntry>(entry => entry.Id == result.EvidenceId && entry.Kind == "artifact"),default);
+        var tool = new EngineeringTool("SaveArtifact", new DeterministicSandbox(), new DeterministicSourceControl(), store);
+        var definition = new AgentDefinition("a", AgentRole.Architect, "a", "", "test", "", [], ["SaveArtifact"]);
+        var result = await tool.ExecuteAsync(new(new Project(), new ExecutionRun(), "", definition), JsonSerializer.SerializeToElement(new { content = "Verified design" }), "operation-id", default);
+        Assert.Equal("artifact-operation-id", result.EvidenceId);
+        await store.Received().AppendAsync(NSubstitute.Arg.Is<RecordEntry>(entry => entry.Id == result.EvidenceId && entry.Kind == "artifact"), default);
     }
     private sealed class CaptureHandler : HttpMessageHandler
     {

@@ -1,0 +1,42 @@
+{
+  "Executor": {
+    "StateDirectory": "/var/lib/aep-executor",
+    "SocketPath": "/run/aep-executor/executor.sock",
+    "TokenFile": "/etc/aep-executor/control-token",
+    "DockerHost": "unix:///var/run/docker.sock",
+    "WorkspaceLimitMb": 64,
+    "RetentionDays": 7,
+    "GitHubAppId": "",
+    "GitHubPrivateKeyPath": "/etc/aep-executor/github-app.pem",
+    "Repositories": [
+      {
+        "Owner": "YOUR-OWNER",
+        "Name": "aep-sandbox-disposable",
+        "InstallationId": 1,
+        "DefaultBranch": "main",
+        "Profiles": {
+          "all": {
+            "Image": "sha256:REPLACE_WITH_DOCKER_IMAGE_ID",
+            "Command": ["python3", "-c", "import subprocess; subprocess.run(['dotnet','test','backend','--ignore-failed-sources','-p:NuGetAudit=false'],check=True); subprocess.run(['npm','ci','--offline','--ignore-scripts','--prefix','frontend'],check=True); subprocess.run(['npm','test','--prefix','frontend','--','--run'],check=True)"],
+            "MemoryMb": 1024, "Cpus": 1, "TimeoutSeconds": 120
+          },
+          "backend": {
+            "Image": "sha256:REPLACE_WITH_DOCKER_IMAGE_ID",
+            "Command": ["dotnet", "test", "backend", "--ignore-failed-sources", "-p:NuGetAudit=false"],
+            "MemoryMb": 1024, "Cpus": 1, "TimeoutSeconds": 120
+          },
+          "frontend": {
+            "Image": "sha256:REPLACE_WITH_DOCKER_IMAGE_ID",
+            "Command": ["python3", "-c", "import subprocess; subprocess.run(['npm','ci','--offline','--ignore-scripts','--prefix','frontend'],check=True); subprocess.run(['npm','test','--prefix','frontend','--','--run'],check=True)"],
+            "MemoryMb": 1024, "Cpus": 1, "TimeoutSeconds": 120
+          },
+          "build": {
+            "Image": "sha256:REPLACE_WITH_DOCKER_IMAGE_ID",
+            "Command": ["dotnet", "build", "backend", "--no-restore"],
+            "MemoryMb": 1024, "Cpus": 1, "TimeoutSeconds": 120
+          }
+        }
+      }
+    ]
+  }
+}
