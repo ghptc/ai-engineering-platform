@@ -11,3 +11,7 @@ frontend/test-results
 **/*.pem
 **/*.key
 **/TestResults
+
+backend/.local-runtime
+
+**/__pycache__

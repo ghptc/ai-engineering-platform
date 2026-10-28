@@ -2,10 +2,10 @@ using System.Net.Http.Json;
 using AIEngineeringPlatform.Application;
 namespace AIEngineeringPlatform.Infrastructure;
 
-public sealed class RemoteSandboxOptions { public string Provider { get; set; } = "Remote"; public string? Endpoint { get; set; } public string? Token { get; set; } }
-public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, string? token) : IExecutionSandbox
+public sealed class RemoteSandboxOptions { public string Provider { get; set; } = "Remote"; public string? Endpoint { get; set; } public string? Token { get; set; } public string? SocketPath { get; set; } }
+public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, string? token, bool unixTransport = false) : IExecutionSandbox
 {
-    public bool Configured => Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) && uri.Scheme == "https" && string.IsNullOrEmpty(uri.UserInfo) && !string.IsNullOrWhiteSpace(token);
+    public bool Configured => Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) && (uri.Scheme == "https" || unixTransport && endpoint == "http://local-executor.invalid/") && string.IsNullOrEmpty(uri.UserInfo) && !string.IsNullOrWhiteSpace(token);
     public async Task<SandboxResponse> ExecuteAsync(SandboxRequest request, CancellationToken ct)
     {
         if (!Configured) throw new ConfigurationException("Secure remote execution sandbox is not configured. Host execution is disabled.");
@@ -15,6 +15,12 @@ public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, st
         message.Headers.Authorization = new("Bearer", token);
         message.Headers.Add("Idempotency-Key", request.OperationId);
         using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            var problem = await response.Content.ReadAsStringAsync(timeout.Token);
+            if (problem.Length > 10000) problem = "Executor rejected tool arguments.";
+            return new(false, problem, "rejected-" + request.OperationId, null, request.RunId);
+        }
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
         using var buffer = new MemoryStream();

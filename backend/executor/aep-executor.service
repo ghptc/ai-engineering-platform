@@ -1,0 +1,32 @@
+[Unit]
+Description=AI Engineering Platform local Docker executor
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=aep-executor
+Group=aep-executor
+SupplementaryGroups=docker
+Environment=EXECUTOR_CONFIG=/etc/aep-executor/executor.json
+Environment=ASPNETCORE_ENVIRONMENT=Production
+ExecStart=/usr/bin/dotnet /opt/aep-executor/AIEngineeringPlatform.LocalExecutor.dll
+WorkingDirectory=/var/lib/aep-executor
+RuntimeDirectory=aep-executor
+RuntimeDirectoryMode=0750
+StateDirectory=aep-executor
+StateDirectoryMode=0700
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/aep-executor /run/aep-executor
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

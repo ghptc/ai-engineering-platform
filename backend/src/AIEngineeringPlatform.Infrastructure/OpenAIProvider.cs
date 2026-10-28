@@ -12,7 +12,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
     public static readonly string OutputSchema = """
     {"type":"object","additionalProperties":false,"required":["summary","decision","acceptanceCriteria","evidence","assumptions","toolCalls","nextContext"],"properties":{"summary":{"type":"string"},"decision":{"type":"string","enum":["CONTINUE","APPROVE","COMMENT","REQUEST_CHANGES","BLOCKED"]},"acceptanceCriteria":{"type":"array","items":{"type":"string"}},"evidence":{"type":"array","items":{"type":"string"}},"assumptions":{"type":"array","items":{"type":"string"}},"toolCalls":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["name","arguments"],"properties":{"name":{"type":"string"},"arguments":{"type":"string","description":"A JSON-encoded object containing tool arguments."}}}},"nextContext":{"type":"string"}}}
     """;
-    public static string SchemaFor(AgentRole role)
+    public static string SchemaFor(AgentRole role, string[]? allowedTools = null)
     {
         var schema = JsonNode.Parse(OutputSchema)!.AsObject();
         var properties = schema["properties"]!.AsObject();
@@ -35,6 +35,11 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         Array("architectureDecisions", """
         {"type":"object","additionalProperties":false,"required":["title","context","decision","consequences","mermaid"],"properties":{"title":{"type":"string"},"context":{"type":"string"},"decision":{"type":"string"},"consequences":{"type":"string"},"mermaid":{"type":"string"}}}
         """, role == AgentRole.Architect ? "Required nonempty final architectural decisions with constraints, API contracts, auth and persistence; use Mermaid only when useful." : "Use an empty array unless proposing an ADR.");
+        if (allowedTools != null)
+        {
+            properties["toolCalls"]!["items"]!["properties"]!["name"]!["enum"] = new JsonArray((allowedTools.Length > 0 ? allowedTools : ["Unavailable"]).Select(x => (JsonNode?)JsonValue.Create(x)).ToArray());
+            if (allowedTools.Length == 0) properties["toolCalls"]!["maxItems"] = 0;
+        }
         return schema.ToJsonString();
     }
     public async Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct)
@@ -49,10 +54,10 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         var options = new CreateResponseOptions
         {
             Model = context.Definition.Model,
-            Instructions = context.Definition.SystemInstructions + "\nReturn only schema-valid JSON. Tool arguments are JSON-encoded objects. Allowed tools: " + string.Join(", ", context.Definition.AllowedTools),
+            Instructions = context.Definition.SystemInstructions + "\nReturn only schema-valid JSON. Tool arguments are JSON-encoded objects. Allowed tools: " + string.Join(", ", context.Definition.AllowedTools) + "\nAuthoritative local tool protocol: ReadFile {path}; WriteFile {path,content}; ListFiles {}; SearchCode {query}; ApplyPatch {patch: JSON-encoded {path,search,replacement}} with exactly one matching search region; RunCommand {profile: build|lint|format|typecheck}; RunTests {profile: all|backend|frontend|e2e}; InspectDiff {}. Tool failures are feedback: correct the arguments or implementation and try a new tool call. Never claim success from a failed tool result. RunCommand file changes are temporary; use WriteFile/ApplyPatch for persistent source edits. No arbitrary shell, package-network access, image or mount selection is allowed.",
             MaxOutputTokenCount = context.Definition.MaxOutputTokens,
             StoredOutputEnabled = false,
-            TextOptions = new() { TextFormat = ResponseTextFormat.CreateJsonSchemaFormat("engineering_result", BinaryData.FromString(SchemaFor(context.Definition.Role)), jsonSchemaIsStrict: true) }
+            TextOptions = new() { TextFormat = ResponseTextFormat.CreateJsonSchemaFormat("engineering_result", BinaryData.FromString(SchemaFor(context.Definition.Role, context.Definition.AllowedTools)), jsonSchemaIsStrict: true) }
         };
         options.InputItems.Add(ResponseItem.CreateUserMessageItem(context.Context));
         ResponseResult? response = null;
@@ -60,6 +65,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         {
             try { response = await client.CreateResponseAsync(options, timeout.Token); break; }
             catch (ClientResultException e) when (attempt < Math.Clamp(settings?.MaxRetries ?? 2, 0, 5) && e.Status is 429 or 500 or 502 or 503) { await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt + 1)), timeout.Token); }
+            catch (ClientResultException e) { throw new ConfigurationException($"OpenAI request failed with HTTP {e.Status}. Verify the API credential, selected model, structured-output support, quota and retry configuration."); }
         }
         if (response.Error != null || response.IncompleteStatusDetails != null) throw new InvalidOperationException("Model returned an error or incomplete response.");
         using var json = JsonDocument.Parse(response.GetOutputText()); var root = json.RootElement;

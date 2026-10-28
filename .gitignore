@@ -28,3 +28,8 @@ frontend/test-results/
 **/playwright-report/
 backend/docs/verification-evidence/
 .DS_Store
+
+# Owner-only local executor state and credentials
+backend/.local-runtime/
+
+**/__pycache__/

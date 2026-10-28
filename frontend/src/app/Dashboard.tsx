@@ -47,6 +47,7 @@ export function Dashboard() {
       {settings.data &&
         (!settings.data.openAIConfigured ||
           !settings.data.sandboxConfigured ||
+          settings.data.sandboxReady === false ||
           !settings.data.githubConfigured) && (
           <Alert
             showIcon

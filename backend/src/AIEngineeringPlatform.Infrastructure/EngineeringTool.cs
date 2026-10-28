@@ -3,7 +3,7 @@ using AIEngineeringPlatform.Domain;
 using System.Text.Json;
 namespace AIEngineeringPlatform.Infrastructure;
 
-public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISourceControl source, IPlatformStore store) : IAgentTool
+public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISourceControl source, IPlatformStore store, SandboxExecutionLimits? limits = null) : IAgentTool
 {
     public string Name => name;
     public static readonly string[] Names = ["ReadRepository", "ListFiles", "SearchCode", "ReadFile", "ApplyPatch", "WriteFile", "RunCommand", "RunTests", "InspectDiff", "CreateBranch", "CreateCommit", "PushBranch", "CreatePullRequest", "ReadPullRequest", "SubmitCodeReview", "ReadProjectMemory", "SaveArtifact"];
@@ -31,7 +31,7 @@ public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISou
         var repository = context.Project.RepositoryConnection ?? throw new ConfigurationException("Connect a repository before invoking repository tools.");
         if (Name is "CreateBranch" or "CreatePullRequest" or "ReadPullRequest" or "SubmitCodeReview") return new(true, await source.ExecuteAsync(repository, Name, args, operationId, ct));
         if (Name == "RunTests" && (!args.TryGetProperty("profile", out var profile) || profile.GetString() is not ("backend" or "frontend" or "e2e" or "all"))) throw new ArgumentException("Use a configured backend, frontend, e2e or all test profile.");
-        var response = await sandbox.ExecuteAsync(new(operationId, context.Run.Id, repository, Name, args, Fence: context.Run.Version, LeaseOwner: context.Run.LeaseOwner), ct);
+        var response = await sandbox.ExecuteAsync(new(operationId, context.Run.Id, repository, Name, args, TimeoutSeconds: limits?.TimeoutSeconds ?? 60, CpuLimit: limits?.CpuLimit ?? 1, MemoryMb: limits?.MemoryMb ?? 512, OutputLimitBytes: limits?.OutputLimitBytes ?? 100000, Fence: context.Run.Version, LeaseOwner: context.Run.LeaseOwner), ct);
         return new(response.Success && (Name != "RunTests" || response.ExitCode == 0), SecretRedactor.Redact(response.Output), response.EvidenceId, response.DiffHash);
     }
 }

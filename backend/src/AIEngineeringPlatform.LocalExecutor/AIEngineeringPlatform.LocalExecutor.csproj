@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><NoWarn>$(NoWarn);CA1416</NoWarn></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../AIEngineeringPlatform.Infrastructure/AIEngineeringPlatform.Infrastructure.csproj" /></ItemGroup>
+</Project>

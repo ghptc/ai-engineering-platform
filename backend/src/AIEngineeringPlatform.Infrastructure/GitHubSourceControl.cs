@@ -21,14 +21,16 @@ public sealed class GitHubSourceControl(HttpClient http, string? appId, string? 
         if (!Regex.IsMatch(repository.Owner, @"\A[a-zA-Z0-9][a-zA-Z0-9-]{0,38}\z") || !Regex.IsMatch(repository.Repository, @"\A[a-zA-Z0-9_.-]{1,100}\z") || repository.Repository is "." or ".." || repository.InstallationId <= 0) throw new ArgumentException("Invalid GitHub repository identity.");
     }
     private static string Base64(byte[] data) => Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-    private async Task<string> InstallationTokenAsync(RepositoryConnection repository, CancellationToken ct)
+    public async Task<string> CreateInstallationTokenAsync(RepositoryConnection repository, CancellationToken ct, bool contentsOnly = false)
     {
         if (!Configured) throw new ConfigurationException("GitHub App credentials are not configured.");
         using var rsa = RSA.Create(); rsa.ImportFromPem(await File.ReadAllTextAsync(keyPath!, ct));
         var now = DateTimeOffset.UtcNow;
         var input = Base64(Encoding.UTF8.GetBytes("{\"alg\":\"RS256\",\"typ\":\"JWT\"}")) + "." + Base64(JsonSerializer.SerializeToUtf8Bytes(new { iat = now.AddSeconds(-60).ToUnixTimeSeconds(), exp = now.AddMinutes(9).ToUnixTimeSeconds(), iss = appId }));
         var jwt = input + "." + Base64(rsa.SignData(Encoding.UTF8.GetBytes(input), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-        using var response = await SendAsync(HttpMethod.Post, $"app/installations/{repository.InstallationId}/access_tokens", jwt, new { repositories = new[] { repository.Repository }, permissions = new { contents = "write", pull_requests = "write", metadata = "read" } }, ct);
+        var permissions = new Dictionary<string, string> { ["contents"] = "write", ["metadata"] = "read" };
+        if (!contentsOnly) permissions["pull_requests"] = "write";
+        using var response = await SendAsync(HttpMethod.Post, $"app/installations/{repository.InstallationId}/access_tokens", jwt, new { repositories = new[] { repository.Repository }, permissions }, ct);
         return response.RootElement.GetProperty("token").GetString()!;
     }
     private async Task<JsonDocument> SendAsync(HttpMethod method, string path, string token, object? body, CancellationToken ct)
@@ -49,7 +51,7 @@ public sealed class GitHubSourceControl(HttpClient http, string? appId, string? 
     public async Task<string> ExecuteAsync(RepositoryConnection repository, string operation, JsonElement args, string operationId, CancellationToken ct)
     {
         Validate(repository);
-        var token = await InstallationTokenAsync(repository, ct);
+        var token = await CreateInstallationTokenAsync(repository, ct);
         var prefix = $"repos/{repository.Owner}/{repository.Repository}";
         string Get(string name) => args.TryGetProperty(name, out var value) ? value.GetString() ?? "" : throw new ArgumentException($"Missing {name}.");
         using var metadata = await SendAsync(HttpMethod.Get, prefix, token, null, ct);

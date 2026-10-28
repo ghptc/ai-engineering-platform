@@ -167,3 +167,39 @@ describe("connected screens", () => {
     );
   });
 });
+
+describe("execution boundaries", () => {
+  it("shows real policy budgets, iterations and tool limits", async () => {
+    vi.mocked(fetch).mockImplementation((url) =>
+      respond(
+        String(url).includes("/events") || String(url).includes("/artifacts")
+          ? { items: [] }
+          : {
+              id: "run",
+              projectId: "project",
+              currentStage: "Implementing",
+              iteration: 2,
+              retryCount: 1,
+              cost: 0.125,
+              tokenUsage: 1500,
+              toolCalls: 7,
+              policy: {
+                maxIterations: 3,
+                maxToolCalls: 25,
+                maxDurationMinutes: 15,
+                maxBudgetUsd: 2,
+                maxRetries: 2,
+              },
+            },
+      ),
+    );
+    wrapper(<ExecutionDetail />);
+    expect(
+      await screen.findByText("Development iteration"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("/ 3")).toBeInTheDocument();
+    expect(screen.getByText("/ $2")).toBeInTheDocument();
+    expect(screen.getByText("7 / 25")).toBeInTheDocument();
+    expect(screen.getByText("15 minutes")).toBeInTheDocument();
+  });
+});

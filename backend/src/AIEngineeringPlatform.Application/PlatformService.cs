@@ -83,6 +83,7 @@ public sealed class ContextBuilder(IPlatformStore store)
             project.TechnologyStack,
             project.RepositoryConnection,
             run.Iteration,
+            SelectedRequirementIds = run.RequirementIds,
             Requirements = requirements,
             Memory = memory,
             ClientMessages = messages,

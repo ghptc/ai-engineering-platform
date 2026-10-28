@@ -1,6 +1,8 @@
+> Milestone 8 update: this contract now also has an included local implementation in `AIEngineeringPlatform.LocalExecutor`, reached through an authenticated Unix socket. See [local runtime](local-runtime.md) and [ADR 004](architecture/004-local-docker-executor.md). HTTPS remains optional; the local transport does not expose a network listener. Local ApplyPatch accepts a JSON-encoded `{path,search,replacement}` patch with exactly one matching source region. Workloads have no network and use administrator-approved offline images/profiles.
+
 # Remote execution contract
 
-The platform implements an HTTPS client for a separately provisioned trusted executor. There is intentionally no unsafe local fallback. The executor service itself is an external prerequisite; simulated test adapters are not a production executor.
+The platform implements an HTTPS client for a separately provisioned trusted executor. There is intentionally no unsafe local fallback. The local daemon is included; a remote service is optional. Simulated test adapters are not a production executor.
 
 `EXECUTION_SANDBOX_PROVIDER=Remote`, `EXECUTION_SANDBOX_ENDPOINT=https://executor.example/`, and `EXECUTION_SANDBOX_TOKEN` configure the control-plane connection. Endpoints with embedded credentials, redirects to untrusted endpoints, or plaintext HTTP must not be used.
 
@@ -52,4 +54,4 @@ The executor control plane must:
 
 Nonzero test exit codes fail the quality gate. The platform rejects absent evidence IDs, mismatched workspace IDs and oversized responses. Test progression also requires a revision; QA must cite test evidence. Missing configuration disables execution instead of granting host access.
 
-The HTTP adapter cannot attest that an arbitrary server enforces isolation. Provision and audit the executor control plane before enabling production execution. Private-repository credential brokering and executor provisioning are not automatically performed by this repository.
+The HTTP adapter cannot attest that an arbitrary server enforces isolation. Provision and audit the executor control plane before enabling production execution. The local daemon brokers GitHub App installation credentials only for trusted Git transfers. Build/test containers never receive them.
