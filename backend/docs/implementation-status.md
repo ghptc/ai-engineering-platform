@@ -11,3 +11,7 @@ Live external verification remains blocked on OpenAI credentials/model access, a
 ## Adaptive context management (2026-10-28)
 
 Implemented configurable model-window and agent-input limits with explicit output reservation, conservative token upper-bound sizing and final provider validation. Replaced recursive context snapshots with references; retained protected requirements, architecture, policy and human instructions; summarized execution/conversation history; added paged project-scoped original retrieval, bounded tool previews and context telemetry. Original execution data is retained. See [ADR 005](architecture/005-adaptive-context.md) for defaults, sizing tradeoffs and regression scope. Live model execution remains unverified by this milestone.
+
+## Architect protected-context regression (2026-10-28)
+
+Replaced project-wide protected agent transcripts and repeated backlog artifacts with selected requirement records, structured architecture constraints and current final analysis fields. Long historical conversations remain in MongoDB and are fetched on demand. Existing input/output/model-window settings and monetary budgets are unchanged. [ADR 006](architecture/006-focused-context-regression.md) records the matching persisted inventory, estimate arithmetic and regression scope.

@@ -187,8 +187,13 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             {
                 await CheckOwnershipAsync();
                 var beforeTokens = ContextBudget.Tokens(context);
-                context = ContextBudget.Compact(context, definition);
-                await service.EventAsync(run, "ContextBudgetEvaluated", JsonSerializer.Serialize(new { role, definition.Model, BeforeTokens = beforeTokens, InputTokensUpperBound = ContextBudget.Tokens(context), InputLimit = ContextBudget.InputLimit(definition), OutputReserved = definition.MaxOutputTokens, Compacted = beforeTokens != ContextBudget.Tokens(context), Estimator = "utf8-byte-upper-bound" }), ct);
+                try { context = ContextBudget.Compact(context, definition); }
+                catch (InvalidOperationException)
+                {
+                    await service.EventAsync(run, "ContextBudgetExceeded", JsonSerializer.Serialize(new { role, definition.Model, ContextTokensUpperBound = beforeTokens, InstructionTokensUpperBound = ContextBudget.Tokens(definition.SystemInstructions), ProtocolAndFramingReserve = 13024, InputLimit = ContextBudget.InputLimit(definition), OutputReserved = definition.MaxOutputTokens }), ct);
+                    throw;
+                }
+                await service.EventAsync(run, "ContextBudgetEvaluated", JsonSerializer.Serialize(new { role, definition.Model, BeforeTokens = beforeTokens, InputTokensUpperBound = ContextBudget.Tokens(context), InstructionTokensUpperBound = ContextBudget.Tokens(definition.SystemInstructions), ProtocolAndFramingReserve = 13024, InputLimit = ContextBudget.InputLimit(definition), OutputReserved = definition.MaxOutputTokens, Compacted = beforeTokens != ContextBudget.Tokens(context), Estimator = "utf8-byte-upper-bound" }), ct);
                 var taskId = Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/{role}/{turn}");
                 var saved = await store.GetRecordAsync("task", taskId, ct);
                 ModelExecutionResult response;

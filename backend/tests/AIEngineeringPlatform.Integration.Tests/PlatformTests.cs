@@ -56,6 +56,8 @@ public sealed class PlatformTests : IClassFixture<PlatformFactory>
         // Reproduce recursive snapshots larger than the former 160000-character bound.
         await store.AppendAsync(new() { Kind = "artifact", ProjectId = project.Id, Name = "DevelopmentContext", Content = new string('x', 200000) }, default);
         await store.AppendAsync(new() { Kind = "artifact", ProjectId = project.Id, Name = "TestReport", Content = new string('h', 200000), RunId = "completed-history" }, default);
+        for (var i = 0; i < 80; i++)
+            await store.AppendAsync(new() { Kind = "message", ProjectId = project.Id, RunId = "old-history", Name = "BusinessAnalyst", Content = JsonSerializer.Serialize(new AgentResult("Unrelated old proposal " + i + new string('h', 4000), "CONTINUE", [], [], [], [], "")) }, default);
         client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
         var start = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/runs", new { }); Assert.Equal(HttpStatusCode.Accepted, start.StatusCode); var run = (await start.Content.ReadFromJsonAsync<ExecutionRun>(Json))!;
         var duplicate = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/runs", new { }); Assert.Equal(run.Id, (await duplicate.Content.ReadFromJsonAsync<ExecutionRun>(Json))!.Id);
