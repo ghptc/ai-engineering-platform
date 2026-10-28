@@ -4,6 +4,25 @@ namespace AIEngineeringPlatform.Application;
 
 public sealed class PlatformService(IPlatformStore store, IExecutionPublisher publisher)
 {
+    public async Task<ExecutionRun> StartTasksAsync(string projectId, string key, EngineeringTask[] tasks, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(key) || key.Length > 128) throw new ArgumentException("Idempotency-Key is required (maximum 128 characters).");
+        var project = await ProjectAsync(projectId, ct);
+        if (project.Status != "Active") throw new InvalidOperationException("Project is archived.");
+        if (tasks is not { Length: > 0 } || tasks.Length > project.ExecutionPolicy.MaxIterations || tasks.Any(x => x == null)) throw new ArgumentException("Queue 1 task up to the existing execution iteration limit.");
+        foreach (var task in tasks)
+        {
+            task.Validate();
+            foreach (var id in task.RequirementIds ?? [])
+                if ((await store.GetRecordAsync("requirement", id, ct))?.ProjectId != projectId) throw new ArgumentException("Task requirements must belong to this project.");
+            foreach (var id in task.HumanInstructionIds ?? [])
+            {
+                var message = await store.GetRecordAsync("message", id, ct);
+                if (message?.ProjectId != projectId || message.Name != "Client") throw new ArgumentException("Task instructions must reference this project's human messages.");
+            }
+        }
+        return await store.CreateRunAsync(new() { ProjectId = projectId, IdempotencyKey = key, ProjectSnapshot = project, Policy = project.ExecutionPolicy, Tasks = tasks, RequirementIds = tasks[0].RequirementIds ?? [] }, ct);
+    }
     public async Task<Project> ProjectAsync(string id, CancellationToken ct) => await store.GetProjectAsync(id, ct) ?? throw new KeyNotFoundException("Project not found.");
     public async Task<ExecutionRun> RunAsync(string id, CancellationToken ct) => await store.GetRunAsync(id, ct) ?? throw new KeyNotFoundException("Execution not found.");
     public async Task<Project> SaveProjectAsync(Project project, long? version, CancellationToken ct)

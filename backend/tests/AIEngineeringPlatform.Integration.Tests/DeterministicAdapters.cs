@@ -12,7 +12,7 @@ public sealed class DeterministicModel : ILanguageModelProvider
         var role = context.Definition.Role;
         var file = role switch { AgentRole.BackendEngineer => "backend/Feature.cs", AgentRole.FrontendEngineer => "frontend/Feature.tsx", _ => "backend/FeatureTests.cs" };
         ToolCall[] calls = [];
-        if (role is AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.TestEngineer && !context.Context.Contains("written " + file)) calls = [new("WriteFile", JsonSerializer.SerializeToElement(new { path = file, content = "// deterministic test fixture: " + role }))];
+        if (role is AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.TestEngineer && !context.Context.Contains("written " + file)) calls = [new("WriteFile", JsonSerializer.SerializeToElement(new { path = file, content = "// deterministic test fixture: " + role + " task " + context.Run.TaskIndex }))];
         var evidence = System.Text.RegularExpressions.Regex.Matches(context.Context, "fake-evidence-[a-f0-9]{64}").Select(x => x.Value).Distinct().ToArray();
         var tests = evidence.LastOrDefault() ?? "test-fixture-evidence";
         // Resolve the required-test report from the persisted context, whose JSON escapes still preserve evidence ids.

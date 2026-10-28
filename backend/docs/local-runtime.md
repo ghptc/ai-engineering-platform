@@ -100,3 +100,11 @@ TEST_MONGODB_CONNECTION_STRING=<isolated test MongoDB>
 ```
 
 Run `dotnet test backend/tests/AIEngineeringPlatform.Integration.Tests --filter RealAgentsDeliverPullRequestOnlyInAuthorizedDisposableRepository`. Opting in authorizes the test to approve delivery only in that explicitly disposable repository. It leaves the resulting PR for human inspection and does not merge or delete it. Missing credentials fail an opted-in test; without opt-in it is reported skipped. No simulated model or GitHub adapter is used in this test. Do not infer a live success from deterministic browser tests.
+
+## Focused local tasks
+
+Use **Start focused task** for a bounded implementation change. Save lasting human constraints in **Project instructions**; attach any additional selected human-message IDs through `HumanInstructionIds` in the task API. Earlier conversations stay visible and retrievable, but are not default execution transcripts. Request BA/Architect expertise only when needed, and select the developer specializations appropriate to the repository. Queue further authorized tasks to continue automatically after verified, approved delivery; all queued tasks share the original execution budget and each delivery still needs approval. The existing **Start execution** action retains the project-planning route for complex/legacy work.
+
+For the dependency-free JavaScript fixture, configure owner-managed test profiles with an immutable image ID and fixed arguments such as `"Command": ["node", "--test"]` for `all` and `backend`. Do not point that fixture at the example profile that expects backend/.NET and frontend/npm projects. The executor recognizes Node's default and TAP reporters. Apply profile or daemon-binary changes by an explicit daemon restart; do not substitute simulated adapters or alter the running owner's configuration during verification.
+
+The existing opt-in live workflow supports `LIVE_FOCUSED_TASK=1`. It then uses only Developer, Test Engineer, QA and Reviewer, requires the two-file answer() 1→2 change, persists real source/test/review evidence and leaves a draft PR. All existing live-test credential, budget, disposable-repository, approval and isolation restrictions still apply. The live test approves only the explicitly authorized disposable verification delivery, not production deliveries or merges.

@@ -103,6 +103,7 @@ export function ExecutionDetail() {
   const run = useApi<Run>("/runs/" + id);
   useLiveEvents(run.data?.projectId);
   const events = useApi<Page<Entry>>("/runs/" + id + "/events?limit=500");
+  const handoffs = useApi<Page<Entry>>("/runs/" + id + "/handoffs?limit=500");
   const artifacts = useApi<Page<Entry>>("/runs/" + id + "/artifacts?limit=500");
   const [artifact, setArtifact] = useState<Entry>();
   const { message } = App.useApp();
@@ -228,8 +229,11 @@ export function ExecutionDetail() {
               ]}
             />
           </Card>
+          {run.data.tasks?.length > 0 && <Card title={"Task " + (run.data.taskIndex + 1) + " of " + run.data.tasks.length} style={{ marginBottom: 24 }}><Typography.Title level={4}>{run.data.tasks[run.data.taskIndex]?.title}</Typography.Title><Typography.Paragraph>{run.data.tasks[run.data.taskIndex]?.description}</Typography.Paragraph><Typography.Text>Selected agents: {run.data.selectedAgents?.join(", ")}</Typography.Text></Card>}
           <Tabs
+            defaultActiveKey="timeline"
             items={[
+              { key: "handoffs", label: "Agent handoffs", children: <Space orientation="vertical" style={{ width: "100%" }}>{handoffs.data?.items.map(entry => <Card key={entry.id} title={entry.name}><pre className="artifact-preview">{jsonText(entry.content)}</pre></Card>)}</Space> },
               {
                 key: "timeline",
                 label: "Execution timeline",

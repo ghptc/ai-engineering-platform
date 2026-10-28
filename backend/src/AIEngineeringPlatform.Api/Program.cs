@@ -108,7 +108,7 @@ var api = app.MapGroup("/api/v1").RequireAuthorization("Owner").RequireRateLimit
 api.MapGet("/projects", async (IPlatformStore s, int? offset, int? limit, CancellationToken ct) => new Page<Project>(await s.ProjectsAsync(Offset(offset), Limit(limit), ct), Offset(offset), Limit(limit)));
 api.MapPost("/projects", async (ProjectInput input, PlatformService s, IOptions<ExecutionDefaults> defaults, CancellationToken ct) => { var p = await s.SaveProjectAsync(input.ToProject() with { ExecutionPolicy = input.ExecutionPolicy ?? defaults.Value.Policy() }, null, ct); return Results.Created($"/api/v1/projects/{p.Id}", p); });
 api.MapGet("/projects/{id}", (string id, PlatformService s, CancellationToken ct) => s.ProjectAsync(id, ct));
-api.MapPut("/projects/{id}", async (string id, ProjectInput input, PlatformService s, CancellationToken ct) => { var existing = await s.ProjectAsync(id, ct); return await s.SaveProjectAsync(input.ToProject() with { Id = id, CreatedAt = existing.CreatedAt, RepositoryConnection = existing.RepositoryConnection }, input.Version, ct); });
+api.MapPut("/projects/{id}", async (string id, ProjectInput input, PlatformService s, CancellationToken ct) => { var existing = await s.ProjectAsync(id, ct); return await s.SaveProjectAsync(input.ToProject() with { Id = id, CreatedAt = existing.CreatedAt, RepositoryConnection = existing.RepositoryConnection, StandingInstructions = existing.StandingInstructions }, input.Version, ct); });
 api.MapDelete("/projects/{id}", async (string id, PlatformService s, IPlatformStore store, CancellationToken ct) =>
 {
     if ((await store.RunsAsync(id, 0, 1000, ct)).Any(x => x.CurrentStage is not (RunStage.Completed or RunStage.Cancelled))) throw new InvalidOperationException("Cancel active executions before archiving a project.");
@@ -133,6 +133,17 @@ api.MapPatch("/requirements/{id}", async (string id, RequirementInput input, IPl
     var revision = previous with { Id = Guid.NewGuid().ToString("N"), Name = input.Title, Content = JsonSerializer.Serialize(input), CreatedAt = DateTimeOffset.UtcNow, Metadata = new() { ["supersedes"] = id } };
     await store.AppendAsync(revision, ct); return revision;
 });
+api.MapPost("/projects/{id}/tasks", async (string id, TaskQueueInput input, HttpContext ctx, PlatformService service, CancellationToken ct) =>
+{
+    var run = await service.StartTasksAsync(id, ctx.Request.Headers["Idempotency-Key"].ToString(), input.Tasks, ct);
+    return Results.Accepted($"/api/v1/runs/{run.Id}", run);
+});
+api.MapPatch("/projects/{id}/instructions", async (string id, ContentInput input, PlatformService service, IPlatformStore store, CancellationToken ct) =>
+{
+    var project = await service.ProjectAsync(id, ct);
+    await store.AppendAsync(new() { Kind = "instructionVersion", ProjectId = id, Name = "ProjectInstructions", Content = project.StandingInstructions }, ct);
+    return await service.SaveProjectAsync(project with { StandingInstructions = input.Content }, project.Version, ct);
+});
 api.MapPost("/projects/{id}/runs", async (string id, HttpContext ctx, PlatformService service, CancellationToken ct) =>
 {
     var run = await service.StartAsync(id, ctx.Request.Headers["Idempotency-Key"].ToString(), ct); return Results.Accepted($"/api/v1/runs/{run.Id}", run);
@@ -140,6 +151,7 @@ api.MapPost("/projects/{id}/runs", async (string id, HttpContext ctx, PlatformSe
 api.MapGet("/projects/{id}/runs", async (string id, IPlatformStore store, int? offset, int? limit, string? status, CancellationToken ct) => new Page<ExecutionRun>(await store.RunsAsync(id == "all" ? null : id, Offset(offset), Limit(limit), ct, status), Offset(offset), Limit(limit)));
 api.MapGet("/runs/{id}", (string id, PlatformService s, CancellationToken ct) => s.RunAsync(id, ct));
 api.MapGet("/runs/{id}/events", (string id, long? after, int? offset, int? limit, IPlatformStore store, CancellationToken ct) => Records("event", null, id, null, after ?? 0, offset, limit, store, ct));
+api.MapGet("/runs/{id}/handoffs", (string id, int? offset, int? limit, IPlatformStore store, CancellationToken ct) => Records("handoff", null, id, null, 0, offset, limit, store, ct));
 api.MapGet("/runs/{id}/artifacts", (string id, int? offset, int? limit, IPlatformStore store, CancellationToken ct) => Records("artifact", null, id, null, 0, offset, limit, store, ct));
 foreach (var action in new[] { "pause", "resume", "cancel", "retry" }) { var captured = action; api.MapPost("/runs/{id}/" + action, (string id, PlatformService service, CancellationToken ct) => service.ControlAsync(id, captured, ct)); }
 api.MapGet("/projects/{id}/conversations", (string id, IPlatformStore store, int? offset, int? limit, CancellationToken ct) => Records("conversation", id, null, null, 0, offset, limit, store, ct));
@@ -198,6 +210,7 @@ static async Task<Page<RecordEntry>> Records(string kind, string? projectId, str
 public sealed record ProjectInput(string Name, string Description, string OriginalContext, string[] TechnologyStack, ExecutionPolicy? ExecutionPolicy, long Version = 0) { public Project ToProject() => new() { Name = Name, Description = Description, OriginalContext = OriginalContext, TechnologyStack = TechnologyStack, ExecutionPolicy = ExecutionPolicy ?? new() }; }
 public sealed record LoginRequest(string Password);
 public sealed record ContentInput(string Content);
+public sealed record TaskQueueInput(EngineeringTask[] Tasks);
 public sealed record DecisionInput(bool Approve, string Reason);
 public sealed record RequirementInput(string Title, string Description, string[] AcceptanceCriteria, int Priority = 1, string[]? Dependencies = null, string AssignedRole = "BackendEngineer");
 public sealed record AgentInput(string Model, bool Enabled, int MaxOutputTokens, decimal InputCostPerMillion, decimal OutputCostPerMillion, string? SystemInstructions, int ModelContextTokens = 128000, int MaxInputTokens = 96000);

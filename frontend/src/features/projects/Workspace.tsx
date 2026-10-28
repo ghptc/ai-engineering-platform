@@ -29,6 +29,7 @@ import {
   useApi,
   jsonText,
 } from "../../components/Common";
+import { TaskLauncher } from "./TaskLauncher";
 import { ProjectForm } from "./Projects";
 import { ConversationPanel } from "../conversations/Conversations";
 import { useLiveEvents } from "../../hooks/useLiveEvents";
@@ -81,6 +82,7 @@ export function Workspace() {
             description={project.data.description}
             actions={
               <Space wrap>
+                <TaskLauncher project={project.data} />
                 <Button icon={<EditOutlined />} onClick={() => setEdit(true)}>
                   Edit
                 </Button>
@@ -91,7 +93,6 @@ export function Workspace() {
                   Connect repository
                 </Button>
                 <Button
-                  type="primary"
                   icon={<PlayCircleOutlined />}
                   loading={start.isPending}
                   onClick={() => start.mutate()}

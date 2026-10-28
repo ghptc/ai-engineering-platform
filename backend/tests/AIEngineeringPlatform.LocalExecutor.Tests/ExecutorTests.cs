@@ -15,6 +15,14 @@ public sealed class DockerFactAttribute : FactAttribute
 public sealed class ExecutorTests
 {
     [Theory]
+    [InlineData("ℹ tests 1\nℹ pass 1\nℹ fail 0\n", 1)]
+    [InlineData("# tests 2\n# pass 2\n", 2)]
+    [InlineData("\u001b[32mℹ tests 1\u001b[0m\n", 1)]
+    [InlineData("ℹ tests 0\n", 0)]
+    [InlineData("arbitrary output, no tests executed", 0)]
+    public void NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(string output, int expected)
+        => Assert.Equal(expected, DockerWorkload.TestCount(output));
+    [Theory]
     [InlineData("../escape")]
     [InlineData("/etc/passwd")]
     [InlineData(".git/config")]

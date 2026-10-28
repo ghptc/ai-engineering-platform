@@ -75,7 +75,7 @@ public sealed class DockerWorkload(ExecutorOptions options, ControlledProcess pr
     public static int TestCount(string output)
     {
         output = Regex.Replace(output, @"\x1B\[[0-9;]*m", "");
-        var patterns = new[] { @"# tests\s+(\d+)", @"Total:\s*(\d+)", @"Total tests:\s*(\d+)", @"Ran\s+(\d+)\s+test", @"Tests\s+(\d+)\s+passed" };
+        var patterns = new[] { @"(?m)^(?:#|ℹ) tests\s+(\d+)\s*$", @"Total:\s*(\d+)", @"Total tests:\s*(\d+)", @"Ran\s+(\d+)\s+test", @"Tests\s+(\d+)\s+passed" };
         return patterns.SelectMany(pattern => Regex.Matches(output, pattern, RegexOptions.CultureInvariant).Select(match => int.Parse(match.Groups[1].Value))).DefaultIfEmpty(0).Max();
     }
 }
