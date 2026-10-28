@@ -59,6 +59,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
             StoredOutputEnabled = false,
             TextOptions = new() { TextFormat = ResponseTextFormat.CreateJsonSchemaFormat("engineering_result", BinaryData.FromString(SchemaFor(context.Definition.Role, context.Definition.AllowedTools)), jsonSchemaIsStrict: true) }
         };
+        ContextBudget.Validate(context.Definition, context.Context, options.Instructions, SchemaFor(context.Definition.Role, context.Definition.AllowedTools));
         options.InputItems.Add(ResponseItem.CreateUserMessageItem(context.Context));
         ResponseResult? response = null;
         for (var attempt = 0; ; attempt++)

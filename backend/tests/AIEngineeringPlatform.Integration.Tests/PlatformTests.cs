@@ -53,6 +53,9 @@ public sealed class PlatformTests : IClassFixture<PlatformFactory>
     {
         using var client = await LoginAsync(); var created = await client.PostAsJsonAsync("/api/v1/projects", new { name = "Verified workflow", description = "Deterministic external adapters", originalContext = "Create a tested feature", technologyStack = new[] { "C#", "React" }, executionPolicy = new ExecutionPolicy(ReviewBeforeCommit: reviewBeforeCommit) }); created.EnsureSuccessStatusCode(); var project = (await created.Content.ReadFromJsonAsync<Project>(Json))!;
         var store = factory.Services.GetRequiredService<IPlatformStore>(); await store.SaveProjectAsync(project with { RepositoryConnection = new("test-owner", "test-repo", 1), Version = project.Version + 1 }, project.Version, default);
+        // Reproduce recursive snapshots larger than the former 160000-character bound.
+        await store.AppendAsync(new() { Kind = "artifact", ProjectId = project.Id, Name = "DevelopmentContext", Content = new string('x', 200000) }, default);
+        await store.AppendAsync(new() { Kind = "artifact", ProjectId = project.Id, Name = "TestReport", Content = new string('h', 200000), RunId = "completed-history" }, default);
         client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
         var start = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/runs", new { }); Assert.Equal(HttpStatusCode.Accepted, start.StatusCode); var run = (await start.Content.ReadFromJsonAsync<ExecutionRun>(Json))!;
         var duplicate = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/runs", new { }); Assert.Equal(run.Id, (await duplicate.Content.ReadFromJsonAsync<ExecutionRun>(Json))!.Id);
@@ -70,6 +73,7 @@ public sealed class PlatformTests : IClassFixture<PlatformFactory>
             if (events!.Items.Any(x => x.Name == "RunCompleted")) break;
             await Task.Delay(50, eventDeadline.Token);
         } while (true);
+        Assert.Contains(events.Items, x => x.Name == "ContextInventory"); Assert.Contains(events.Items, x => x.Name == "ContextBudgetEvaluated");
         Assert.Contains(events.Items, x => x.Name == "RunCompleted"); Assert.True(events.Items.Select(x => x.Sequence).SequenceEqual(events.Items.Select(x => x.Sequence).Order()));
     }
     [Fact]

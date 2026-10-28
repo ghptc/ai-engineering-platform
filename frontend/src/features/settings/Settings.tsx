@@ -95,6 +95,8 @@ function AgentForm({ agent }: { agent: Agent }) {
           <Form.Item label="Model" name="model" rules={[{ required: true }]}>
             <Input placeholder="Available model identifier" />
           </Form.Item>
+          <Form.Item label="Model context window (tokens)" name="modelContextTokens" rules={[{ required: true }]}><InputNumber min={1025} /></Form.Item>
+          <Form.Item label="Agent input limit (tokens)" name="maxInputTokens" rules={[{ required: true }]}><InputNumber min={1} /></Form.Item>
           <Form.Item
             label="Maximum output tokens"
             name="maxOutputTokens"

@@ -94,7 +94,7 @@ public sealed record ExecutionRun
     }
 }
 public sealed record Requirement(string Id, string ProjectId, string Title, string Description, string[] AcceptanceCriteria, int Priority, string[] Dependencies, string Status, string AssignedRole, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
-public sealed record AgentDefinition(string Id, AgentRole Role, string Name, string Description, string Model, string SystemInstructions, string[] Capabilities, string[] AllowedTools, bool Enabled = true, int InstructionVersion = 1, int MaxOutputTokens = 4000, decimal InputCostPerMillion = 0, decimal OutputCostPerMillion = 0);
+public sealed record AgentDefinition(string Id, AgentRole Role, string Name, string Description, string Model, string SystemInstructions, string[] Capabilities, string[] AllowedTools, bool Enabled = true, int InstructionVersion = 1, int MaxOutputTokens = 4000, decimal InputCostPerMillion = 0, decimal OutputCostPerMillion = 0, int ModelContextTokens = 128000, int MaxInputTokens = 96000);
 public sealed record RecordEntry
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");

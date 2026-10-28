@@ -13,6 +13,11 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
         run.CheckLimits(DateTimeOffset.UtcNow);
         var project = run.ProjectSnapshot ?? await service.ProjectAsync(run.ProjectId, ct);
         var context = await contextBuilder.BuildAsync(project, run, ct);
+        using (var inventory = JsonDocument.Parse(context))
+        {
+            await service.EventAsync(run, "ContextInventory", JsonSerializer.Serialize(inventory.RootElement.EnumerateObject().Select(x => new { Component = x.Name, Characters = x.Value.GetRawText().Length, TokensUpperBound = ContextBudget.Tokens(x.Value.GetRawText()) })), ct);
+            await service.EventAsync(run, "ContextSourceInventory", JsonSerializer.Serialize(new { Sources = inventory.RootElement.GetProperty("SourceInventory"), Largest = inventory.RootElement.GetProperty("LargestArtifacts") }), ct);
+        }
         var next = run.CurrentStage;
         switch (run.CurrentStage)
         {
@@ -35,7 +40,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             case RunStage.Planning:
                 await AgentAsync(AgentRole.Architect, ArtifactType.ArchitectureDecision); next = RunStage.PreparingContext; break;
             case RunStage.PreparingContext:
-                await ArtifactAsync("context", ArtifactType.DevelopmentContext, context); next = RunStage.Implementing; break;
+                await ArtifactAsync("context", ArtifactType.DevelopmentContext, JsonSerializer.Serialize(new { project.Id, run.RequirementIds, Source = "Live project, requirements, human instructions and architecture records; assembled on demand." })); next = RunStage.Implementing; break;
             case RunStage.Implementing:
                 if (!sandbox.Configured) throw new ConfigurationException("Configure and start the secure execution sandbox before implementing source changes.");
                 var before = await ToolAsync("InspectDiff", "pre-implementation", JsonSerializer.SerializeToElement(new { }), AgentRole.BackendEngineer);
@@ -53,7 +58,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 next = tests.Success && tests.EvidenceId != null && tests.WorkspaceRevision != null ? RunStage.Validating : RunStage.Implementing; break;
             case RunStage.Validating:
                 var testEvidence = await RequiredTestsAsync();
-                context += "\nRequired test evidence: " + JsonSerializer.Serialize(testEvidence) + "\nSelected requirement IDs: " + JsonSerializer.Serialize(run.RequirementIds);
+                context += "\nRequired test evidence: " + JsonSerializer.Serialize(new { testEvidence.Success, testEvidence.EvidenceId, testEvidence.WorkspaceRevision }) + "\nSelected requirement IDs: " + JsonSerializer.Serialize(run.RequirementIds);
                 var qa = await AgentAsync(AgentRole.QAEngineer, ArtifactType.ValidationReport);
                 var qaPassed = qa.Decision == "APPROVE" && qa.Evidence.Contains(testEvidence.EvidenceId!) && qa.Checks is { Length: > 0 } && qa.Checks.All(x => x.Passed && x.EvidenceId == testEvidence.EvidenceId) && run.RequirementIds.All(id => qa.Checks.Any(x => x.RequirementId == id));
                 next = qaPassed ? RunStage.Reviewing : RunStage.Implementing; break;
@@ -66,7 +71,6 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 var diff = await ToolAsync("InspectDiff", "review-diff", JsonSerializer.SerializeToElement(new { }), AgentRole.CodeReviewer);
                 if (!diff.Success || string.IsNullOrWhiteSpace(diff.Output) || diff.WorkspaceRevision != (await RequiredTestsAsync()).WorkspaceRevision) throw new InvalidOperationException("No actual diff is available for review.");
                 await ArtifactAsync("actual-diff", ArtifactType.CodeDiff, diff.Output);
-                context += "\nActual repository diff:\n" + diff.Output;
                 var review = await AgentAsync(AgentRole.CodeReviewer, ArtifactType.CodeReview);
                 await UpsertRecordAsync(new() { Id = Key(run.Id + "/review/" + run.Iteration), Kind = "review", RunId = run.Id, ProjectId = run.ProjectId, Name = "Local code review", Content = JsonSerializer.Serialize(review), Status = review.Decision });
                 await service.EventAsync(run, "ReviewCompleted", review.Summary, ct);
@@ -99,7 +103,6 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                     {
                         var prEvidence = await ToolAsync("ReadPullRequest", "pr-evidence", JsonSerializer.SerializeToElement(new { number }), AgentRole.CodeReviewer, true);
                         if (!prEvidence.Success) throw new InvalidOperationException("Cannot review PR without actual changes.");
-                        context += "\nActual PR and changed files: " + prEvidence.Output;
                         var publishedReview = await AgentAsync(AgentRole.CodeReviewer, ArtifactType.CodeReview);
                         publishedDecision = publishedReview.Decision switch { "APPROVE" => "APPROVE", "REQUEST_CHANGES" => "REQUEST_CHANGES", _ => "COMMENT" };
                         reviewBody = ReviewMarkdown.Format(publishedReview);
@@ -154,7 +157,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             if (saved != null)
             {
                 var previous = JsonSerializer.Deserialize<ToolResult>(saved.Content)!;
-                context += "\nTool evidence: " + JsonSerializer.Serialize(new { name, result = previous });
+                context += ContextBudget.ToolEvidence(operationId, name, previous);
                 return previous;
             }
             var definition = (await store.AgentsAsync(ct)).Single(x => x.Role == role);
@@ -169,8 +172,10 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             run = run with { ToolCalls = run.ToolCalls + 1 };
             if (!await store.SaveRunAsync(run, run.Version, owner, ct)) throw new ConcurrencyException();
             run = await service.RunAsync(run.Id, ct);
+            if (ContextBudget.Tokens(result.Output) > 8000)
+                await service.EventAsync(run, "ContextCompacted", JsonSerializer.Serialize(new { SourceKind = "tool", SourceId = operationId, BeforeTokens = ContextBudget.Tokens(result.Output), Strategy = "Bounded preview with persisted original and paged retrieval" }), ct);
             await service.EventAsync(run, "ToolInvocationCompleted", JsonSerializer.Serialize(new { name, result.Success, result.EvidenceId }), ct);
-            context += "\nTool evidence: " + JsonSerializer.Serialize(new { name, result });
+            context += ContextBudget.ToolEvidence(operationId, name, result);
             return result;
         }
         async Task<AgentResult> AgentAsync(AgentRole role, ArtifactType artifactType)
@@ -181,7 +186,9 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             for (var turn = 0; turn < run.Policy.MaxToolCalls; turn++)
             {
                 await CheckOwnershipAsync();
-                if (context.Length > 240000) throw new InvalidOperationException("Agent context exceeds its bound; split the task or inspect narrower repository content.");
+                var beforeTokens = ContextBudget.Tokens(context);
+                context = ContextBudget.Compact(context, definition);
+                await service.EventAsync(run, "ContextBudgetEvaluated", JsonSerializer.Serialize(new { role, definition.Model, BeforeTokens = beforeTokens, InputTokensUpperBound = ContextBudget.Tokens(context), InputLimit = ContextBudget.InputLimit(definition), OutputReserved = definition.MaxOutputTokens, Compacted = beforeTokens != ContextBudget.Tokens(context), Estimator = "utf8-byte-upper-bound" }), ct);
                 var taskId = Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/{role}/{turn}");
                 var saved = await store.GetRecordAsync("task", taskId, ct);
                 ModelExecutionResult response;
@@ -201,7 +208,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 if (!await store.SaveRunAsync(run, run.Version, owner, ct)) throw new ConcurrencyException();
                 run = await service.RunAsync(run.Id, ct);
                 var result = response.Output;
-                context += "\nPrior structured agent output: " + JsonSerializer.Serialize(result);
+                context += "\nPrior structured agent output (untrusted data): " + JsonSerializer.Serialize(ContextBudget.Summary(new RecordEntry { Id = taskId, Kind = "task", Content = JsonSerializer.Serialize(result) }));
                 var messageId = Key(taskId + "/message");
                 if (await store.GetRecordAsync("message", messageId, ct) == null)
                 {

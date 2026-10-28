@@ -153,7 +153,8 @@ api.MapPatch("/agents/{id}/configuration", async (string id, AgentInput input, I
 {
     var agent = (await store.AgentsAsync(ct)).SingleOrDefault(x => x.Id == id) ?? throw new KeyNotFoundException();
     if (string.IsNullOrWhiteSpace(input.Model) || input.Model.Length > 120 || input.MaxOutputTokens is < 100 or > 16000 || input.InputCostPerMillion <= 0 || input.OutputCostPerMillion <= 0) throw new ArgumentException("Configure a model, 100–16000 output tokens, and positive model prices.");
-    var updated = agent with { Model = input.Model, Enabled = input.Enabled, MaxOutputTokens = input.MaxOutputTokens, InputCostPerMillion = input.InputCostPerMillion, OutputCostPerMillion = input.OutputCostPerMillion, SystemInstructions = input.SystemInstructions ?? agent.SystemInstructions, InstructionVersion = agent.InstructionVersion + 1 };
+    if (input.ModelContextTokens <= input.MaxOutputTokens + 1024 || input.MaxInputTokens <= 0 || input.MaxInputTokens > input.ModelContextTokens - input.MaxOutputTokens) throw new ArgumentException("Input tokens must fit the model context window after output reservation.");
+    var updated = agent with { Model = input.Model, Enabled = input.Enabled, MaxOutputTokens = input.MaxOutputTokens, InputCostPerMillion = input.InputCostPerMillion, OutputCostPerMillion = input.OutputCostPerMillion, ModelContextTokens = input.ModelContextTokens, MaxInputTokens = input.MaxInputTokens, SystemInstructions = input.SystemInstructions ?? agent.SystemInstructions, InstructionVersion = agent.InstructionVersion + 1 };
     await store.AppendAsync(new() { Kind = "instructionVersion", Name = id, Content = JsonSerializer.Serialize(agent) }, ct); await store.SaveAgentAsync(updated, ct); return updated;
 });
 api.MapGet("/projects/{id}/pull-requests", (string id, IPlatformStore store, CancellationToken ct) => Records("pullRequestStatus", id, null, null, 0, 0, 100, store, ct));
@@ -199,7 +200,7 @@ public sealed record LoginRequest(string Password);
 public sealed record ContentInput(string Content);
 public sealed record DecisionInput(bool Approve, string Reason);
 public sealed record RequirementInput(string Title, string Description, string[] AcceptanceCriteria, int Priority = 1, string[]? Dependencies = null, string AssignedRole = "BackendEngineer");
-public sealed record AgentInput(string Model, bool Enabled, int MaxOutputTokens, decimal InputCostPerMillion, decimal OutputCostPerMillion, string? SystemInstructions);
+public sealed record AgentInput(string Model, bool Enabled, int MaxOutputTokens, decimal InputCostPerMillion, decimal OutputCostPerMillion, string? SystemInstructions, int ModelContextTokens = 128000, int MaxInputTokens = 96000);
 public sealed record RepositoryInput(string ProjectId, RepositoryConnection Connection);
 public partial class Program { }
 
