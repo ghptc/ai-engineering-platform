@@ -12,12 +12,22 @@ public sealed record ExecutionPolicy(int MaxIterations = 5, int MaxToolCalls = 3
     }
 }
 public sealed record RepositoryConnection(string Owner, string Repository, long InstallationId, string DefaultBranch = "main");
+public sealed record EngineeringTask(string Title, string Description, string[] AcceptanceCriteria, bool RequiresBusinessAnalysis = false, bool RequiresArchitecture = false, AgentRole[]? Developers = null, string[]? RequirementIds = null, string[]? HumanInstructionIds = null)
+{
+    public void Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Title) || Title.Length > 120 || string.IsNullOrWhiteSpace(Description) || Description.Length > 12000 || AcceptanceCriteria is not { Length: > 0 and <= 20 } || AcceptanceCriteria.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 1000)) throw new ArgumentException("A focused task needs a title, bounded description and 1–20 acceptance criteria.");
+        if (Developers is { Length: > 2 } || Developers?.Any(x => x is not (AgentRole.BackendEngineer or AgentRole.FrontendEngineer)) == true || RequirementIds is { Length: > 20 } || HumanInstructionIds is { Length: > 20 } || RequirementIds?.Any(string.IsNullOrWhiteSpace) == true || HumanInstructionIds?.Any(string.IsNullOrWhiteSpace) == true) throw new ArgumentException("Task specialists or references are outside supported bounds.");
+    }
+    public AgentRole[] Plan => [.. RequiresBusinessAnalysis ? new[] { AgentRole.BusinessAnalyst } : [], .. RequiresArchitecture ? new[] { AgentRole.Architect } : [], .. Developers is { Length: > 0 } ? Developers.Distinct() : [AgentRole.BackendEngineer], AgentRole.TestEngineer, AgentRole.QAEngineer, AgentRole.CodeReviewer];
+}
 public sealed record Project
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
     public string Name { get; init; } = "";
     public string Description { get; init; } = "";
     public string OriginalContext { get; init; } = "";
+    public string StandingInstructions { get; init; } = "";
     public string[] TechnologyStack { get; init; } = [];
     public RepositoryConnection? RepositoryConnection { get; init; }
     public string DefaultBranch { get; init; } = "main";
@@ -30,6 +40,7 @@ public sealed record Project
     {
         if (string.IsNullOrWhiteSpace(Name) || Name.Length > 120 || OriginalContext is null || OriginalContext.Length > 100_000 || Description is null || Description.Length > 10_000 || TechnologyStack is null || TechnologyStack.Length > 30) throw new ArgumentException("Project name is required (maximum 120 characters); context maximum is 100000 characters.");
         if (ExecutionPolicy is null) throw new ArgumentException("Execution policy is required.");
+        if (StandingInstructions is null || StandingInstructions.Length > 12000) throw new ArgumentException("Project instructions must be at most 12000 characters.");
         ExecutionPolicy.Validate();
     }
 }
@@ -39,6 +50,10 @@ public sealed record ExecutionRun
     public string ProjectId { get; init; } = "";
     public string IdempotencyKey { get; init; } = "";
     public string[] RequirementIds { get; init; } = [];
+    public EngineeringTask[] Tasks { get; init; } = [];
+    public int TaskIndex { get; init; }
+    public EngineeringTask? CurrentTask => Tasks.ElementAtOrDefault(TaskIndex);
+    public AgentRole[] SelectedAgents => CurrentTask?.Plan ?? Enum.GetValues<AgentRole>();
     public Project? ProjectSnapshot { get; init; }
     public RunStage CurrentStage { get; init; } = RunStage.Pending;
     public RunStage ResumeStage { get; init; } = RunStage.Pending;
@@ -63,6 +78,9 @@ public sealed record ExecutionRun
         var cancel = CurrentStage is RunStage.Paused or RunStage.Failed or RunStage.AwaitingHumanApproval && target == RunStage.Cancelled;
         var forward = (CurrentStage, target) switch
         {
+            (RunStage.Pending, RunStage.Planning) when CurrentTask is { RequiresBusinessAnalysis: false, RequiresArchitecture: true } => true,
+            (RunStage.Pending, RunStage.Implementing) when CurrentTask is { RequiresBusinessAnalysis: false, RequiresArchitecture: false } => true,
+            (RunStage.Analyzing, RunStage.PreparingContext) when CurrentTask is { RequiresArchitecture: false } => true,
             (RunStage.Pending, RunStage.Analyzing) or (RunStage.Analyzing, RunStage.Planning) or
             (RunStage.Planning, RunStage.PreparingContext) or (RunStage.PreparingContext, RunStage.Implementing) or
             (RunStage.Implementing, RunStage.GeneratingTests) or (RunStage.GeneratingTests, RunStage.RunningTests) or
@@ -85,6 +103,11 @@ public sealed record ExecutionRun
             RetryCount = RetryCount + (resume && CurrentStage == RunStage.Failed ? 1 : 0),
             CompletedAt = target is RunStage.Completed or RunStage.Cancelled or RunStage.Failed ? DateTimeOffset.UtcNow : null
         };
+    }
+    public ExecutionRun AdvanceTask()
+    {
+        if (CurrentStage != RunStage.PreparingDelivery || TaskIndex + 1 >= Tasks.Length || Iteration >= Policy.MaxIterations) throw new InvalidOperationException("No further authorized task fits this execution's iteration budget.");
+        return this with { TaskIndex = TaskIndex + 1, Iteration = Iteration + 1, CurrentStage = RunStage.Pending, RequirementIds = Tasks[TaskIndex + 1].RequirementIds ?? [], FailureReason = null };
     }
     public void CheckLimits(DateTimeOffset now)
     {

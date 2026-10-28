@@ -7,6 +7,28 @@ using Xunit;
 namespace AIEngineeringPlatform.Application.Tests;
 public class ContextBudgetTests
 {
+    [Fact]
+    public async Task ArchitectContextDoesNotGrowWithHistoricalAgentProposals()
+    {
+        var store = Substitute.For<IPlatformStore>();
+        store.RecordsAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<long>(), Arg.Any<int>(), Arg.Any<int>(), default).Returns(Array.Empty<RecordEntry>());
+        var proposal = new RequirementProposal("Change answer", "Return 2", "As an owner", ["answer() returns 2", "Run the updated test"], 1, [], false);
+        var result = new AgentResult("Historical agent transcript " + new string('h', 5000), "CONTINUE", ["answer() returns 2"], [], [], [], new string('n', 10000), [proposal], ArchitectureDecisions: []);
+        var history = Enumerable.Range(0, 500).Select(i => new RecordEntry { Id = "old-" + i, Kind = "message", Name = "BusinessAnalyst", RunId = "previous", Content = JsonSerializer.Serialize(result with { Requirements = [proposal with { Description = new string('p', 4000) }] }) }).ToArray();
+        var human = new RecordEntry { Id = "human", Kind = "message", Name = "Client", Content = "Only change the disposable JavaScript fixture. Never touch the default branch." };
+        store.RecordsAsync("message", "p", null, null, 0, 0, 1000, default).Returns(history.Append(human).ToArray());
+        store.RecordsAsync("requirement", "p", null, null, 0, 0, 1000, default).Returns(new[] { new RecordEntry { Id = "selected", Kind = "requirement", Name = proposal.Title, Content = JsonSerializer.Serialize(proposal) }, new RecordEntry { Id = "unrelated", Kind = "requirement", Content = "Unrelated backlog " + new string('u', 100000) } });
+        store.RecordsAsync("artifact", "p", null, null, 0, 0, 1000, default).Returns(new[] { new RecordEntry { Id = "analysis", Kind = "artifact", Name = "Requirements", RunId = "r", Content = JsonSerializer.Serialize(result) } });
+        var run = new ExecutionRun { Id = "r", ProjectId = "p", RequirementIds = ["selected"], CurrentStage = RunStage.Planning };
+        var context = await new ContextBuilder(store).BuildAsync(new Project { Id = "p", OriginalContext = "Change answer() from 1 to 2" }, run, default);
+        var prepared = ContextBudget.Compact(context, Agent(128000, 25000) with { Role = AgentRole.Architect });
+        Assert.True(ContextBudget.Tokens(prepared) < 10000);
+        Assert.Contains("answer() returns 2", prepared); Assert.Contains("Run the updated test", prepared);
+        Assert.Contains("Never touch the default branch", prepared);
+        Assert.DoesNotContain("Historical agent transcript", prepared); Assert.DoesNotContain("Unrelated backlog", prepared);
+        Assert.Equal(1, prepared.Split("Return 2").Length - 1);
+        Assert.Equal(5, run.Policy.MaxBudgetUsd); Assert.Equal(0, run.Cost);
+    }
     private static AgentDefinition Agent(int window = 128000, int input = 96000, int output = 4000) => new("a", AgentRole.BackendEngineer, "Backend", "", "configured-model", "Trusted instructions", [], ["ReadProjectMemory"], MaxOutputTokens: output, ModelContextTokens: window, MaxInputTokens: input);
     [Fact]
     public void UnicodeUsesConservativeTokenBoundAndOutputIsReserved()

@@ -70,3 +70,57 @@ Read-only inspection identified the actual matching local failed run and artifac
 Sizing deliberately uses a conservative byte-level BPE token upper bound, not exact model tokenization. Live OpenAI/GitHub App engineering execution and opt-in real Docker executor tests were not run for this change (2 live-agent and 3 executor tests skipped). Docker image build success and the feature-branch Git/PR delivery are separate from those external integration boundaries. No deployment or automatic retry of the preserved failed run is claimed.
 
 Diff review checked protected-content retention, original-reference/project isolation, model preflight/output reservation, persist-before-publish telemetry, unchanged approval/lease/fence/idempotency gates, source layout and absence of secrets/generated build artifacts in the staged change.
+
+## Architect context regression — 2026-10-28
+
+Source/test delta SHA-256: `3169dce80f51bb8049121fb4c308de01d33509324e149aebd02f9b1c4eb2d904` from the staged binary diff of backend/src and backend/tests before commit. Final backend build passed with zero warnings/errors. Full backend tests passed: 64 passing (15 Application, 14 Domain, 2 Architecture, 25 Integration, 8 LocalExecutor) and 5 opt-in external tests skipped. Integration workflows were rerun after adding 80 distinct long historical conversations to each approval-policy scenario; both reached implementation, QA and approved completion. The new focused-context regression retains selected JavaScript fixture criteria and human safety instructions with 500 long historical agent messages while fitting below 10000 conservative context tokens under a 25000-token input limit. Missing selected records fail closed; financial/model budgets remain untouched.
+
+Playwright full workflow passed (1 test, 9.5 seconds). Docker packaging passed, image config `sha256:332ffdde40fa6372c3ff43e70617b1e9e49c9e8c769105dc035c8c91f2fdee07`. Frontend source/dependencies were unchanged; their checks remain as recorded for the preceding milestone. Staged diff/whitespace review passed and found no secrets or generated artifacts. No production execution was retried or mutated. [ADR 006](architecture/006-focused-context-regression.md) contains the actual failed-run inventory and official model-window reference. No live OpenAI/GitHub App or real executor workload success is claimed by this regression milestone.
+
+## Lightweight local task workflow — 2026-10-28
+
+Final source/test delta SHA-256: `fb01286e0aba304b837807450a361725d8453f48dd3e64084f20b25f490072cf`, computed from `git diff --cached --binary -- backend/src backend/tests frontend/src frontend/tests | sha256sum` relative to the focused-context milestone. Application source was unchanged after the successful live workflow; additional scope-isolation and specialist-routing test cases then passed in the final suite. Documentation changes only record these results.
+
+| Check | Final result |
+| --- | --- |
+| Backend restore | Passed |
+| Backend build, `--no-restore -m:1` | Passed, zero warnings/errors |
+| Full backend suite with `RUN_LOCAL_EXECUTOR_TESTS=1`, immutable `EXECUTOR_TEST_IMAGE` and isolated MongoDB | **83 passed**: 19 Application, 17 Domain, 2 Architecture, 29 Integration, 16 LocalExecutor. Two opt-in live tests skipped in this invocation; the complete real workflow was explicitly run separately below. |
+| Real Docker executor tests | All three opt-in tests passed within the full suite: Node/.NET workload edits and assertions, feature-branch commit/push/default-branch protection, isolation/resources/network/output/deadline/cleanup, authenticated Unix daemon and durable replay/restart |
+| `npm ci --prefix frontend` | Passed, zero reported vulnerabilities |
+| Frontend typecheck / unit tests / production build | Passed / **8 passed** / passed; existing large-chunk warning remains |
+| Browser workflow | **1 passed**, 11.2 seconds; focused task launch, saved standing instructions, chosen specialists, handoffs, collaboration, artifacts, persisted timeline and delivery approval |
+| Docker application image | Built successfully; config `sha256:8d40f4f8c0426b5a09d3909745aa404c727106a97be99d4435a4862cbed6efcf` |
+| Staged diff, whitespace and secret-pattern review | Passed; no generated build output, credentials, .env, daemon configuration or runtime state staged |
+
+Regression coverage exercises all four independent BA/Architect selection combinations, optional frontend participation, two-task automatic continuation with unchanged cumulative budgets, human delivery approvals, exact QA evidence matching, refusal to import another project's requirement/human-message references, no project-wide history reads for focused tasks, and Node default/TAP/ANSI test-reporter counts with zero-test rejection. Existing broad project workflows and both review policies remain covered.
+
+### Real OpenAI, GitHub App and local Docker result
+
+The explicit `RUN_LIVE_AGENT_TESTS=1 LIVE_FOCUSED_TASK=1` workflow passed using real credentials, model `gpt-6.1-sol`, positive configured prices (USD 2 input / 10 output per million tokens), an explicit **USD 1 run cap**, real MongoDB and a separately authenticated host Unix daemon. No deterministic model, sandbox or GitHub adapter was used in this run. The separate daemon reused only the owner's existing disposable-repository allowlist and pinned runtime image, with its own state/socket and fixed `node --test` profiles. The owner's running application, daemon, project database, profiles and failed executions were not changed or retried.
+
+| Evidence | Confirmed value |
+| --- | --- |
+| Run / status | `f90535012966492c97c04698c84803cb` / Completed |
+| Verification database | `aep_test_c7d54e45a38d4dfaab4b3773744d3c29` on dedicated test MongoDB port 27029 |
+| Specialists actually called | BackendEngineer (Developer), TestEngineer, QAEngineer, CodeReviewer; no BA, Architect or FrontendEngineer |
+| Initial context / maximum turn body | **3,269 / 13,783** conservative input token upper bounds; no full historical conversations |
+| Actual usage / cost | 53,530 total reported model tokens over 11 model calls / **USD 0.146036**, 24 tool calls |
+| Source changes | `feature.mjs`: answer() 1→2; `feature.test.mjs`: existing strict assertion 1→2; exactly two files changed |
+| Required passing test evidence | `local-ee41e3a5567c6d59f8d884ec02a30b9b33c264cf83bd40ec0f82fa892240a549` |
+| Tested and committed workspace revision | `987f8a8c0454441834b304fe3a57d6d84a559788433e09de60d73318ad9e5dae` |
+| Git commit / pushed branch | `1eb536ce57b8ebc0f5346f7d6f5572f142abdd85` / `engineering/f90535012966492c97c04698c84803cb` |
+| Actual draft PR | [Disposable fixture PR 1](https://github.com/ghptc/aep-sandbox-m8-20261028-3a0ed9/pull/1), open and unmerged |
+| Published GitHub review | [Review 5688623915](https://github.com/ghptc/aep-sandbox-m8-20261028-3a0ed9/pull/1#pullrequestreview-5688623915), COMMENTED against the delivered commit; local model diff review is recorded separately, not represented as independent human review |
+| Delivery approval | Persisted Approved decision `9f64622191ee7cdda0690bd16bdd59589257f2528dce3c7666b36a6d5fe49da9`, explicitly authorized by the owner-invoked disposable live test; production delivery approval remains manual |
+| Default branch before / after | Both `46f5f71a228dfe46d72d0f04c85118dc8620b2ab`; remote SHA independently read back after PR creation |
+
+The standalone real API contract probe was not separately run; the complete workflow exercised the real Responses API and recorded successful usage. The final full-suite opt-in skips must not be confused with the separately passing complete live workflow.
+
+### Failures investigated and retained
+
+The first real attempt correctly failed closed because Node's default `ℹ tests 1` reporter was counted as zero; the executor now supports default and TAP output and has regression coverage. A later attempt completed real tests and QA but returned explanatory evidence strings rather than an exact evidence-ID array item; the strict gate rejected it. The schema/context now explicitly require bare IDs and preserve the required checkpoint through specialist handoff. These failures were fixed without accepting prose as evidence or dropping test/review/approval requirements.
+
+The pre-existing isolated test MongoDB container exited repeatedly with a server segmentation fault (exit 139, not an OOM-killed report). Its data was retained; final verification used a new dedicated container, `aep-focused-mongo-verification`, with bounded resources/cache on port 27029. Failed attempt receipts, logs and workspaces remain under `/tmp/aep-focused-live-20261028/` and their original test databases; successful receipts/state remain alongside them. No production data was reset, discarded, migrated or overwritten. The temporary verification daemon and MongoDB service are stopped after verification; the test container/volume and local evidence files are retained for inspection.
+
+Final review covered domain transition restrictions, project-scoped references, persisted instruction revisions, shared queue budgets, strict QA IDs/revisions, real diff review, owner approval before protected Git actions, persist-before-publish telemetry/handoffs, the existing host-daemon trust boundary and lack of automatic merging. No deployment or replacement of the owner application/daemon is claimed.

@@ -23,17 +23,23 @@ public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISou
         if (Name == "ReadProjectMemory")
         {
             var kind = args.TryGetProperty("kind", out var k) ? k.GetString()! : "artifact";
-            if (kind is not ("artifact" or "tool" or "task" or "message" or "requirement")) throw new ArgumentException("Unsupported memory kind.");
+            if (kind is not ("artifact" or "tool" or "task" or "message" or "requirement" or "handoff" or "project")) throw new ArgumentException("Unsupported memory kind.");
             var offset = args.TryGetProperty("offset", out var o) ? o.GetInt32() : 0;
             var limit = args.TryGetProperty("limit", out var l) ? l.GetInt32() : 2000;
             if (offset < 0 || limit is < 1 or > 4000) throw new ArgumentException("Use nonnegative offset and 1–4000 characters per page.");
+            if (kind == "project")
+            {
+                if (!args.TryGetProperty("id", out var projectId) || projectId.GetString() != context.Project.Id) throw new KeyNotFoundException("Project knowledge not found.");
+                var original = context.Project.OriginalContext;
+                return new(true, JsonSerializer.Serialize(new { Id = context.Project.Id, Kind = "project", offset, TotalCharacters = original.Length, Content = original.Substring(Math.Min(offset, original.Length), Math.Min(limit, Math.Max(0, original.Length - offset))) }));
+            }
             if (args.TryGetProperty("id", out var id))
             {
                 var record = await store.GetRecordAsync(kind, id.GetString()!, ct);
                 if (record == null || record.ProjectId != context.Project.Id) throw new KeyNotFoundException("Memory not found in this project.");
                 return new(true, JsonSerializer.Serialize(new { Reference = ContextBudget.Reference(record), offset, TotalCharacters = record.Content.Length, Content = record.Content.Substring(Math.Min(offset, record.Content.Length), Math.Min(limit, Math.Max(0, record.Content.Length - offset))) }));
             }
-            var records = await store.RecordsAsync(kind, context.Project.Id, null, null, 0, offset, 20, ct);
+            var records = await store.RecordsAsync(kind, context.Project.Id, args.TryGetProperty("runId", out var runId) ? runId.GetString() : context.Run.CurrentTask == null ? null : context.Run.Id, null, 0, offset, 20, ct);
             return new(true, JsonSerializer.Serialize(records.Select(ContextBudget.Reference)));
         }
         if (Name == "SaveArtifact")

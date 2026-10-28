@@ -60,11 +60,15 @@ public sealed class LiveAgentCycleTests
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { password = PlatformFactory.Password }); login.EnsureSuccessStatusCode();
         var store = live.Services.GetRequiredService<IPlatformStore>();
         for (var attempt = 0; (await store.AgentsAsync(default)).Count < 7 && attempt < 50; attempt++) await Task.Delay(100);
-        foreach (var agent in await store.AgentsAsync(default)) await store.SaveAgentAsync(agent with { Model = model, MaxOutputTokens = 2500, InputCostPerMillion = inputPrice, OutputCostPerMillion = outputPrice }, default);
+        foreach (var agent in await store.AgentsAsync(default)) await store.SaveAgentAsync(agent with { Model = model, MaxOutputTokens = 4000, InputCostPerMillion = inputPrice, OutputCostPerMillion = outputPrice }, default);
         var project = new Project { Name = "Live disposable engineering verification", OriginalContext = "This is an explicitly disposable local-runtime verification repository. Inspect its actual source and tests. Implement one small useful change to its existing feature (for the standard fixture, change answer() to return 2 and update its tests). Use its existing stack without installing dependencies or adding dummy frontend code. Preserve compatibility except this explicit behavior change. Write/execute real tests, map each selected requirement ID to RunTests evidence, and review the actual diff. Do not modify any other repository or default branch.", RepositoryConnection = connection, ExecutionPolicy = new(MaxIterations: 3, MaxToolCalls: 60, MaxDurationMinutes: 15, MaxBudgetUsd: budget) };
         await store.SaveProjectAsync(project, null, default);
         client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
-        var response = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/runs", new { }); response.EnsureSuccessStatusCode();
+        var focused = Environment.GetEnvironmentVariable("LIVE_FOCUSED_TASK") == "1";
+        var response = focused
+            ? await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/tasks", new { tasks = new[] { new EngineeringTask("Update JavaScript answer fixture", "Inspect feature.mjs and feature.test.mjs. Change answer() from 1 to 2 and update its existing test. Use only this existing dependency-free JavaScript fixture; no C#, frontend, new frameworks or unrelated files. RunTests profile all executes node --test in the isolated Docker container. Review the real diff and stop for delivery approval. Never modify the default branch.", ["answer() returns 2", "The existing test asserts 2 and passes with node --test", "Only feature.mjs and feature.test.mjs change"]) } })
+            : await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/runs", new { });
+        response.EnsureSuccessStatusCode();
         var json = new JsonSerializerOptions(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
         var run = (await response.Content.ReadFromJsonAsync<ExecutionRun>(json))!;
         var approved = false;
@@ -88,5 +92,15 @@ public sealed class LiveAgentCycleTests
         var pr = Assert.Single(artifacts, item => item.Name == "PullRequest");
         using var document = JsonDocument.Parse(pr.Content); Assert.True(document.RootElement.GetProperty("number").GetInt32() > 0);
         Assert.Contains(artifacts, item => item.Name == "CodeReview" && item.Content.Contains("html_url", StringComparison.Ordinal));
+        Console.WriteLine($"Live delivery: run={run.Id}; database={factory.Database}; PR={document.RootElement.GetProperty("html_url").GetString()}; USD={run.Cost}; tokens={run.TokenUsage}; toolCalls={run.ToolCalls}");
+        if (focused)
+        {
+            var tasks = await store.RecordsAsync("task", project.Id, run.Id, null, 0, 0, 1000, default);
+            Assert.DoesNotContain(tasks, x => x.Name is "BusinessAnalyst" or "Architect" or "FrontendEngineer");
+            var tools = await store.RecordsAsync("tool", project.Id, run.Id, null, 0, 0, 1000, default);
+            var passing = tools.Where(x => x.Name == "RunTests").Select(x => JsonSerializer.Deserialize<ToolResult>(x.Content)!).Where(x => x.Success).ToArray();
+            Assert.NotEmpty(passing); Assert.All(passing, x => { Assert.NotNull(x.EvidenceId); Assert.NotNull(x.WorkspaceRevision); });
+            Assert.Contains(artifacts, x => x.Name == "CodeDiff" && x.Content.Contains("feature.mjs") && x.Content.Contains("feature.test.mjs"));
+        }
     }
 }

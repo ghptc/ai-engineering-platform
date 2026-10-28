@@ -172,7 +172,7 @@ describe("execution boundaries", () => {
   it("shows real policy budgets, iterations and tool limits", async () => {
     vi.mocked(fetch).mockImplementation((url) =>
       respond(
-        String(url).includes("/events") || String(url).includes("/artifacts")
+        String(url).includes("/events") || String(url).includes("/artifacts") || String(url).includes("/handoffs")
           ? { items: [] }
           : {
               id: "run",

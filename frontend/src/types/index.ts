@@ -12,6 +12,7 @@ export interface Project {
   name: string;
   description: string;
   originalContext: string;
+  standingInstructions: string;
   technologyStack: string[];
   status: string;
   version: number;
@@ -25,7 +26,11 @@ export interface Project {
     defaultBranch: string;
   };
 }
+export interface FocusedTask { title: string; description: string; acceptanceCriteria: string[]; requiresBusinessAnalysis?: boolean; requiresArchitecture?: boolean; developers?: string[]; }
 export interface Run {
+  tasks: FocusedTask[];
+  taskIndex: number;
+  selectedAgents: string[];
   policy: Policy;
   id: string;
   projectId: string;

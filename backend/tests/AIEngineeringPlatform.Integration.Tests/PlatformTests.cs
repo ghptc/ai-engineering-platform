@@ -56,6 +56,8 @@ public sealed class PlatformTests : IClassFixture<PlatformFactory>
         // Reproduce recursive snapshots larger than the former 160000-character bound.
         await store.AppendAsync(new() { Kind = "artifact", ProjectId = project.Id, Name = "DevelopmentContext", Content = new string('x', 200000) }, default);
         await store.AppendAsync(new() { Kind = "artifact", ProjectId = project.Id, Name = "TestReport", Content = new string('h', 200000), RunId = "completed-history" }, default);
+        for (var i = 0; i < 80; i++)
+            await store.AppendAsync(new() { Kind = "message", ProjectId = project.Id, RunId = "old-history", Name = "BusinessAnalyst", Content = JsonSerializer.Serialize(new AgentResult("Unrelated old proposal " + i + new string('h', 4000), "CONTINUE", [], [], [], [], "")) }, default);
         client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
         var start = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/runs", new { }); Assert.Equal(HttpStatusCode.Accepted, start.StatusCode); var run = (await start.Content.ReadFromJsonAsync<ExecutionRun>(Json))!;
         var duplicate = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/runs", new { }); Assert.Equal(run.Id, (await duplicate.Content.ReadFromJsonAsync<ExecutionRun>(Json))!.Id);
@@ -75,6 +77,50 @@ public sealed class PlatformTests : IClassFixture<PlatformFactory>
         } while (true);
         Assert.Contains(events.Items, x => x.Name == "ContextInventory"); Assert.Contains(events.Items, x => x.Name == "ContextBudgetEvaluated");
         Assert.Contains(events.Items, x => x.Name == "RunCompleted"); Assert.True(events.Items.Select(x => x.Sequence).SequenceEqual(events.Items.Select(x => x.Sequence).Order()));
+    }
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task FocusedQueueSelectsSpecialistsAndAdvancesWithinOriginalBudget(bool analysis, bool architecture)
+    {
+        await using var isolated = new PlatformFactory();
+        using var client = isolated.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Requested-With", "AIEngineeringPlatform");
+        (await client.PostAsJsonAsync("/api/v1/auth/login", new { password = PlatformFactory.Password })).EnsureSuccessStatusCode();
+        var created = await client.PostAsJsonAsync("/api/v1/projects", new { name = "Focused queue", description = "Focused workflow regression", originalContext = "Project knowledge " + new string('h', 50000), technologyStack = new[] { "JavaScript" }, executionPolicy = new ExecutionPolicy(MaxIterations: 3, MaxToolCalls: 60) });
+        created.EnsureSuccessStatusCode();
+        var project = (await created.Content.ReadFromJsonAsync<Project>(Json))!;
+        var store = isolated.Services.GetRequiredService<IPlatformStore>();
+        await store.SaveProjectAsync(project with { RepositoryConnection = new("test-owner", "test-repo", 1), Version = project.Version + 1, StandingInstructions = "Never touch main" }, project.Version, default);
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
+        var started = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/tasks", new { tasks = new[] { new EngineeringTask("First change", "Implement answer", ["Tests pass"], analysis, architecture), new EngineeringTask("Next change", "Refine answer", ["Updated tests pass"]) } });
+        started.EnsureSuccessStatusCode();
+        var run = (await started.Content.ReadFromJsonAsync<ExecutionRun>(Json))!;
+        for (var taskIndex = 0; taskIndex < 2; taskIndex++)
+        {
+            run = await WaitAsync(client, run.Id, RunStage.AwaitingHumanApproval);
+            Assert.Equal(taskIndex, run.TaskIndex);
+            Assert.Equal(5, run.Policy.MaxBudgetUsd);
+            var approvals = await store.RecordsAsync("approval", project.Id, run.Id, null, 0, 0, 100, default);
+            var approval = Assert.Single(approvals, x => x.Status == "Pending");
+            (await client.PostAsJsonAsync($"/api/v1/approvals/{approval.Id}/decision", new { approve = true, reason = "Authorized deterministic task delivery" })).EnsureSuccessStatusCode();
+            if (taskIndex == 0)
+            {
+                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                do { await Task.Delay(100, deadline.Token); run = (await client.GetFromJsonAsync<ExecutionRun>($"/api/v1/runs/{run.Id}", Json, deadline.Token))!; if (run.CurrentStage == RunStage.Failed) throw new Exception(run.FailureReason); } while (run.TaskIndex == 0);
+            }
+        }
+        run = await WaitAsync(client, run.Id, RunStage.Completed);
+        var tasks = await store.RecordsAsync("task", project.Id, run.Id, null, 0, 0, 1000, default);
+        Assert.DoesNotContain(tasks, x => x.Name == "FrontendEngineer");
+        Assert.Equal(analysis, tasks.Any(x => x.Name == "BusinessAnalyst"));
+        Assert.Equal(architecture, tasks.Any(x => x.Name == "Architect"));
+        Assert.True(run.Cost > 0); Assert.True(run.TokenUsage > 0); Assert.Equal(2, run.Iteration);
+        var handoffs = await client.GetFromJsonAsync<Page<RecordEntry>>($"/api/v1/runs/{run.Id}/handoffs", Json);
+        Assert.NotEmpty(handoffs!.Items);
+        Assert.All(handoffs.Items, h => Assert.Contains("NextAction", h.Content));
     }
     [Fact]
     public async Task MongoLeasesFenceStaleWorkersAndEnforceIdempotency()

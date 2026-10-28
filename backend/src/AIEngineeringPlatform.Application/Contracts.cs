@@ -35,6 +35,7 @@ public interface IExecutionPublisher { Task PublishAsync(RecordEntry entry, Canc
 public sealed record AgentContext(Project Project, ExecutionRun Run, string Context, AgentDefinition Definition);
 public sealed record ToolCall(string Name, JsonElement Arguments);
 public sealed record AgentResult(string Summary, string Decision, string[] AcceptanceCriteria, string[] Evidence, string[] Assumptions, ToolCall[] ToolCalls, string NextContext, RequirementProposal[]? Requirements = null, ReviewFinding[]? Findings = null, QualityCheck[]? Checks = null, string[]? OpenQuestions = null, ArchitectureDecision[]? ArchitectureDecisions = null);
+public sealed record AgentHandoff(string Summary, string CompletedWork, string[] RelevantArtifacts, QualityCheck[] ValidationResults, string[] Blockers, string NextAction);
 public sealed record RequirementProposal(string Title, string Description, string UserStory, string[] AcceptanceCriteria, int Priority, string[] Dependencies, bool NonFunctional);
 public sealed record ReviewFinding(string Severity, string File, int? Line, string Description, string SuggestedCorrection);
 public sealed record QualityCheck(string RequirementId, string Scenario, bool Passed, string EvidenceId, string Details);
