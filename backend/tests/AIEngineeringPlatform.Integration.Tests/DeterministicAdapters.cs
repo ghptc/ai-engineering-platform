@@ -18,6 +18,12 @@ public sealed class DeterministicModel : ILanguageModelProvider
         // Resolve the required-test report from the persisted context, whose JSON escapes still preserve evidence ids.
         var reportIndex = context.Context.LastIndexOf("TestReport", StringComparison.Ordinal);
         if (reportIndex >= 0) tests = System.Text.RegularExpressions.Regex.Match(context.Context[reportIndex..], "fake-evidence-[a-f0-9]{64}") is { Success: true } match ? match.Value : tests;
+        var requiredIndex = context.Context.LastIndexOf("Required test evidence:", StringComparison.Ordinal);
+        if (requiredIndex >= 0)
+        {
+            var requiredMatch = System.Text.RegularExpressions.Regex.Match(context.Context[requiredIndex..], "fake-evidence-[a-f0-9]{64}");
+            if (requiredMatch.Success) tests = requiredMatch.Value;
+        }
         var requirements = role == AgentRole.BusinessAnalyst ? new[] { new RequirementProposal("Fixture requirement", "Deterministic test scenario", "As an owner, I need traceable delivery.", ["Persist and verify the fixture"], 1, [], false) } : [];
         var decisions = role == AgentRole.Architect ? new[] { new ArchitectureDecision("Test architecture", "Test-only context", "Use deterministic adapters", "External calls are not verified", "") } : [];
         var checks = role == AgentRole.QAEngineer ? context.Run.RequirementIds.Select(id => new QualityCheck(id, "Fixture test execution", true, tests, "Deterministic test evidence only")).ToArray() : [];

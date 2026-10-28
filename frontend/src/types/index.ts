@@ -66,6 +66,8 @@ export interface Agent {
   instructionVersion: number;
   allowedTools: string[];
   maxOutputTokens: number;
+  modelContextTokens: number;
+  maxInputTokens: number;
   inputCostPerMillion: number;
   outputCostPerMillion: number;
 }

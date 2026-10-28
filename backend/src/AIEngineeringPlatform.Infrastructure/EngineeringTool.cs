@@ -20,7 +20,22 @@ public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISou
         if (Name == "WriteFile" && !args.TryGetProperty("content", out _)) throw new ArgumentException("content is required.");
         if (Name == "ApplyPatch" && !args.TryGetProperty("patch", out _)) throw new ArgumentException("patch is required.");
         if (Name == "RunCommand" && (!args.TryGetProperty("profile", out var commandProfile) || commandProfile.GetString() is not ("build" or "lint" or "format" or "typecheck") || args.EnumerateObject().Any(x => x.Name != "profile"))) throw new UnauthorizedAccessException("RunCommand accepts only administrator-defined build, lint, format or typecheck profiles; shell text is not allowed.");
-        if (Name == "ReadProjectMemory") return new(true, JsonSerializer.Serialize(await store.RecordsAsync("artifact", context.Project.Id, null, null, 0, 0, 100, ct)));
+        if (Name == "ReadProjectMemory")
+        {
+            var kind = args.TryGetProperty("kind", out var k) ? k.GetString()! : "artifact";
+            if (kind is not ("artifact" or "tool" or "task" or "message" or "requirement")) throw new ArgumentException("Unsupported memory kind.");
+            var offset = args.TryGetProperty("offset", out var o) ? o.GetInt32() : 0;
+            var limit = args.TryGetProperty("limit", out var l) ? l.GetInt32() : 2000;
+            if (offset < 0 || limit is < 1 or > 4000) throw new ArgumentException("Use nonnegative offset and 1–4000 characters per page.");
+            if (args.TryGetProperty("id", out var id))
+            {
+                var record = await store.GetRecordAsync(kind, id.GetString()!, ct);
+                if (record == null || record.ProjectId != context.Project.Id) throw new KeyNotFoundException("Memory not found in this project.");
+                return new(true, JsonSerializer.Serialize(new { Reference = ContextBudget.Reference(record), offset, TotalCharacters = record.Content.Length, Content = record.Content.Substring(Math.Min(offset, record.Content.Length), Math.Min(limit, Math.Max(0, record.Content.Length - offset))) }));
+            }
+            var records = await store.RecordsAsync(kind, context.Project.Id, null, null, 0, offset, 20, ct);
+            return new(true, JsonSerializer.Serialize(records.Select(ContextBudget.Reference)));
+        }
         if (Name == "SaveArtifact")
         {
             if (!args.TryGetProperty("content", out var content)) throw new ArgumentException("content is required.");

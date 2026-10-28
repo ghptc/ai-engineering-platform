@@ -7,3 +7,7 @@ Completed during recovery: reconciled source and architecture; repaired browser 
 Final local results: backend builds with zero warnings/errors; 45 backend tests pass; TypeScript and production React builds pass; seven frontend tests pass; the Playwright engineering workflow passes; dependency audits report no known vulnerabilities; the production image passes 13 HTTP smoke checks and runs as a healthy non-root container without Node.
 
 Live external verification remains blocked on OpenAI credentials/model access, a GitHub App installation/private key, and a separately provisioned secure remote executor. No live operation or isolation guarantee is fabricated. See [verification.md](verification.md) for exact evidence and [README](../../README.md) for setup and limitations. Verified milestones are finalized through Conventional Commits; inspect `git log` for source-control history.
+
+## Adaptive context management (2026-10-28)
+
+Implemented configurable model-window and agent-input limits with explicit output reservation, conservative token upper-bound sizing and final provider validation. Replaced recursive context snapshots with references; retained protected requirements, architecture, policy and human instructions; summarized execution/conversation history; added paged project-scoped original retrieval, bounded tool previews and context telemetry. Original execution data is retained. See [ADR 005](architecture/005-adaptive-context.md) for defaults, sizing tradeoffs and regression scope. Live model execution remains unverified by this milestone.

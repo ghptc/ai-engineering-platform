@@ -12,6 +12,32 @@ namespace AIEngineeringPlatform.Integration.Tests;
 public class AdapterTests
 {
     [Fact]
+    public async Task MemoryRetrievalIsBoundedTraceableAndProjectScoped()
+    {
+        var store = Substitute.For<IPlatformStore>();
+        store.GetRecordAsync("tool", "original", default).Returns(new RecordEntry { Id = "original", Kind = "tool", ProjectId = "p", Content = new string('a', 5000) + "TARGET" });
+        var tool = new EngineeringTool("ReadProjectMemory", new DeterministicSandbox(), new DeterministicSourceControl(), store);
+        var definition = new AgentDefinition("a", AgentRole.Architect, "a", "", "test", "", [], ["ReadProjectMemory"]);
+        var context = new AgentContext(new Project { Id = "p" }, new ExecutionRun(), "", definition);
+        var args = JsonSerializer.SerializeToElement(new { kind = "tool", id = "original", offset = 5000, limit = 6 });
+        var result = await tool.ExecuteAsync(context, args, "read", default);
+        using var json = JsonDocument.Parse(result.Output);
+        Assert.Equal("TARGET", json.RootElement.GetProperty("Content").GetString());
+        Assert.Equal(5006, json.RootElement.GetProperty("TotalCharacters").GetInt32());
+        Assert.Contains("Sha256", result.Output);
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => tool.ExecuteAsync(context with { Project = new Project { Id = "other" } }, args, "read", default));
+        await Assert.ThrowsAsync<ArgumentException>(() => tool.ExecuteAsync(context, JsonSerializer.SerializeToElement(new { id = "original", limit = 4001 }), "read", default));
+    }
+    [Fact]
+    public async Task ProviderRejectsOversizedProtectedInputBeforeSendingRequest()
+    {
+        var handler = new ModelHandler();
+        var client = new OpenAI.Responses.ResponsesClient(new System.ClientModel.ApiKeyCredential("test-key"), new OpenAI.Responses.ResponsesClientOptions { Endpoint = new Uri("https://example.invalid/v1/"), Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(new HttpClient(handler)) });
+        var definition = new AgentDefinition("a", AgentRole.Architect, "a", "", "test-model", "instructions", [], [], InputCostPerMillion: 1, OutputCostPerMillion: 2, ModelContextTokens: 20000, MaxInputTokens: 16000);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new OpenAIProvider("test-key", clientOverride: client).ExecuteAsync(new(new Project(), new ExecutionRun(), new string('x', 15000), definition), default));
+        Assert.Empty(handler.Body);
+    }
+    [Fact]
     public void GitHubWebhookUsesConstantTimeHmacVerification()
     {
         const string secret = "test-secret"; var body = Encoding.UTF8.GetBytes("{\"action\":\"opened\"}");
