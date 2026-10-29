@@ -124,3 +124,29 @@ The first real attempt correctly failed closed because Node's default `ℹ tests
 The pre-existing isolated test MongoDB container exited repeatedly with a server segmentation fault (exit 139, not an OOM-killed report). Its data was retained; final verification used a new dedicated container, `aep-focused-mongo-verification`, with bounded resources/cache on port 27029. Failed attempt receipts, logs and workspaces remain under `/tmp/aep-focused-live-20261028/` and their original test databases; successful receipts/state remain alongside them. No production data was reset, discarded, migrated or overwritten. The temporary verification daemon and MongoDB service are stopped after verification; the test container/volume and local evidence files are retained for inspection.
 
 Final review covered domain transition restrictions, project-scoped references, persisted instruction revisions, shared queue budgets, strict QA IDs/revisions, real diff review, owner approval before protected Git actions, persist-before-publish telemetry/handoffs, the existing host-daemon trust boundary and lack of automatic merging. No deployment or replacement of the owner application/daemon is claimed.
+
+## Engineering workspace UX redesign — 2026-10-29
+
+Implemented in isolated worktree `/tmp/aep-ux-worktree` on `feat/engineering-workspace-ui`, preserving concurrent unrelated changes in the owner's original worktree. Audit preceded implementation; see [ux-audit.md](ux-audit.md). No production database migration, live provider call, deployment or automatic merge was performed.
+
+Verification of the UX milestone based on `54d13df`:
+
+| Check | Actual result |
+| --- | --- |
+| .NET restore and single-worker build | Passed; 0 warnings, 0 errors |
+| Full backend suite with isolated MongoDB | **84 passed, 5 explicit opt-in skips**: Application 20, Domain 17, Architecture 2, Integration 32, LocalExecutor 13 |
+| Frontend clean install | Passed; npm reported 0 vulnerabilities |
+| TypeScript typecheck | Passed |
+| Frontend unit/component tests | **25 passed**, three files |
+| Playwright browser suite | **2 passed**, 17.6 seconds, dedicated ports 16088/16173 |
+| Production React build | Passed; existing large Monaco/vendor chunk warning remains |
+| Production Docker build | Passed; separate tag `ai-engineering-platform:ux-review`, image config `sha256:6e9ff79594b13e9575d269ee71a777e185d49a4b552e5725161ec4818dd86739` |
+| Whitespace/source review | `git diff --check` passed; reviewed persisted-before-publish, owner authorization, scoped evidence, Markdown sanitization, price/history isolation and original budget/approval checks |
+
+Regression evidence includes 1,002+ persisted events replayed through real hub logic across multiple 500-record batches, reconnect from the completed watermark, no duplicates, cold snapshot behavior, latest-first cursor pagination, a preserved 100,000-character diagnostic original behind a preview, scoped evidence 404s, historical receipt arithmetic, price-only updates and owner authentication. Frontend tests cover shared subscriptions, out-of-order/deduplicated replay, initial connection retry and cleanup, selected specialists, recorded handoffs, scrolling/auto-follow freeze and Jump to Latest, readable Markdown, safe lazy JSON, cost separation, clarification and terminal states. Browser tests create a project, save instructions/messages, launch a focused four-specialist task, inspect actual persisted deterministic evidence, approve delivery through the existing backend and reload completed state; they also inspect 1,000 history events and mobile light-mode navigation without page overflow.
+
+The first final repetition failed when isolated `aep-ux-mongo` exhausted file descriptors and exited 139 (`OOMKilled=false`), producing Mongo connection/500 failures. Its container/data were retained. The complete successful repeat used fresh `aep-ux-final-mongo` at localhost:27031 with a 65,536 file-descriptor limit and bounded memory/cache. Test fixtures use unique databases. Owner services and production data were not restarted, replaced or modified. Vitest emits existing jsdom/Ant Design CSS and pseudo-element warnings; no test or unhandled-error failure is hidden.
+
+Screenshots from that successful deterministic browser run: [dashboard](ux-evidence/dashboard-dark.png), [execution/team/approval](ux-evidence/execution-dark.png), [usage/pricing separation](ux-evidence/usage-dark.png), [large diagnostic Drawer](ux-evidence/evidence-drawer-dark.png), [mobile light-mode team](ux-evidence/mobile-light.png). These are persisted test-host interactions, not new live OpenAI/GitHub/sandbox success. The two live integration tests and three real executor tests were deliberately skipped in this UX milestone; previous live evidence above remains historical evidence only.
+
+Remaining limits: dashboard/budget panels summarize recent runs and link to full history; legacy missing model/task/tool-input metadata is unavailable; usage totals stream the existing receipt ledger rather than introducing an analytics subsystem; existing Monaco chunks remain large. Full originals, old events and artifacts remain accessible. No imaginary activity, billing confirmation or source-control success is shown.

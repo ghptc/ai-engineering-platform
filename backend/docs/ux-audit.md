@@ -1,0 +1,28 @@
+# Engineering workspace UX audit
+
+Audit performed before implementation, 2026-10-28. Reviewed every frontend route and feature, Common/CodeViewer primitives, preferences/theme, styles, API client, SignalR hook, component/browser tests, API routes, MongoDB usage ledger and hub replay contract. Existing worktree was clean.
+
+| Severity | Finding and impact | Remediation |
+| --- | --- | --- |
+| High | Execution renders up to 500 full JSON event bodies in an expanding timeline; current work disappears below diagnostic payloads. | Latest-first, 50-row viewport-bounded activity monitor; cursor-paged history; lazy evidence Drawer. |
+| High | Collaboration is a selector over saved chats, with no selected team, agent state, handoff direction or next specialist. | Run-based team workspace derived from persisted events/handoffs, with chronological readable messages and tool/evidence access. Never infer all seven are active. |
+| High | Dashboard/execution spend statistics displace engineering actions; there is no dedicated usage destination. | Operational dashboard: active work, owner actions, validated deliveries, persisted team activity. Separate estimated-cost/actual-token ledger, dimensions, history, pricing and budget alerts under Usage & Costs. |
+| High | SignalR opens overlapping connections in nested views, drops lower-sequence replay events, invalidates unrelated queries and replays only 500 events. Five-second polling hits every mounted query. | Shared project subscription, bounded ID deduplication, completed replay watermark, full persisted replay pagination, targeted coalesced invalidation and direct live-feed cache updates. Explicit auto-follow/older-history controls. |
+| High | Project overview renders entire original context; messages, handoffs and requirements expose raw structured output. | Objective/task/requirements/decisions hierarchy; sanitized Markdown; readable structured summaries, criteria/findings/evidence; raw source only on demand. |
+| Medium | Review JSON parsing can crash on legacy text; approvals lack project/evidence context and are disconnected from the run. | Safe parsing and shared evidence views; internal vs published review labels; inline authorized approval/clarification surfaces. |
+| Medium | History pages silently show the oldest fixed page; run tables display IDs instead of task/project context. | Latest-first cursor/offset paging, direct task/run/project links, explicit page boundaries and empty/error states. |
+| Medium | Agent prices share the behavioral settings form; usage endpoint only exposes aggregate estimates. | Dedicated pricing-only endpoint and historical usage projection from persisted task/conversation ledgers. Preserve existing enforcement and instruction revision records. Billing confirmation remains unavailable, never invented. |
+| Medium | Small-screen navigation remains an icon rail without a clear menu control; controls overflow and text-heavy cards dominate mobile. | Responsive drawer navigation, keyboard skip/focus affordances, compact grids and overflow-safe content. |
+| Medium | Status colors/empty guidance vary; cancellation lacks confirmation and raw log updates lack useful announcements. | Shared labeled status vocabulary; contextual empty states; destructive confirmation; restrained polite live announcements. |
+
+Implementation direction is the user's approved engineering-first workspace design, not an aesthetic reskin. Reuse existing React/TypeScript/Ant Design architecture, routes and secure backend use cases. Minimal backend changes are read models for latest-first history, inspectable evidence and historical usage, a scoped pricing update, and complete hub replay. No changes to orchestration, budget enforcement, sandbox authorization, repository delivery or persisted project/run data are planned.
+
+Verification will cover shared state derivation, event ordering/dedup/windowing, replay/reconnect/cleanup, cost separation, real handoff presentation, Markdown safety, drawer details, auto-follow, owner actions, mobile layout and browser workflow. Screenshots will come from the dedicated deterministic browser test host; they are visual evidence, not live provider success.
+
+## Delivered remediation
+
+Implemented the engineering-first dashboard, Usage & Costs, live execution/team workspace, compact activity/evidence inspection, readable project/requirements/conversation/review surfaces, inline owner actions and responsive navigation. Added read projections and replay support rather than rewriting orchestration. The one necessary workflow addition attaches owner clarification to the blocked task before retry; simply saving it as chat would not supply focused implementation context.
+
+Historical labels are conservative: missing legacy model/task/tool metadata stays unavailable; no agent activity, billing confirmation or evidence is invented. Handoff cards focus on the current task/iteration; older orchestration events remain cursor-accessible. Dashboard and budget summaries cover recent executions and link to paged history. The usage read model streams all model receipts to compute totals; it is appropriate to the personal installation, but is not a preaggregated analytics service. Existing Monaco/build chunks remain large; diagnostics are lazy and event DOM remains bounded.
+
+Visual evidence under [ux-evidence](ux-evidence/) is generated by Playwright against isolated MongoDB and deterministic test adapters. It demonstrates real persisted UI behavior, not a new live OpenAI/GitHub/Docker engineering run. External live services were not invoked by this UX milestone. Existing owner services, databases and execution evidence were preserved.

@@ -6,7 +6,7 @@ using MongoDB.Bson.Serialization.Attributes;
 using System.Text.Json;
 namespace AIEngineeringPlatform.Infrastructure;
 
-public sealed class MongoPlatformStore : IPlatformStore
+public sealed partial class MongoPlatformStore : IPlatformStore, IWorkspaceQueries
 {
     private readonly IMongoDatabase database;
     private readonly IMongoCollection<ProjectDocument> projects;
@@ -165,7 +165,7 @@ public sealed class MongoPlatformStore : IPlatformStore
             model.Tokens + conversations.Tokens, model.Cost + conversations.Cost,
             await runs.CountDocumentsAsync(FilterDefinition<RunDocument>.Empty, cancellationToken: ct));
     }
-    public async Task<IReadOnlyList<RecordEntry>> RecentActivityAsync(CancellationToken ct) => (await entries.Find(x => x.Kind == "event" && x.Name == "AgentStarted").SortByDescending(x => x.Sequence).Limit(20).ToListAsync(ct)).Select(x => Decode<RecordEntry>(x.Data)!).ToArray();
+    public async Task<IReadOnlyList<RecordEntry>> RecentActivityAsync(CancellationToken ct) => (await entries.Find(x => x.Kind == "event" && (x.Name == "AgentStarted" || x.Name == "AgentHandoffCreated" || x.Name == "ToolInvocationCompleted" || x.Name == "RunCompleted" || x.Name == "ApprovalRequested" || x.Name == "RunFailed")).SortByDescending(x => x.Sequence).Limit(20).ToListAsync(ct)).Select(x => Decode<RecordEntry>(x.Data)!).ToArray();
     public async Task<bool> PingAsync(CancellationToken ct) { await database.RunCommandAsync<BsonDocument>(new BsonDocument("ping", 1), cancellationToken: ct); return true; }
     private static string Encode<T>(T value) => JsonSerializer.Serialize(value, Json);
     private static T? Decode<T>(string? data) => data == null ? default : JsonSerializer.Deserialize<T>(data, Json);

@@ -1,181 +1,246 @@
-import { Card, Statistic, Space, Table, Typography, Button, Alert } from "antd";
-import { PlusOutlined, ArrowRightOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Empty, Space, Typography } from "antd";
 import { Link } from "react-router-dom";
 import { Heading, QueryState, Status, useApi } from "../components/Common";
-import type { Entry, Page, Run, Settings } from "../types";
+import { human, summary, teamState, terminal } from "../lib/engineering";
+import { useLiveEvents, type RecordWindow } from "../hooks/useLiveEvents";
+import type { Entry, Page, Project, Run, Settings } from "../types";
+function ActiveWork({ run, project }: { run: Run; project?: Project }) {
+  useLiveEvents(run.projectId);
+  const events = useApi<RecordWindow>(
+    `/runs/${run.id}/stream?limit=50`,
+    true,
+    10000,
+  );
+  const handoffs = useApi<RecordWindow>(
+    `/runs/${run.id}/stream?kind=handoff&limit=50`,
+    true,
+    10000,
+  );
+  const team = teamState(
+    run,
+    events.data?.items ?? [],
+    handoffs.data?.items ?? [],
+  );
+  const working = team.find(
+    (a) => a.state === "Working" || a.state === "Waiting for tool",
+  );
+  const next = team.find(
+    (a) =>
+      a.state !== "Completed" &&
+      a.state !== "Idle" &&
+      a.state !== "Working" &&
+      a.state !== "Waiting for tool",
+  );
+  return (
+    <div className="work-row">
+      <div>
+        <Typography.Text type="secondary">
+          {project?.name ?? "Project " + run.projectId.slice(0, 8)}
+        </Typography.Text>
+        <h3>
+          <Link to={`/executions/${run.id}`}>
+            {run.tasks?.[run.taskIndex]?.title ?? "Engineering execution"}
+          </Link>
+        </h3>
+        <Space wrap>
+          <Status value={run.currentStage} />
+          <span>
+            {working
+              ? `${human(working.role)} · ${working.state}`
+              : terminal.has(run.currentStage)
+                ? "Owner attention required"
+                : "Waiting for recorded agent activity"}
+          </span>
+        </Space>
+        <p className="secondary">
+          {events.data?.items[0]
+            ? summary(events.data.items[0])
+            : "Waiting for persisted progress"}
+        </p>
+        {next && <small>Next selected specialist: {human(next.role)}</small>}
+      </div>
+      <Link to={`/executions/${run.id}`}>
+        <Button>Open workspace ↗</Button>
+      </Link>
+    </div>
+  );
+}
 export function Dashboard() {
-  const runs = useApi<Page<Run>>("/projects/all/runs");
-  const usage = useApi<{
-    tokenUsage: number;
-    estimatedCostUsd: number;
-    activeProjects: number;
-    runningExecutions: number;
-    completedExecutions: number;
-    failedExecutions: number;
-    pendingApprovals: number;
-  }>("/usage");
-  const activity = useApi<Entry[]>("/activity");
+  const runs = useApi<Page<Run>>("/projects/all/runs?limit=50", true, 15000);
+  const projects = useApi<Page<Project>>("/projects?limit=50");
+  const activity = useApi<Entry[]>("/activity", true, 15000);
+  const approvals = useApi<RecordWindow>("/approvals/feed?limit=30");
   const settings = useApi<Settings>("/settings");
-  const all = runs.data?.items || [];
+  const all = runs.data?.items ?? [];
+  const ongoing = all.filter(
+    (r) => !["Completed", "Cancelled"].includes(r.currentStage),
+  );
+  const deliveries = all
+    .filter((r) => r.currentStage === "Completed")
+    .slice(0, 5);
   return (
     <>
       <Heading
         eyebrow="ENGINEERING OPERATIONS"
         title="Your engineering workspace"
-        description="From product intent to verified software, with every decision recorded."
+        description="Work in progress, team decisions and verified deliveries."
         actions={
           <Link to="/projects">
-            <Button type="primary" icon={<PlusOutlined />}>
-              Create a project
-            </Button>
+            <Button type="primary">Open projects</Button>
           </Link>
         }
       />
-      <div className="hero-banner">
-        <div>
-          <span className="eyebrow">AUTONOMY WITH ACCOUNTABILITY</span>
-          <Typography.Title level={3}>
-            One context. A coordinated engineering team.
-          </Typography.Title>
-          <Typography.Paragraph>
-            Plan, implement, test, validate, and review—with evidence at every
-            gate.
-          </Typography.Paragraph>
-        </div>
-        <div className="hero-mark">&lt;/&gt;</div>
-      </div>
       {settings.data &&
         (!settings.data.openAIConfigured ||
-          !settings.data.sandboxConfigured ||
-          settings.data.sandboxReady === false ||
-          !settings.data.githubConfigured) && (
+          !settings.data.githubConfigured ||
+          !settings.data.sandboxReady) && (
           <Alert
             showIcon
             type="warning"
-            title="Integrations need configuration"
+            title="Engineering runtime needs attention"
             description={
-              <span>
-                Configure OpenAI, a secure remote sandbox, and a GitHub App to
-                enable a complete engineering cycle.{" "}
-                <Link to="/settings">
-                  Open settings <ArrowRightOutlined />
-                </Link>
-              </span>
+              <Link to="/settings">
+                Inspect OpenAI, GitHub and local sandbox readiness
+              </Link>
             }
-            style={{ marginBottom: 24 }}
+            className="section-gap"
           />
         )}
-      <div className="metrics">
-        {[
-          ["Active projects", usage.data?.activeProjects || 0],
-          ["Running executions", usage.data?.runningExecutions || 0],
-          ["Completed", usage.data?.completedExecutions || 0],
-          ["Pending approvals", usage.data?.pendingApprovals || 0],
-        ].map(([label, value]) => (
-          <Card key={String(label)}>
-            <Statistic title={label} value={value} />
-          </Card>
-        ))}
-      </div>
-      <div className="workspace-grid">
+      <div className="operations-grid">
         <Card
-          title="Recent executions"
-          extra={<Link to="/executions">View all</Link>}
+          title="Active engineering"
+          extra={<Link to="/executions">All executions</Link>}
         >
-          <QueryState
-            loading={runs.isLoading}
-            error={runs.error}
-            empty={!all.length}
-          >
-            <Table
-              rowKey="id"
-              size="small"
-              pagination={false}
-              dataSource={all.slice(0, 6)}
-              columns={[
-                {
-                  title: "Run",
-                  dataIndex: "id",
-                  render: (value: string) => (
-                    <Link to={"/executions/" + value}>{value.slice(0, 8)}</Link>
-                  ),
-                },
-                {
-                  title: "Stage",
-                  dataIndex: "currentStage",
-                  render: (value: string) => <Status value={value} />,
-                },
-                { title: "Iteration", dataIndex: "iteration" },
-              ]}
-            />
+          <QueryState loading={runs.isLoading} error={runs.error}>
+            {ongoing.length ? (
+              ongoing
+                .slice(0, 6)
+                .map((run) => (
+                  <ActiveWork
+                    key={run.id}
+                    run={run}
+                    project={projects.data?.items.find(
+                      (p) => p.id === run.projectId,
+                    )}
+                  />
+                ))
+            ) : (
+              <Empty description="No execution is active. Open a project to describe the next focused task." />
+            )}
           </QueryState>
         </Card>
-        <Card title="Usage & reliability">
-          <Space orientation="vertical" size={24}>
-            <Statistic
-              title="Tokens used"
-              value={usage.data?.tokenUsage || 0}
-            />
-            <Statistic
-              title="Estimated model cost"
-              prefix="$"
-              precision={4}
-              value={usage.data?.estimatedCostUsd || 0}
-            />
-            <Statistic
-              title="Failed executions"
-              value={usage.data?.failedExecutions || 0}
-            />
+        <Card title="Action required">
+          <Space orientation="vertical" style={{ width: "100%" }}>
+            {approvals.data?.items
+              .filter((e) => e.status === "Pending")
+              .map((e) => (
+                <Alert
+                  key={e.id}
+                  type="warning"
+                  showIcon
+                  title="Human delivery approval"
+                  description={
+                    <Link to={`/executions/${e.runId}`}>
+                      {e.name} → inspect evidence
+                    </Link>
+                  }
+                />
+              ))}
+            {ongoing
+              .filter(
+                (r) =>
+                  r.currentStage === "Failed" || r.currentStage === "Paused",
+              )
+              .map((r) => (
+                <Alert
+                  key={r.id}
+                  type={r.currentStage === "Failed" ? "error" : "info"}
+                  title={
+                    r.failureReason?.startsWith("Human clarification")
+                      ? "Clarification requested"
+                      : `Execution ${r.currentStage.toLowerCase()}`
+                  }
+                  description={
+                    <Link to={`/executions/${r.id}`}>
+                      {(r.failureReason ?? "Resume when ready").slice(0, 180)} →
+                      open decision
+                    </Link>
+                  }
+                />
+              ))}
+            {!ongoing.some((r) =>
+              ["Failed", "Paused", "AwaitingHumanApproval"].includes(
+                r.currentStage,
+              ),
+            ) && (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="No blocking owner decisions in recent executions."
+              />
+            )}
+            {projects.data?.items
+              .filter(
+                (p) =>
+                  p.status === "Active" &&
+                  !all.some(
+                    (r) =>
+                      r.projectId === p.id && !terminal.has(r.currentStage),
+                  ),
+              )
+              .slice(0, 3)
+              .map((p) => (
+                <Link key={p.id} to={`/projects/${p.id}`}>
+                  {p.name} · plan the next task ↗
+                </Link>
+              ))}
           </Space>
         </Card>
       </div>
-      <Card title="Recent agent activity" style={{ marginTop: 24 }}>
-        <QueryState
-          loading={activity.isLoading}
-          error={activity.error}
-          empty={!activity.data?.length}
-        >
-          <Table
-            size="small"
-            rowKey="id"
-            pagination={false}
-            dataSource={activity.data?.slice(0, 8)}
-            columns={[
-              { title: "Agent", dataIndex: "content" },
-              {
-                title: "Time",
-                dataIndex: "createdAt",
-                render: (value: string) => new Date(value).toLocaleString(),
-              },
-              {
-                title: "Execution",
-                dataIndex: "runId",
-                render: (value: string) => (
-                  <Link to={"/executions/" + value}>{value.slice(0, 12)}</Link>
-                ),
-              },
-            ]}
-          />
-        </QueryState>
-      </Card>
-      <Card title="Engineering team" style={{ marginTop: 24 }}>
-        <div className="team-grid">
-          {[
-            "Business Analyst",
-            "Software Architect",
-            "Backend Engineer",
-            "Frontend Engineer",
-            "Test Engineer",
-            "QA Engineer",
-            "Code Reviewer",
-          ].map((role, i) => (
-            <div className="team-member" key={role}>
-              <span className="role-dot">0{i + 1}</span>
-              <Typography.Text>{role}</Typography.Text>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <div className="operations-grid section-gap">
+        <Card title="Recent deliveries">
+          {deliveries.length ? (
+            deliveries.map((r) => (
+              <div className="compact-row" key={r.id}>
+                <div>
+                  <Link to={`/executions/${r.id}`}>
+                    {r.tasks?.[r.taskIndex]?.title ??
+                      "Verified engineering delivery"}
+                  </Link>
+                  <p className="secondary">
+                    Tests, review and delivery artifacts recorded ·{" "}
+                    {new Date(r.completedAt ?? r.startedAt).toLocaleString()}
+                  </p>
+                </div>
+                <Status value="Completed" />
+              </div>
+            ))
+          ) : (
+            <Empty description="Completed tasks and their commit, PR and validation evidence will appear here." />
+          )}
+        </Card>
+        <Card title="Team activity">
+          <QueryState
+            loading={activity.isLoading}
+            error={activity.error}
+            empty={!activity.data?.length}
+          >
+            {activity.data?.slice(0, 8).map((e) => (
+              <div className="compact-row" key={e.id}>
+                <div>
+                  <Link to={`/executions/${e.runId}`}>{summary(e)}</Link>
+                  <p className="secondary">
+                    {new Date(e.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </QueryState>
+        </Card>
+      </div>
+      <Typography.Paragraph type="secondary">
+        Showing recent persisted executions. Operational states come from run
+        records, agent handoffs and tool events.
+      </Typography.Paragraph>
     </>
   );
 }
