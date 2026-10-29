@@ -66,7 +66,7 @@ public sealed class LiveAgentCycleTests
         client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
         var focused = Environment.GetEnvironmentVariable("LIVE_FOCUSED_TASK") == "1";
         var response = focused
-            ? await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/tasks", new { tasks = new[] { new EngineeringTask("Update JavaScript answer fixture", "Inspect feature.mjs and feature.test.mjs. Change answer() from 1 to 2 and update its existing test. Use only this existing dependency-free JavaScript fixture; no C#, frontend, new frameworks or unrelated files. RunTests profile all executes node --test in the isolated Docker container. Review the real diff and stop for delivery approval. Never modify the default branch.", ["answer() returns 2", "The existing test asserts 2 and passes with node --test", "Only feature.mjs and feature.test.mjs change"]) } })
+            ? await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/tasks", new { tasks = new[] { new EngineeringTask("Update JavaScript answer fixture", "Inspect feature.mjs and feature.test.mjs. Change answer() from 1 to 2 and update its existing test. Use only this existing dependency-free JavaScript fixture; no C#, frontend, new frameworks or unrelated files. RunTests profile node executes node --test in the isolated Docker container. Review the real diff and stop for delivery approval. Never modify the default branch.", ["answer() returns 2", "The existing test asserts 2 and passes with node --test", "Only feature.mjs and feature.test.mjs change"]) } })
             : await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/runs", new { });
         response.EnsureSuccessStatusCode();
         var json = new JsonSerializerOptions(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
@@ -76,7 +76,7 @@ public sealed class LiveAgentCycleTests
         while (!deadline.IsCancellationRequested)
         {
             run = (await client.GetFromJsonAsync<ExecutionRun>("/api/v1/runs/" + run.Id, json, deadline.Token))!;
-            if (run.CurrentStage == RunStage.Failed) throw new Exception("Live stage failed: " + run.FailureReason);
+            if (run.CurrentStage is RunStage.Failed or RunStage.Paused) throw new Exception("Live stage failed: " + run.FailureReason);
             if (run.CurrentStage == RunStage.Completed) break;
             if (run.CurrentStage == RunStage.AwaitingHumanApproval)
             {
@@ -87,11 +87,11 @@ public sealed class LiveAgentCycleTests
             }
             await Task.Delay(1000, deadline.Token);
         }
-        Assert.Equal(RunStage.Completed, run.CurrentStage); Assert.True(approved); Assert.True(run.TokenUsage > 0); Assert.InRange(run.Cost, 0.000001m, budget);
+        Assert.Equal(RunStage.Completed, run.CurrentStage); Assert.Equal(run.Outcome != ExecutionOutcome.AlreadySatisfied, approved); Assert.True(run.TokenUsage > 0); Assert.InRange(run.Cost, 0.000001m, budget);
         var artifacts = await store.RecordsAsync("artifact", project.Id, run.Id, null, 0, 0, 100, default);
         var pr = Assert.Single(artifacts, item => item.Name == "PullRequest");
         using var document = JsonDocument.Parse(pr.Content); Assert.True(document.RootElement.GetProperty("number").GetInt32() > 0);
-        Assert.Contains(artifacts, item => item.Name == "CodeReview" && item.Content.Contains("html_url", StringComparison.Ordinal));
+        if (run.Outcome != ExecutionOutcome.AlreadySatisfied) Assert.Contains(artifacts, item => item.Name == "CodeReview" && item.Content.Contains("html_url", StringComparison.Ordinal));
         Console.WriteLine($"Live delivery: run={run.Id}; database={factory.Database}; PR={document.RootElement.GetProperty("html_url").GetString()}; USD={run.Cost}; tokens={run.TokenUsage}; toolCalls={run.ToolCalls}");
         if (focused)
         {
@@ -100,7 +100,8 @@ public sealed class LiveAgentCycleTests
             var tools = await store.RecordsAsync("tool", project.Id, run.Id, null, 0, 0, 1000, default);
             var passing = tools.Where(x => x.Name == "RunTests").Select(x => JsonSerializer.Deserialize<ToolResult>(x.Content)!).Where(x => x.Success).ToArray();
             Assert.NotEmpty(passing); Assert.All(passing, x => { Assert.NotNull(x.EvidenceId); Assert.NotNull(x.WorkspaceRevision); });
-            Assert.Contains(artifacts, x => x.Name == "CodeDiff" && x.Content.Contains("feature.mjs") && x.Content.Contains("feature.test.mjs"));
+            if (run.Outcome != ExecutionOutcome.AlreadySatisfied) Assert.Contains(artifacts, x => x.Name == "CodeDiff" && x.Content.Contains("feature.mjs") && x.Content.Contains("feature.test.mjs"));
+            else Assert.DoesNotContain(tools, x => x.Name is "CreateCommit" or "PushBranch" or "CreatePullRequest");
         }
     }
 }

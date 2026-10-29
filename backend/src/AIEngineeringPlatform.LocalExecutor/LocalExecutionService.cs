@@ -57,12 +57,32 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                 await RequireGitAsync(workspace, ["switch", "-C", "engineering/" + request.RunId], ct);
                 await SaveAsync(statePath, state, ct);
             }
+            if (state.BaselineRevision == null)
+            {
+                var initialStatus = await RequireGitAsync(workspace, ["status", "--porcelain"], ct);
+                if (!string.IsNullOrWhiteSpace(initialStatus.Output)) throw new ConfigurationException("Legacy workspace has uncommitted changes; preserve it for human reconciliation before establishing a baseline.");
+                state.BaselineRevision = WorkspaceFiles.Revision(workspace, options.WorkspaceLimitMb);
+            }
             WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb);
             string Argument(string key) => request.Arguments.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()! : throw new ArgumentException("Missing string argument: " + key);
             var success = true; int? exitCode = 0; string output;
             switch (request.Operation)
             {
-                case "ReadRepository": output = JsonSerializer.Serialize(new { repository.Owner, repository.Name, Branch = "engineering/" + request.RunId, state.BaseCommit, Files = WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb) }); break;
+                case "ReadRepository":
+                    output = JsonSerializer.Serialize(new { repository.Owner, repository.Name, Branch = "engineering/" + request.RunId, state.BaseCommit, HeadCommit = (await RequireGitAsync(workspace, ["rev-parse", "HEAD"], ct)).Output.Trim(), SelectedBranch = state.SelectedBranch, HasSourceChanges = state.BaselineRevision != WorkspaceFiles.Revision(workspace, options.WorkspaceLimitMb), Files = WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb), TestProfiles = ProfileSelection.Available(WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb), repository.Profiles) }); break;
+                case "SelectBranch":
+                    var selected = Argument("branch");
+                    var expectedCommit = Argument("commit");
+                    if (!Regex.IsMatch(selected, @"\Aengineering/[a-zA-Z0-9-]{1,100}\z") || selected == repository.DefaultBranch || !Regex.IsMatch(expectedCommit, @"\A[a-f0-9]{40}\z")) throw new ArgumentException("Select an existing engineering branch at its exact commit.");
+                    var dirty = await RequireGitAsync(workspace, ["status", "--porcelain"], ct);
+                    if (!string.IsNullOrWhiteSpace(dirty.Output) || state.Commit != null) throw new InvalidOperationException("Branch reconciliation cannot overwrite workspace changes or a delivery commit.");
+                    var fetched = await GitAsync(workspace, ["fetch", "--depth", "1", "origin", "refs/heads/" + selected], await CredentialsAsync(repository, ct), ct, repository.TestRemotePath != null);
+                    if (fetched.ExitCode != 0) throw new InvalidOperationException("Cannot fetch selected branch.");
+                    var fetchedHead = (await RequireGitAsync(workspace, ["rev-parse", "FETCH_HEAD"], ct)).Output.Trim();
+                    if (fetchedHead != expectedCommit) throw new InvalidOperationException("Selected branch changed; inspect repository facts again.");
+                    await RequireGitAsync(workspace, ["reset", "--keep", fetchedHead], ct);
+                    state.SelectedBranch = selected; state.TestedRevision = null; state.BaselineRevision = WorkspaceFiles.Revision(workspace, options.WorkspaceLimitMb);
+                    output = JsonSerializer.Serialize(new { branch = selected, sha = fetchedHead }); break;
                 case "CreateBranch":
                     if (Argument("branch") != "engineering/" + request.RunId) throw new ArgumentException("Only the run's dedicated feature branch is permitted.");
                     output = "engineering/" + request.RunId; break;
@@ -98,9 +118,17 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                 case "RunCommand":
                 case "RunTests":
                     var name = Argument("profile");
-                    if (request.Operation == "RunTests" && name is not ("all" or "backend" or "frontend" or "e2e") || request.Operation == "RunCommand" && name is not ("build" or "lint" or "format" or "typecheck")) throw new ArgumentException("Unregistered execution profile.");
+                    if (request.Operation == "RunTests" && name is not ("all" or "backend" or "frontend" or "e2e" or "node") || request.Operation == "RunCommand" && name is not ("build" or "lint" or "format" or "typecheck")) throw new ArgumentException("Unregistered execution profile.");
                     if (request.Arguments.EnumerateObject().Any(x => x.Name != "profile")) throw new ArgumentException("Only a profile identifier may be supplied; shell text is forbidden.");
-                    if (!repository.Profiles.TryGetValue(name, out var profile)) throw new ConfigurationException("No administrator-defined profile exists: " + name);
+                    var sourceFilesForProfile = WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb);
+                    if (name == "all")
+                    {
+                        var available = ProfileSelection.Available(sourceFilesForProfile, repository.Profiles);
+                        name = available.Contains("all") ? "all" : available.Length == 1 ? available[0] : throw new ConfigurationException("Select an applicable configured test profile explicitly.");
+                    }
+                    if (!repository.Profiles.TryGetValue(name, out var profile)) throw new ConfigurationException("No administrator-defined compatible profile exists: " + name);
+                    if (name == "node" && !profile.Command.SequenceEqual(new[] { "node", "--test" })) throw new ConfigurationException("The node profile must use the fixed node --test argument array.");
+                    if (request.Operation == "RunTests" || profile.Command.FirstOrDefault() == "npm") ProfileSelection.Require(sourceFilesForProfile, profile);
                     var execution = await docker.ExecuteAsync(workspace, profile, request, ct);
                     output = execution.Output; exitCode = execution.ExitCode; success = exitCode == 0 && !execution.TimedOut && !execution.OutputExceeded;
                     if (request.Operation == "RunTests")
@@ -127,6 +155,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                     }
                     state.Commit = (await RequireGitAsync(workspace, ["rev-parse", "HEAD"], ct)).Output.Trim();
                     state.CommittedRevision = revision;
+                    state.BaselineRevision = revision;
                     output = JsonSerializer.Serialize(new { sha = state.Commit, branch = "engineering/" + request.RunId }); break;
                 case "PushBranch":
                     if (Argument("branch") != "engineering/" + request.RunId || state.Commit == null || state.CommittedRevision != WorkspaceFiles.Revision(workspace, options.WorkspaceLimitMb) || state.CommittedRevision != state.TestedRevision) throw new InvalidOperationException("Push requires the committed and tested feature-branch revision.");
@@ -147,7 +176,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
     }
     public static void ValidateRequest(SandboxRequest request)
     {
-        if (request.Repository is null || request.Operation is not ("ReadRepository" or "CreateBranch" or "ListFiles" or "ReadFile" or "SearchCode" or "WriteFile" or "ApplyPatch" or "InspectDiff" or "RunTests" or "RunCommand" or "CreateCommit" or "PushBranch") || !Regex.IsMatch(request.RunId, "\\A[a-zA-Z0-9-]{1,64}\\z") || !Regex.IsMatch(request.OperationId, "\\A[a-zA-Z0-9-]{1,128}\\z") || request.Arguments.ValueKind != JsonValueKind.Object || request.Arguments.GetRawText().Length > 100000 || request.NetworkEnabled || request.Fence < 1 || string.IsNullOrWhiteSpace(request.LeaseOwner) || request.LeaseOwner.Length > 128 || request.TimeoutSeconds is < 1 or > 120 || request.MemoryMb is < 128 or > 4096 || request.CpuLimit is < 1 or > 4 || request.OutputLimitBytes is < 1024 or > 100000) throw new ArgumentException("Invalid bounded executor request; networking is disabled.");
+        if (request.Repository is null || request.Operation is not ("ReadRepository" or "SelectBranch" or "CreateBranch" or "ListFiles" or "ReadFile" or "SearchCode" or "WriteFile" or "ApplyPatch" or "InspectDiff" or "RunTests" or "RunCommand" or "CreateCommit" or "PushBranch") || !Regex.IsMatch(request.RunId, "\\A[a-zA-Z0-9-]{1,64}\\z") || !Regex.IsMatch(request.OperationId, "\\A[a-zA-Z0-9-]{1,128}\\z") || request.Arguments.ValueKind != JsonValueKind.Object || request.Arguments.GetRawText().Length > 100000 || request.NetworkEnabled || request.Fence < 1 || string.IsNullOrWhiteSpace(request.LeaseOwner) || request.LeaseOwner.Length > 128 || request.TimeoutSeconds is < 1 or > 120 || request.MemoryMb is < 128 or > 4096 || request.CpuLimit is < 1 or > 4 || request.OutputLimitBytes is < 1024 or > 100000) throw new ArgumentException("Invalid bounded executor request; networking is disabled.");
     }
     private static string Identity(RepositoryConnection repository) => $"{repository.Owner}/{repository.Repository}@{repository.InstallationId}:{repository.DefaultBranch}";
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
@@ -186,6 +215,8 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
         public long Fence { get; set; }
         public string? Owner { get; set; }
         public string? BaseCommit { get; set; }
+        public string? SelectedBranch { get; set; }
+        public string? BaselineRevision { get; set; }
         public string? TestedRevision { get; set; }
         public string? CommittedRevision { get; set; }
         public string? Commit { get; set; }

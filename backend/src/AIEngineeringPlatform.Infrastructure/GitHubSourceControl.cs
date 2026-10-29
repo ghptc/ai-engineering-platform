@@ -60,6 +60,25 @@ public sealed class GitHubSourceControl(HttpClient http, string? appId, string? 
         switch (operation)
         {
             case "ReadRepository": return metadata.RootElement.GetRawText();
+            case "ReconcileRepository":
+                var candidates = new List<JsonElement>();
+                var branches = new List<JsonElement>();
+                for (var branchPage = 1; branchPage <= 10; branchPage++)
+                {
+                    using var batch = await SendAsync(HttpMethod.Get, prefix + $"/branches?per_page=100&page={branchPage}", token, null, ct);
+                    branches.AddRange(batch.RootElement.EnumerateArray().Where(x => (x.GetProperty("name").GetString() ?? "").StartsWith("engineering/", StringComparison.Ordinal)).Select(x => JsonSerializer.SerializeToElement(new { branch = x.GetProperty("name"), commit = x.GetProperty("commit").GetProperty("sha") })));
+                    if (batch.RootElement.GetArrayLength() < 100) break;
+                    if (branchPage == 10) throw new InvalidOperationException("Branch inventory exceeds reconciliation bounds.");
+                }
+                for (var page = 1; page <= 10; page++)
+                {
+                    using var batch = await SendAsync(HttpMethod.Get, prefix + $"/pulls?state=all&per_page=100&page={page}", token, null, ct);
+                    foreach (var item in batch.RootElement.EnumerateArray())
+                        if (item.GetProperty("base").GetProperty("ref").GetString() == repository.DefaultBranch && item.GetProperty("head").GetProperty("repo").ValueKind != JsonValueKind.Null && string.Equals(item.GetProperty("head").GetProperty("repo").GetProperty("full_name").GetString(), repository.Owner + "/" + repository.Repository, StringComparison.OrdinalIgnoreCase))
+                            candidates.Add(JsonSerializer.SerializeToElement(new { number = item.GetProperty("number"), url = item.GetProperty("html_url"), html_url = item.GetProperty("html_url"), mergeCommit = item.GetProperty("merge_commit_sha"), title = item.GetProperty("title"), state = item.GetProperty("state"), merged = item.GetProperty("merged_at"), branch = item.GetProperty("head").GetProperty("ref"), commit = item.GetProperty("head").GetProperty("sha"), @base = item.GetProperty("base").GetProperty("ref") }));
+                    if (batch.RootElement.GetArrayLength() < 100) return JsonSerializer.Serialize(new { defaultBranch = repository.DefaultBranch, branches, pullRequests = candidates });
+                }
+                throw new InvalidOperationException("Repository reconciliation exceeds bounded PR inventory; narrow the task manually.");
             case "CreateBranch":
                 var branch = Get("branch");
                 if (!Regex.IsMatch(branch, @"\Aengineering/[a-zA-Z0-9-]{1,100}\z") || branch == repository.DefaultBranch) throw new ArgumentException("Work branches must start with engineering/.");

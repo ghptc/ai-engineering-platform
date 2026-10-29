@@ -57,3 +57,5 @@ public interface ISourceControl
 }
 public sealed class ConcurrencyException() : Exception("The resource changed; reload it and retry.");
 public sealed class ConfigurationException(string message) : Exception(message);
+
+public sealed class TaskReconciliationException(ExecutionOutcome outcome, string message) : InvalidOperationException(message) { public ExecutionOutcome Outcome { get; } = outcome; }

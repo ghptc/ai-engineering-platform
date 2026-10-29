@@ -6,7 +6,7 @@ namespace AIEngineeringPlatform.Infrastructure;
 public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISourceControl source, IPlatformStore store, SandboxExecutionLimits? limits = null) : IAgentTool
 {
     public string Name => name;
-    public static readonly string[] Names = ["ReadRepository", "ListFiles", "SearchCode", "ReadFile", "ApplyPatch", "WriteFile", "RunCommand", "RunTests", "InspectDiff", "CreateBranch", "CreateCommit", "PushBranch", "CreatePullRequest", "ReadPullRequest", "SubmitCodeReview", "ReadProjectMemory", "SaveArtifact"];
+    public static readonly string[] Names = ["ReadRepository", "ReconcileRepository", "SelectBranch", "ListFiles", "SearchCode", "ReadFile", "ApplyPatch", "WriteFile", "RunCommand", "RunTests", "InspectDiff", "CreateBranch", "CreateCommit", "PushBranch", "CreatePullRequest", "ReadPullRequest", "SubmitCodeReview", "ReadProjectMemory", "SaveArtifact"];
     public async Task<ToolResult> ExecuteAsync(AgentContext context, JsonElement args, string operationId, CancellationToken ct)
     {
         if (args.ValueKind != JsonValueKind.Object || args.GetRawText().Length > 100000) throw new ArgumentException("Tool arguments must be a bounded JSON object.");
@@ -50,8 +50,14 @@ public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISou
             return new(true, "Artifact persisted.", artifactId);
         }
         var repository = context.Project.RepositoryConnection ?? throw new ConfigurationException("Connect a repository before invoking repository tools.");
-        if (Name is "CreateBranch" or "CreatePullRequest" or "ReadPullRequest" or "SubmitCodeReview") return new(true, await source.ExecuteAsync(repository, Name, args, operationId, ct));
-        if (Name == "RunTests" && (!args.TryGetProperty("profile", out var profile) || profile.GetString() is not ("backend" or "frontend" or "e2e" or "all"))) throw new ArgumentException("Use a configured backend, frontend, e2e or all test profile.");
+        if (Name == "SelectBranch")
+        {
+            if (!args.TryGetProperty("branch", out var selected) || !args.TryGetProperty("commit", out var expected)) throw new ArgumentException("Exact branch and commit are required.");
+            using var inventory = JsonDocument.Parse(await source.ExecuteAsync(repository, "ReconcileRepository", JsonSerializer.SerializeToElement(new { }), operationId, ct));
+            if (!(inventory.RootElement.TryGetProperty("branches", out var branches) && branches.EnumerateArray().Any(x => x.GetProperty("branch").GetString() == selected.GetString() && x.GetProperty("commit").GetString() == expected.GetString())) && !inventory.RootElement.GetProperty("pullRequests").EnumerateArray().Any(x => x.GetProperty("branch").GetString() == selected.GetString() && x.GetProperty("commit").GetString() == expected.GetString() && x.GetProperty("state").GetString() == "open")) throw new ArgumentException("Only an exact current same-repository feature branch or open PR head may be selected.");
+        }
+        if (Name is "ReconcileRepository" or "CreateBranch" or "CreatePullRequest" or "ReadPullRequest" or "SubmitCodeReview") return new(true, await source.ExecuteAsync(repository, Name, args, operationId, ct));
+        if (Name == "RunTests" && (!args.TryGetProperty("profile", out var profile) || profile.GetString() is not ("backend" or "frontend" or "e2e" or "all" or "node"))) throw new ArgumentException("Use a configured node, backend, frontend, e2e or all test profile.");
         var response = await sandbox.ExecuteAsync(new(operationId, context.Run.Id, repository, Name, args, TimeoutSeconds: limits?.TimeoutSeconds ?? 60, CpuLimit: limits?.CpuLimit ?? 1, MemoryMb: limits?.MemoryMb ?? 512, OutputLimitBytes: limits?.OutputLimitBytes ?? 100000, Fence: context.Run.Version, LeaseOwner: context.Run.LeaseOwner), ct);
         return new(response.Success && (Name != "RunTests" || response.ExitCode == 0), SecretRedactor.Redact(response.Output), response.EvidenceId, response.DiffHash);
     }

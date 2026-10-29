@@ -1,6 +1,7 @@
 namespace AIEngineeringPlatform.Domain;
 
 public enum RunStage { Pending, Analyzing, Planning, PreparingContext, Implementing, GeneratingTests, RunningTests, Validating, Reviewing, AwaitingHumanApproval, PreparingDelivery, Completed, Failed, Paused, Cancelled }
+public enum ExecutionOutcome { Implemented, AlreadySatisfied, AwaitingHumanInput, Blocked, Failed }
 public enum AgentRole { BusinessAnalyst, Architect, BackendEngineer, FrontendEngineer, TestEngineer, QAEngineer, CodeReviewer }
 public enum ArtifactType { Requirements, ArchitectureDecision, DevelopmentContext, CodeDiff, TestReport, ValidationReport, CodeReview, PullRequest, Commit, ExecutionLog, NextContext }
 public sealed record ExecutionPolicy(int MaxIterations = 5, int MaxToolCalls = 30, int MaxDurationMinutes = 60, decimal MaxBudgetUsd = 5, int MaxRetries = 2, bool RequireHumanApprovalForMerge = true, bool ReviewBeforeCommit = true)
@@ -64,6 +65,8 @@ public sealed record ExecutionRun
     public DateTimeOffset StartedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? CompletedAt { get; init; }
     public string? FailureReason { get; init; }
+    public ExecutionOutcome? Outcome { get; init; }
+    public bool NoSourceChanges { get; init; }
     public decimal Cost { get; init; }
     public long TokenUsage { get; init; }
     public int ToolCalls { get; init; }
@@ -81,6 +84,8 @@ public sealed record ExecutionRun
             (RunStage.Pending, RunStage.Planning) when CurrentTask is { RequiresBusinessAnalysis: false, RequiresArchitecture: true } => true,
             (RunStage.Pending, RunStage.Implementing) when CurrentTask is { RequiresBusinessAnalysis: false, RequiresArchitecture: false } => true,
             (RunStage.Analyzing, RunStage.PreparingContext) when CurrentTask is { RequiresArchitecture: false } => true,
+            (RunStage.Implementing, RunStage.RunningTests) when NoSourceChanges => true,
+            (RunStage.Reviewing, RunStage.Completed) when NoSourceChanges => true,
             (RunStage.Pending, RunStage.Analyzing) or (RunStage.Analyzing, RunStage.Planning) or
             (RunStage.Planning, RunStage.PreparingContext) or (RunStage.PreparingContext, RunStage.Implementing) or
             (RunStage.Implementing, RunStage.GeneratingTests) or (RunStage.GeneratingTests, RunStage.RunningTests) or
@@ -99,6 +104,7 @@ public sealed record ExecutionRun
             CurrentStage = target,
             ResumeStage = control ? CurrentStage : ResumeStage,
             FailureReason = reason,
+            Outcome = target == RunStage.Failed ? ExecutionOutcome.Failed : resume ? null : Outcome,
             Iteration = Iteration + (correction ? 1 : 0),
             RetryCount = RetryCount + (resume && CurrentStage == RunStage.Failed ? 1 : 0),
             CompletedAt = target is RunStage.Completed or RunStage.Cancelled or RunStage.Failed ? DateTimeOffset.UtcNow : null
@@ -106,8 +112,8 @@ public sealed record ExecutionRun
     }
     public ExecutionRun AdvanceTask()
     {
-        if (CurrentStage != RunStage.PreparingDelivery || TaskIndex + 1 >= Tasks.Length || Iteration >= Policy.MaxIterations) throw new InvalidOperationException("No further authorized task fits this execution's iteration budget.");
-        return this with { TaskIndex = TaskIndex + 1, Iteration = Iteration + 1, CurrentStage = RunStage.Pending, RequirementIds = Tasks[TaskIndex + 1].RequirementIds ?? [], FailureReason = null };
+        if (CurrentStage != RunStage.PreparingDelivery && !(CurrentStage == RunStage.Reviewing && NoSourceChanges) || TaskIndex + 1 >= Tasks.Length || Iteration >= Policy.MaxIterations) throw new InvalidOperationException("No further authorized task fits this execution's iteration budget.");
+        return this with { TaskIndex = TaskIndex + 1, Iteration = Iteration + 1, CurrentStage = RunStage.Pending, Outcome = null, NoSourceChanges = false, RequirementIds = Tasks[TaskIndex + 1].RequirementIds ?? [], FailureReason = null };
     }
     public void CheckLimits(DateTimeOffset now)
     {

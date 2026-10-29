@@ -41,6 +41,7 @@ public sealed class ExecutionProfile
 {
     public string Image { get; set; } = "";
     public string[] Command { get; set; } = [];
+    public string[] RequiredFiles { get; set; } = [];
     public int MemoryMb { get; set; } = 1024;
     public int Cpus { get; set; } = 1;
     public int TimeoutSeconds { get; set; } = 120;
