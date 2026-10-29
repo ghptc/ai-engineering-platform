@@ -34,7 +34,7 @@ public interface IPlatformStore
 public interface IExecutionPublisher { Task PublishAsync(RecordEntry entry, CancellationToken ct); }
 public sealed record AgentContext(Project Project, ExecutionRun Run, string Context, AgentDefinition Definition);
 public sealed record ToolCall(string Name, JsonElement Arguments);
-public sealed record AgentResult(string Summary, string Decision, string[] AcceptanceCriteria, string[] Evidence, string[] Assumptions, ToolCall[] ToolCalls, string NextContext, RequirementProposal[]? Requirements = null, ReviewFinding[]? Findings = null, QualityCheck[]? Checks = null, string[]? OpenQuestions = null, ArchitectureDecision[]? ArchitectureDecisions = null, string[]? ReworkTargets = null);
+public sealed record AgentResult(string Summary, string Decision, string[] AcceptanceCriteria, string[] Evidence, string[] Assumptions, ToolCall[] ToolCalls, string NextContext, RequirementProposal[]? Requirements = null, ReviewFinding[]? Findings = null, QualityCheck[]? Checks = null, string[]? OpenQuestions = null, ArchitectureDecision[]? ArchitectureDecisions = null, string[]? ReworkTargets = null, PlanningAssessment? Planning = null);
 public sealed record AgentHandoff(string Summary, string CompletedWork, string[] RelevantArtifacts, QualityCheck[] ValidationResults, string[] Blockers, string NextAction);
 public sealed record RequirementProposal(string Title, string Description, string UserStory, string[] AcceptanceCriteria, int Priority, string[] Dependencies, bool NonFunctional);
 public sealed record ReviewFinding(string Severity, string File, int? Line, string Description, string SuggestedCorrection);
@@ -60,3 +60,6 @@ public sealed class ConcurrencyException() : Exception("The resource changed; re
 public sealed class ConfigurationException(string message) : Exception(message);
 
 public sealed class TaskReconciliationException(ExecutionOutcome outcome, string message) : InvalidOperationException(message) { public ExecutionOutcome Outcome { get; } = outcome; }
+
+public sealed record PlanningAssessment(string[] Risks, string[] Prerequisites, PlanningBlocker[] Blockers, string BootstrapStrategy, string DependencyStrategy, string TestStrategy);
+public sealed record PlanningBlocker(string Stage, string Reason, string Evidence);

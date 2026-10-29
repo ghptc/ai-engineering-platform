@@ -70,7 +70,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
             switch (request.Operation)
             {
                 case "ReadRepository":
-                    output = JsonSerializer.Serialize(new { repository.Owner, repository.Name, Branch = "engineering/" + request.RunId, state.BaseCommit, HeadCommit = (await RequireGitAsync(workspace, ["rev-parse", "HEAD"], ct)).Output.Trim(), SelectedBranch = state.SelectedBranch, HasSourceChanges = state.BaselineRevision != WorkspaceFiles.Revision(workspace, options.WorkspaceLimitMb), Files = WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb), TestProfiles = ProfileSelection.Available(WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb), repository.Profiles) }); break;
+                    output = JsonSerializer.Serialize(new { repository.Owner, repository.Name, Branch = "engineering/" + request.RunId, state.BaseCommit, HeadCommit = (await RequireGitAsync(workspace, ["rev-parse", "HEAD"], ct)).Output.Trim(), SelectedBranch = state.SelectedBranch, HasSourceChanges = state.BaselineRevision != WorkspaceFiles.Revision(workspace, options.WorkspaceLimitMb), Files = WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb), Capabilities = ProfileSelection.Capabilities(WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb), repository.Profiles), TestProfiles = ProfileSelection.Available(WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb), repository.Profiles) }); break;
                 case "SelectBranch":
                     var selected = Argument("branch");
                     var expectedCommit = Argument("commit");

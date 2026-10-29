@@ -5,6 +5,23 @@ namespace AIEngineeringPlatform.LocalExecutor.Tests;
 
 public class ProfileSelectionTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EmptyRepositoriesExposeConfiguredCapabilitiesWithoutAdvertisingExecutableTests(bool readme)
+    {
+        string[] files = readme ? ["README.md"] : [];
+        var profiles = new Dictionary<string, ExecutionProfile> { ["backend"] = new() { Command = ["dotnet", "test", "backend"] } };
+        Assert.Empty(ProfileSelection.Available(files, profiles));
+        using var capabilities = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(ProfileSelection.Capabilities(files, profiles)));
+        var profile = capabilities.RootElement.GetProperty("Profiles")[0];
+        Assert.Equal("backend", profile.GetProperty("Name").GetString());
+        Assert.False(profile.GetProperty("Applicable").GetBoolean());
+        Assert.False(capabilities.RootElement.GetProperty("NetworkEnabled").GetBoolean());
+        Assert.Throws<ConfigurationException>(() => ProfileSelection.Require(files, profiles["backend"]));
+        Assert.Equal(["backend"], ProfileSelection.Available(["backend/App.csproj"], profiles));
+    }
+
     [Fact]
     public void NodeOnlyRepositoryAdvertisesOnlyFixedNodeTests()
     {
