@@ -17,23 +17,69 @@
         "Profiles": {
           "all": {
             "Image": "sha256:REPLACE_WITH_DOCKER_IMAGE_ID",
-            "Command": ["python3", "-c", "import subprocess; subprocess.run(['dotnet','test','backend','--ignore-failed-sources','-p:NuGetAudit=false'],check=True); subprocess.run(['npm','ci','--offline','--ignore-scripts','--prefix','frontend'],check=True); subprocess.run(['npm','test','--prefix','frontend','--','--run'],check=True)"],
-            "MemoryMb": 1024, "Cpus": 1, "TimeoutSeconds": 120
+            "Command": [
+              "python3",
+              "-c",
+              "import subprocess; subprocess.run(['dotnet','test','backend','--ignore-failed-sources','-p:NuGetAudit=false'],check=True); subprocess.run(['npm','ci','--offline','--ignore-scripts','--prefix','frontend'],check=True); subprocess.run(['npm','test','--prefix','frontend','--','--run'],check=True)"
+            ],
+            "MemoryMb": 1024,
+            "Cpus": 1,
+            "TimeoutSeconds": 120,
+            "RequiredFiles": [
+              "backend/AIEngineeringPlatform.sln",
+              "frontend/package.json",
+              "frontend/package-lock.json"
+            ]
           },
           "backend": {
             "Image": "sha256:REPLACE_WITH_DOCKER_IMAGE_ID",
-            "Command": ["dotnet", "test", "backend", "--ignore-failed-sources", "-p:NuGetAudit=false"],
-            "MemoryMb": 1024, "Cpus": 1, "TimeoutSeconds": 120
+            "Command": [
+              "dotnet",
+              "test",
+              "backend",
+              "--ignore-failed-sources",
+              "-p:NuGetAudit=false"
+            ],
+            "MemoryMb": 1024,
+            "Cpus": 1,
+            "TimeoutSeconds": 120
           },
           "frontend": {
             "Image": "sha256:REPLACE_WITH_DOCKER_IMAGE_ID",
-            "Command": ["python3", "-c", "import subprocess; subprocess.run(['npm','ci','--offline','--ignore-scripts','--prefix','frontend'],check=True); subprocess.run(['npm','test','--prefix','frontend','--','--run'],check=True)"],
-            "MemoryMb": 1024, "Cpus": 1, "TimeoutSeconds": 120
+            "Command": [
+              "python3",
+              "-c",
+              "import subprocess; subprocess.run(['npm','ci','--offline','--ignore-scripts','--prefix','frontend'],check=True); subprocess.run(['npm','test','--prefix','frontend','--','--run'],check=True)"
+            ],
+            "MemoryMb": 1024,
+            "Cpus": 1,
+            "TimeoutSeconds": 120,
+            "RequiredFiles": [
+              "frontend/package.json",
+              "frontend/package-lock.json"
+            ]
           },
           "build": {
             "Image": "sha256:REPLACE_WITH_DOCKER_IMAGE_ID",
-            "Command": ["dotnet", "build", "backend", "--no-restore"],
-            "MemoryMb": 1024, "Cpus": 1, "TimeoutSeconds": 120
+            "Command": [
+              "dotnet",
+              "build",
+              "backend",
+              "--no-restore"
+            ],
+            "MemoryMb": 1024,
+            "Cpus": 1,
+            "TimeoutSeconds": 120
+          },
+          "node": {
+            "Image": "sha256:REPLACE_WITH_DOCKER_IMAGE_ID",
+            "Command": [
+              "node",
+              "--test"
+            ],
+            "MemoryMb": 512,
+            "Cpus": 1,
+            "TimeoutSeconds": 60
           }
         }
       }

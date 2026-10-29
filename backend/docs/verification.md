@@ -125,6 +125,28 @@ The pre-existing isolated test MongoDB container exited repeatedly with a server
 
 Final review covered domain transition restrictions, project-scoped references, persisted instruction revisions, shared queue budgets, strict QA IDs/revisions, real diff review, owner approval before protected Git actions, persist-before-publish telemetry/handoffs, the existing host-daemon trust boundary and lack of automatic merging. No deployment or replacement of the owner application/daemon is claimed.
 
+## Idempotent task execution and stack-aware tests — 2026-10-29
+
+Verification used an isolated snapshot at `/tmp/aep-idempotent-verification`: base commit `54d13df2f62a1164b65f2a3be45b416603ac4dd4` plus only the 19 bug-fix source/config/test files. Concurrent owner API/UI changes were excluded and preserved. The sorted path-to-SHA256 manifest has SHA256 `e280b482df4cb8f8147ff08be3832f59ab22845e596ed01378013a23399b95e2` (canonical JSON with sorted keys). Workspace files were compared byte-for-byte with that manifest before staging. Subsequent documentation updates do not change the verified source. Local logs are `/tmp/aep-reconcile-final-tests.log`, `/tmp/aep-reconcile-browser.log` and `/tmp/aep-reconcile-image.log`; they are not committed.
+
+| Check | Result |
+| --- | --- |
+| `dotnet restore backend/AIEngineeringPlatform.sln` | Passed in isolated snapshot |
+| `dotnet build backend/AIEngineeringPlatform.sln --no-restore -m:1` | Passed, zero warnings/errors |
+| Full backend suite with real executor/disposable flags | 93 passed: Application 19, Architecture 2, Domain 17, Integration 32, LocalExecutor 23; two live OpenAI opt-in tests skipped |
+| Real Docker executor verification | Four real tests passed: mixed-stack delivery, existing feature-branch reconciliation, Unix authentication/restart, isolation/time/output/cleanup; pinned image `sha256:ba3d80d3f5077a1eaac0a3627bb3b9723684f39d391f9cf996fc90dbf90e44be` |
+| Real disposable repository verification | GitHub App reads, fresh clone, source/test inspection, empty actual diff, fixed `node --test`, exact source revision and existing merged PR all confirmed; no remote mutation |
+| `npm ci`, frontend typecheck, Vitest and production build | Passed against unchanged committed frontend; 8 tests; existing bundle-size warning |
+| Playwright | Passed, one workflow; dedicated API/frontend ports 16988/16973; deterministic test-only adapters |
+| Docker production build | Passed under separate tag `ai-engineering-platform:idempotent-verification`; image `sha256:f8d224e3aeaac828c9284186e4a438c46568576f4eb8e8446b527371bf9e9f30` |
+| Diff review | Reviewed reconciliation authorization, dedicated-branch transfer, no-op revision/QA/review gates, duplicate-delivery guard, instruction migration and stack prerequisites; `git diff --check` passed |
+
+Regression coverage includes already-completed criteria, no-op implementation, existing matching PR, existing feature-branch source, incompatible .NET/Node profiles, missing npm lockfile, exact evidence revision mismatch and unchanged protected default branch. No-op integration tests require fresh successful tests and QA, assert `AlreadySatisfied`, and reject commit/push/duplicate PR operations. The optional live test harness now accepts existing verified delivery rather than requiring artificial changes.
+
+The real repository was `ghptc/aep-sandbox-m8-20261028-3a0ed9`, current default/merge commit `eb4462114a9c7c5f95b4db99ee50013d5ea3f94a`. Source `feature.mjs` returns numeric 2; the existing Node assertion expects numeric 2. One test passed at source revision `987f8a8c0454441834b304fe3a57d6d84a559788433e09de60d73318ad9e5dae`. [Existing PR #1](https://github.com/ghptc/aep-sandbox-m8-20261028-3a0ed9/pull/1) is merged; its feature head is `1eb536ce57b8ebc0f5346f7d6f5572f142abdd85`. Repository `pushed_at` was unchanged across this check. Disposable fixture tests ran only inside the hardened Docker workload; no generated repository code ran on the workstation host.
+
+Reproduce the remote read-only check using `VERIFY_DISPOSABLE_REPOSITORY=1 EXECUTOR_CONFIG_PATH=<owner-managed-config> EXECUTOR_TEST_IMAGE=<immutable-image-id>` and the local executor test project. Add `RUN_LOCAL_EXECUTOR_TESTS=1` to include the four isolated Docker regressions. No OpenAI call or new sandbox delivery was needed or claimed. Owner development services and existing data remain intact; deploying the new daemon and configuring its `node`/composite profiles is separate from this verification. Further edits on an existing reconciled feature branch pause for explicit delivery handling instead of opening another PR.
+
 ## Engineering workspace UX redesign — 2026-10-29
 
 Implemented in isolated worktree `/tmp/aep-ux-worktree` on `feat/engineering-workspace-ui`, preserving concurrent unrelated changes in the owner's original worktree. Audit preceded implementation; see [ux-audit.md](ux-audit.md). No production database migration, live provider call, deployment or automatic merge was performed.

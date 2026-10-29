@@ -22,6 +22,14 @@ Added bounded focused tasks, optional BA/Architect participation, selectable dev
 
 A real focused run completed against the allowlisted disposable JavaScript repository: answer() and its existing test changed from 1 to 2, node --test passed in Docker, QA and actual diff review passed, and owner-authorized disposable delivery produced a real commit, pushed feature branch, draft PR and published review. It did not run BA, Architect or Frontend Engineer, mutate the default branch or merge. Detailed identifiers and verification caveats are in the current verification report. The owner's running application/daemon are preserved; deploying the reviewed changes is a separate operation.
 
+## Idempotent execution and stack-aware verification (2026-10-29)
+
+Repository inspection now precedes implementation. Bounded GitHub reconciliation exposes real engineering branches, commit SHAs and same-repository PRs; exact branch selection preserves the default snapshot and refuses dirty-workspace replacement. No-op work reaches `AlreadySatisfied` only after fresh applicable tests, acceptance QA, actual diff inspection and revision checks. Existing matching delivery artifacts are recorded without a new commit/push/PR. Focused tasks continue to skip BA/Architect by default and receive bounded current inspection evidence instead of project history. Instruction migrations preserve the previous revision.
+
+The executor advertises compatible administrator profiles from actual files, including the fixed `node --test` profile. It rejects .NET profiles in Node-only repositories and npm CI without a manifest/lockfile. Composite profiles now require administrator-declared prerequisite files; existing executor configurations need this update and a pinned Node profile before deployment. No shell, network, credential, fencing, lease, isolation or human delivery restrictions are relaxed. Explicit human-input/capability outcomes pause runs; implementation failures remain failures. Further edits to an existing reconciled feature branch require explicit delivery handling rather than creating a duplicate PR.
+
+Verification uses a separate source snapshot to exclude concurrent owner changes. Real GitHub App reads and hardened Node execution confirm the disposable fixture already passes at its merged default revision, without another delivery. The owner application and daemon were not restarted or reconfigured. Live OpenAI execution is not claimed for this milestone. See the current [verification report](verification.md).
+
 ## Engineering workspace UX redesign (2026-10-28)
 
 Completed the route/component/contract audit before edits; priorities and rationale are in [ux-audit.md](ux-audit.md). The dashboard now leads with active engineering, owner actions, deliveries and persisted team activity. Usage & Costs owns receipt totals, dimensions, trends, pricing and budget alerts; model behavior and security/runtime status stay in Settings & Agents.

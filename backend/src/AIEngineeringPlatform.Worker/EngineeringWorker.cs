@@ -22,11 +22,14 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                     if ((await store.AgentsAsync(stoppingToken)).Count == 0) foreach (var definition in AgentCatalog.Defaults(configuration["OPENAI_DEFAULT_MODEL"] ?? "")) await store.SaveAgentAsync(definition, stoppingToken);
                     foreach (var definition in await store.AgentsAsync(stoppingToken))
                     {
-                        if (definition.Role is not (AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.TestEngineer)) continue;
-                        var tools = definition.AllowedTools.Union(new[] { "RunCommand", "RunTests" }).ToArray();
-                        if (tools.Length == definition.AllowedTools.Length) continue;
-                        await store.AppendAsync(new() { Kind = "instructionVersion", Name = definition.Id, Content = System.Text.Json.JsonSerializer.Serialize(definition), Metadata = new() { ["migration"] = "milestone-8-isolated-profiles" } }, stoppingToken);
-                        await store.SaveAgentAsync(definition with { AllowedTools = tools, InstructionVersion = definition.InstructionVersion + 1 }, stoppingToken);
+                        var addedTools = definition.Role is AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.TestEngineer
+                            ? new[] { "RunCommand", "RunTests", "ReconcileRepository", "ReadPullRequest", "SelectBranch" }
+                            : new[] { "ReconcileRepository", "ReadPullRequest" };
+                        var tools = definition.AllowedTools.Union(addedTools).ToArray();
+                        const string reconciliationInstructions = " Inspect actual repository files and ReconcileRepository PR facts before editing. ReadRepository advertises applicable TestProfiles. SelectBranch {branch,commit} selects an exact existing engineering PR head, never the default branch. Read its source and diff before deciding whether criteria already hold. Do not manufacture changes. A no-op is verified through current tests, QA and review; return ALREADY_SATISFIED when appropriate. Use node profile for dependency-free JavaScript, never dotnet or npm ci without required manifests/lockfiles. Business ambiguity returns AWAITING_HUMAN_INPUT; missing capabilities return BLOCKED.";
+                        if (tools.Length == definition.AllowedTools.Length && definition.SystemInstructions.Contains(reconciliationInstructions, StringComparison.Ordinal)) continue;
+                        await store.AppendAsync(new() { Kind = "instructionVersion", Name = definition.Id, Content = System.Text.Json.JsonSerializer.Serialize(definition), Metadata = new() { ["migration"] = "task-reconciliation-and-stack-profiles" } }, stoppingToken);
+                        await store.SaveAgentAsync(definition with { AllowedTools = tools, SystemInstructions = definition.SystemInstructions + reconciliationInstructions, InstructionVersion = definition.InstructionVersion + 1 }, stoppingToken);
                     }
                     initialized = true;
                 }
@@ -47,7 +50,7 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                     if (current is { IsRunnable: true } && current.LeaseOwner == owner)
                     {
                         var safeReason = exception is ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : "Stage failed; inspect operational diagnostics using the run identifier.";
-                        var failed = current.Transition(RunStage.Failed, safeReason);
+                        var failed = exception is TaskReconciliationException reconciliation ? current.Transition(RunStage.Paused, safeReason) with { Outcome = reconciliation.Outcome } : exception is ConfigurationException ? current.Transition(RunStage.Paused, safeReason) with { Outcome = ExecutionOutcome.Blocked } : current.Transition(RunStage.Failed, safeReason);
                         if (await store.SaveRunAsync(failed, current.Version, owner, stoppingToken) && (exception is HttpRequestException or TimeoutException or TaskCanceledException) && current.RetryCount < current.Policy.MaxRetries)
                         {
                             await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, current.RetryCount + 1)), stoppingToken);
