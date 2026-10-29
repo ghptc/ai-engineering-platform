@@ -29,7 +29,7 @@ export function EvidenceDrawer({
   return (
     <Drawer
       open={!!entry}
-      title={active?.name ?? "Execution evidence"}
+      title={resolved?.name ?? "Execution evidence"}
       onClose={onClose}
       size="large"
       destroyOnHidden
@@ -55,13 +55,13 @@ export function EvidenceDrawer({
             </Button>
           )}
           <Space wrap>
-            <Status value={active!.status || active!.kind} />
+            <Status value={resolved!.status || resolved!.kind} />
             <Typography.Text type="secondary">
-              {new Date(active!.createdAt).toLocaleString()}
+              {new Date(resolved!.createdAt).toLocaleString()}
             </Typography.Text>
           </Space>
           <Typography.Paragraph copyable code>
-            {active!.id}
+            {resolved!.id}
           </Typography.Paragraph>
           {raw ? (
             <JsonDetails content={resolved!.content} />

@@ -251,6 +251,45 @@ describe("engineering workspace", () => {
       ).toBe(true),
     );
   });
+  it("opens original related artifacts and returns to the source event", async () => {
+    const source = entry("source", 1, "Progress", "Original event");
+    const artifact = {
+      ...entry(
+        "artifact",
+        2,
+        "TestReport",
+        JSON.stringify({ Summary: "Original validation evidence" }),
+      ),
+      kind: "artifact",
+    };
+    vi.mocked(fetch).mockImplementation((url) =>
+      response(
+        String(url).includes("/details/artifact/")
+          ? { entry: artifact, artifacts: [] }
+          : String(url).includes("/details/")
+            ? {
+                entry: source,
+                artifacts: [{ id: artifact.id, name: artifact.name }],
+              }
+            : { items: [source], hasMore: false },
+      ),
+    );
+    mount(<ActivityFeed runId="r" />);
+    fireEvent.click(await screen.findByText("Original event"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "TestReport" }),
+    );
+    expect(
+      await screen.findByText("Original validation evidence"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Back to original event"));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Original validation evidence"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getAllByText("Original event").length).toBeGreaterThan(0);
+  });
   it("opens a lazy large JSON Drawer with copy and controlled expansion", async () => {
     const event = entry(
       "big",
