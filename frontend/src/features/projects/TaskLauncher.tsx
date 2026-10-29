@@ -13,6 +13,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
+import { presets } from "../executions/ExecutionCapacity";
 import type { Project, Run } from "../../types";
 
 type TaskFields = {
@@ -38,11 +39,14 @@ export function TaskLauncher({
   const client = useQueryClient();
   const { message } = App.useApp();
   const start = useMutation({
-    mutationFn: (values: { tasks: TaskFields[] }) =>
+    mutationFn: (values: { tasks: TaskFields[]; preset?: string }) =>
       api<Run>(
         "/projects/" + project.id + "/tasks",
         "POST",
         {
+          policy: values.preset
+            ? { ...project.executionPolicy, ...presets[values.preset] }
+            : undefined,
           tasks: values.tasks.map(({ criteria, ...task }) => ({
             ...task,
             acceptanceCriteria: criteria
@@ -101,6 +105,19 @@ export function TaskLauncher({
           }}
           onFinish={(values) => start.mutate(values)}
         >
+          <Form.Item
+            name="preset"
+            label="Execution capacity (optional; otherwise project limits)"
+          >
+            <Select
+              allowClear
+              options={Object.keys(presets).map((value) => ({ value }))}
+            />
+          </Form.Item>
+          <Typography.Paragraph type="secondary">
+            Extended: 300 tools, 10 iterations, 3 retries, 180 minutes, USD 10
+            estimated API budget. Select explicitly to authorize these limits.
+          </Typography.Paragraph>
           <Form.List name="tasks">
             {(fields, { add, remove }) => (
               <>

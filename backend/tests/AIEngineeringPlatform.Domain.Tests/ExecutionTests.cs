@@ -24,9 +24,19 @@ public class ExecutionTests
         Assert.Equal(RunStage.RunningTests, retry.CurrentStage); Assert.Equal(1, retry.RetryCount);
         Assert.Throws<InvalidOperationException>(() => (failed with { RetryCount = 2 }).Transition(failed.ResumeStage));
     }
-    [Fact] public void BudgetExhaustionStopsExecution() => Assert.Throws<InvalidOperationException>(() => new ExecutionRun { Cost = 5 }.CheckLimits(DateTimeOffset.UtcNow));
-    [Fact] public void DurationExhaustionStopsExecution() => Assert.Throws<InvalidOperationException>(() => new ExecutionRun { StartedAt = DateTimeOffset.UtcNow.AddHours(-2) }.CheckLimits(DateTimeOffset.UtcNow));
-    [Fact] public void ToolLimitStopsExecution() => Assert.Throws<InvalidOperationException>(() => new ExecutionRun { ToolCalls = 30 }.CheckLimits(DateTimeOffset.UtcNow));
+    [Fact] public void BudgetExhaustionStopsExecution() => Assert.Throws<ExecutionLimitException>(() => new ExecutionRun { Cost = 5 }.CheckLimits(DateTimeOffset.UtcNow));
+    [Fact] public void DurationExhaustionStopsExecution() => Assert.Throws<ExecutionLimitException>(() => new ExecutionRun { StartedAt = DateTimeOffset.UtcNow.AddHours(-2) }.CheckLimits(DateTimeOffset.UtcNow));
+    [Fact] public void ToolLimitStopsExecution() => Assert.Throws<ExecutionLimitException>(() => new ExecutionRun { ToolCalls = 30 }.CheckLimits(DateTimeOffset.UtcNow));
+    [Fact]
+    public void RetryAllowancesAreIndependentPerStage()
+    {
+        var implementation = new ExecutionRun { CurrentStage = RunStage.Implementing, Policy = new(MaxRetries: 1) };
+        var failed = implementation.Transition(RunStage.Failed);
+        var retry = failed.Transition(failed.ResumeStage);
+        Assert.Throws<InvalidOperationException>(() => retry.Transition(RunStage.Failed).Transition(RunStage.Implementing));
+        var tests = retry.Transition(RunStage.GeneratingTests).Transition(RunStage.RunningTests).Transition(RunStage.Failed);
+        Assert.Equal(RunStage.RunningTests, tests.Transition(tests.ResumeStage).CurrentStage);
+    }
     [Fact] public void PolicyRejectsUnsafeLimits() => Assert.Throws<ArgumentException>(() => new ExecutionPolicy(MaxIterations: 0).Validate());
     [Fact] public void AutomaticMergeRemainsDisabled() => Assert.Throws<ArgumentException>(() => new ExecutionPolicy(RequireHumanApprovalForMerge: false).Validate());
     [Fact] public void ProjectRequiresName() => Assert.Throws<ArgumentException>(() => new Project().Validate());

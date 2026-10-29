@@ -20,7 +20,7 @@ public sealed class EngineeringHub(PlatformService service, IPlatformStore store
         while (true)
         {
             var records = await store.RecordsAsync("event", projectId, null, null, cursor, 0, 500, Context.ConnectionAborted);
-            foreach (var record in records) await Clients.Caller.SendAsync("EngineeringEvent", RecordPresentation.Preview(record), Context.ConnectionAborted);
+            foreach (var record in records) await Clients.Caller.SendAsync("EngineeringEvent", RecordPresentation.Preview(record with { Content = AIEngineeringPlatform.Infrastructure.SecretRedactor.Redact(record.Content) }), Context.ConnectionAborted);
             if (records.Count > 0) cursor = records[^1].Sequence;
             if (records.Count < 500) return cursor;
         }
@@ -31,7 +31,7 @@ public sealed class SignalRPublisher(IHubContext<EngineeringHub> hub, IPlatformS
     public async Task PublishAsync(RecordEntry entry, CancellationToken ct)
     {
         var saved = await store.GetRecordAsync(entry.Kind, entry.Id, ct) ?? throw new InvalidOperationException("Cannot publish an unpersisted event.");
-        try { await hub.Clients.Group("project:" + saved.ProjectId).SendAsync("EngineeringEvent", RecordPresentation.Preview(saved), ct); await hub.Clients.Group("project:" + saved.ProjectId).SendAsync(saved.Kind == "message" ? "AgentMessageCreated" : saved.Name, RecordPresentation.Preview(saved), ct); }
+        try { await hub.Clients.Group("project:" + saved.ProjectId).SendAsync("EngineeringEvent", RecordPresentation.Preview(saved with { Content = AIEngineeringPlatform.Infrastructure.SecretRedactor.Redact(saved.Content) }), ct); await hub.Clients.Group("project:" + saved.ProjectId).SendAsync(saved.Kind == "message" ? "AgentMessageCreated" : saved.Name, RecordPresentation.Preview(saved with { Content = AIEngineeringPlatform.Infrastructure.SecretRedactor.Redact(saved.Content) }), ct); }
         catch (Exception e) when (e is not OperationCanceledException) { logger.LogWarning("Live event delivery failed for persisted event {EventId}", saved.Id); }
     }
 }

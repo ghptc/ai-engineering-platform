@@ -115,7 +115,34 @@ export function teamState(run: Run, events: Entry[], handoffs: Entry[]) {
   const completed = new Set(
     currentHandoffs.filter((h) => h.status === "Completed").map((h) => h.name),
   );
-  const sorted = [...events].sort((a, b) => b.sequence - a.sequence);
+  const correctionTargets = (run.reworkPlan ?? [])
+    .filter((p) => p.iteration === run.iteration)
+    .map((p) => roleName(p.targetAgent));
+  if (correctionTargets.length) {
+    const revisited = new Set([
+      ...correctionTargets,
+      "TestEngineer",
+      "QAEngineer",
+      "CodeReviewer",
+    ]);
+    handoffs
+      .filter(
+        (h) =>
+          h.status === "Completed" &&
+          h.metadata?.taskIndex === String(run.taskIndex ?? 0) &&
+          !revisited.has(h.name),
+      )
+      .forEach((h) => completed.add(h.name));
+  }
+  const sorted = events
+    .filter(
+      (e) =>
+        (!e.metadata?.taskIndex ||
+          e.metadata.taskIndex === String(run.taskIndex ?? 0)) &&
+        (!e.metadata?.iteration ||
+          e.metadata.iteration === String(run.iteration)),
+    )
+    .sort((a, b) => b.sequence - a.sequence);
   const planned = sorted.find(
     (e) =>
       e.name === "AgentsSelected" &&
@@ -129,6 +156,10 @@ export function teamState(run: Run, events: Entry[], handoffs: Entry[]) {
     Analyzing: "BusinessAnalyst",
     Planning: "Architect",
     Implementing:
+      run.reworkPlan
+        ?.filter((p) => p.iteration === run.iteration)
+        .map((p) => roleName(p.targetAgent))
+        .find((r) => !completed.has(r)) ??
       selected.find((r) => /Engineer/.test(r) && !/Test|QA/.test(r)) ??
       "BackendEngineer",
     GeneratingTests: "TestEngineer",

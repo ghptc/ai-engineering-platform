@@ -45,7 +45,11 @@ public sealed partial class MongoPlatformStore : IPlatformStore, IWorkspaceQueri
         return (await projects.ReplaceOneAsync(x => x.Id == project.Id && x.Version == expectedVersion, doc, cancellationToken: ct)).MatchedCount == 1;
     }
     private static RunDocument Document(ExecutionRun run) => new() { Id = run.Id, ProjectId = run.ProjectId, Key = run.IdempotencyKey, Data = Encode(run), Version = run.Version, Active = run.CurrentStage is not (RunStage.Completed or RunStage.Cancelled), Runnable = run.IsRunnable, LeaseExpiry = run.LeaseExpiry.UtcDateTime, Owner = run.LeaseOwner, Stage = run.Status, CreatedAt = run.StartedAt.UtcDateTime, Cost = run.Cost, TokenUsage = run.TokenUsage };
-    private static ExecutionRun DecodeRun(RunDocument doc) => Decode<ExecutionRun>(doc.Data)! with { Version = doc.Version, LeaseOwner = doc.Owner, LeaseExpiry = new DateTimeOffset(DateTime.SpecifyKind(doc.LeaseExpiry, DateTimeKind.Utc)) };
+    private static ExecutionRun DecodeRun(RunDocument doc)
+    {
+        var run = Decode<ExecutionRun>(doc.Data)!;
+        return run with { FailureReason = run.FailureReason is { } failure ? SecretRedactor.Redact(failure) : null, Version = doc.Version, LeaseOwner = doc.Owner, LeaseExpiry = new DateTimeOffset(DateTime.SpecifyKind(doc.LeaseExpiry, DateTimeKind.Utc)) };
+    }
     public async Task<ExecutionRun?> GetRunAsync(string id, CancellationToken ct) { var doc = await runs.Find(x => x.Id == id).FirstOrDefaultAsync(ct); return doc is null ? null : DecodeRun(doc); }
     public async Task<IReadOnlyList<ExecutionRun>> RunsAsync(string? projectId, int offset, int limit, CancellationToken ct, string? status = null)
     {
@@ -83,8 +87,11 @@ public sealed partial class MongoPlatformStore : IPlatformStore, IWorkspaceQueri
         if (previous.Stage != run.Status)
         {
             replacement.Outbox.Add(TransitionEvent(run with { Version = expectedVersion + 1 }, "StageChanged", previous.Stage + " → " + run.Status));
+            if (run.CurrentStage == RunStage.Implementing && run.ReworkPlan.Any(x => x.Iteration == run.Iteration)) replacement.Outbox.Add(TransitionEvent(run with { Version = expectedVersion + 1 }, "ReworkPlanned", JsonSerializer.Serialize(run.ReworkPlan)));
             if (run.CurrentStage is RunStage.Completed or RunStage.Failed) replacement.Outbox.Add(TransitionEvent(run with { Version = expectedVersion + 1 }, run.CurrentStage == RunStage.Completed ? "RunCompleted" : "RunFailed", run.FailureReason ?? run.Status));
         }
+        if (DecodeRun(previous).LimitExtensions.Length < run.LimitExtensions.Length)
+            replacement.Outbox.Add(TransitionEvent(run with { Version = expectedVersion + 1 }, "LimitsExtended", JsonSerializer.Serialize(run.LimitExtensions.Last())));
         return (await runs.ReplaceOneAsync(filter, replacement, cancellationToken: ct)).MatchedCount == 1;
     }
     public async Task<bool> RenewLeaseAsync(string id, string owner, CancellationToken ct) => (await runs.UpdateOneAsync(x => x.Id == id && x.Owner == owner && x.LeaseExpiry > DateTime.UtcNow, Builders<RunDocument>.Update.Set(x => x.LeaseExpiry, DateTime.UtcNow.AddMinutes(2)), cancellationToken: ct)).MatchedCount == 1;

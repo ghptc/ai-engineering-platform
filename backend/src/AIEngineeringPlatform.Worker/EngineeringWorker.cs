@@ -50,10 +50,12 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                     if (current is { IsRunnable: true } && current.LeaseOwner == owner)
                     {
                         var safeReason = exception is ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : "Stage failed; inspect operational diagnostics using the run identifier.";
-                        var failed = exception is TaskReconciliationException reconciliation ? current.Transition(RunStage.Paused, safeReason) with { Outcome = reconciliation.Outcome } : exception is ConfigurationException ? current.Transition(RunStage.Paused, safeReason) with { Outcome = ExecutionOutcome.Blocked } : current.Transition(RunStage.Failed, safeReason);
-                        if (await store.SaveRunAsync(failed, current.Version, owner, stoppingToken) && (exception is HttpRequestException or TimeoutException or TaskCanceledException) && current.RetryCount < current.Policy.MaxRetries)
+                        if (exception is TaskReconciliationException { Outcome: ExecutionOutcome.AwaitingHumanInput } && !safeReason.StartsWith("Human clarification required:", StringComparison.Ordinal)) safeReason = "Human clarification required: " + safeReason;
+                        var failed = exception is TaskReconciliationException reconciliation ? current.Transition(RunStage.Paused, safeReason) with { Outcome = reconciliation.Outcome } : exception is ConfigurationException or ExecutionLimitException ? current.Transition(RunStage.Paused, safeReason) with { Outcome = ExecutionOutcome.Blocked } : current.Transition(RunStage.Failed, safeReason);
+                        failed = failed with { FailureCategory = FailureDiagnosis.Category(exception, current.CurrentStage) };
+                        if (await store.SaveRunAsync(failed, current.Version, owner, stoppingToken) && (exception is HttpRequestException or TimeoutException or TaskCanceledException) && current.RetriesFor(current.CurrentStage) < current.Policy.MaxRetries)
                         {
-                            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, current.RetryCount + 1)), stoppingToken);
+                            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, current.RetriesFor(current.CurrentStage) + 1)), stoppingToken);
                             var retryable = await store.GetRunAsync(run.Id, stoppingToken);
                             if (retryable?.CurrentStage == RunStage.Failed && retryable.LeaseOwner == owner && retryable.Version == current.Version + 1) await store.SaveRunAsync(retryable.Transition(retryable.ResumeStage), retryable.Version, owner, stoppingToken);
                         }

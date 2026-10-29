@@ -87,7 +87,9 @@ test("owner creates a project, runs engineering cycle, reviews evidence and appr
     fullPage: true,
   });
   await expect(
-    page.getByLabel("Selected engineering team").locator(".agent-tile"),
+    page
+      .getByLabel("Live directed engineering workflow")
+      .locator("g[role=button]"),
   ).toHaveCount(4);
   await expect(
     page.getByText("Recorded handoffs", { exact: true }),
@@ -95,6 +97,17 @@ test("owner creates a project, runs engineering cycle, reviews evidence and appr
   await expect(
     page.getByText("Backend Engineer → Test Engineer", { exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: /Backend Engineer · Completed/ })
+    .click();
+  await expect(
+    page.getByRole("tab", { name: "Execution Terminal", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "WriteFile", exact: true }).click();
+  await expect(page.locator(".execution-terminal")).toContainText(
+    "written backend/Feature.cs",
+  );
+  await expect(page.getByText("Copy output", { exact: true })).toBeVisible();
   await page
     .getByRole("tab", { name: "Execution timeline", exact: true })
     .click();
@@ -265,7 +278,9 @@ test("large histories, safe details, cost separation and mobile navigation", asy
     .filter({ hasText: /^Engineering history fixture$/ })
     .click();
   await expect(
-    page.getByLabel("Selected engineering team").locator(".agent-tile"),
+    page
+      .getByLabel("Live directed engineering workflow")
+      .locator("g[role=button]"),
   ).toHaveCount(4);
   await page.keyboard.press("Escape");
   expect(

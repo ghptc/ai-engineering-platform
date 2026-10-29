@@ -64,6 +64,8 @@ public sealed class ExecutorTests
         await executor.ExecuteAsync(Request("original", "test", "ApplyPatch", new { patch = JsonSerializer.Serialize(new { path = "feature.test.mjs", search = "answer(), 1", replacement = "answer(), 2" }) }), default);
         var verified = await executor.ExecuteAsync(Request("original", "tests", "RunTests", new { profile = "node" }), default);
         Assert.True(verified.Success, verified.Output);
+        Assert.NotNull(verified.Execution); Assert.Equal("/workspace", verified.Execution.WorkingDirectory);
+        Assert.Equal(new[] { "node", "--test" }, verified.Execution.Command); Assert.NotEmpty(verified.Execution.Stdout);
         var commit = await executor.ExecuteAsync(Request("original", "commit", "CreateCommit", new { branch = "engineering/original", message = "fix: answer returns 2", expectedRevision = verified.DiffHash }), default);
         await executor.ExecuteAsync(Request("original", "push", "PushBranch", new { branch = "engineering/original" }), default);
         using var json = JsonDocument.Parse(commit.Output);

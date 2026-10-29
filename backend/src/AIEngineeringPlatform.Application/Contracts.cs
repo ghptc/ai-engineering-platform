@@ -34,7 +34,7 @@ public interface IPlatformStore
 public interface IExecutionPublisher { Task PublishAsync(RecordEntry entry, CancellationToken ct); }
 public sealed record AgentContext(Project Project, ExecutionRun Run, string Context, AgentDefinition Definition);
 public sealed record ToolCall(string Name, JsonElement Arguments);
-public sealed record AgentResult(string Summary, string Decision, string[] AcceptanceCriteria, string[] Evidence, string[] Assumptions, ToolCall[] ToolCalls, string NextContext, RequirementProposal[]? Requirements = null, ReviewFinding[]? Findings = null, QualityCheck[]? Checks = null, string[]? OpenQuestions = null, ArchitectureDecision[]? ArchitectureDecisions = null);
+public sealed record AgentResult(string Summary, string Decision, string[] AcceptanceCriteria, string[] Evidence, string[] Assumptions, ToolCall[] ToolCalls, string NextContext, RequirementProposal[]? Requirements = null, ReviewFinding[]? Findings = null, QualityCheck[]? Checks = null, string[]? OpenQuestions = null, ArchitectureDecision[]? ArchitectureDecisions = null, string[]? ReworkTargets = null);
 public sealed record AgentHandoff(string Summary, string CompletedWork, string[] RelevantArtifacts, QualityCheck[] ValidationResults, string[] Blockers, string NextAction);
 public sealed record RequirementProposal(string Title, string Description, string UserStory, string[] AcceptanceCriteria, int Priority, string[] Dependencies, bool NonFunctional);
 public sealed record ReviewFinding(string Severity, string File, int? Line, string Description, string SuggestedCorrection);
@@ -43,10 +43,11 @@ public sealed record ArchitectureDecision(string Title, string Context, string D
 public sealed record ModelExecutionResult(AgentResult Output, string ResponseId, long InputTokens, long OutputTokens, decimal Cost);
 public interface ILanguageModelProvider { Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct); }
 public interface IEngineeringAgent { AgentRole Role { get; } Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct); }
-public sealed record ToolResult(bool Success, string Output, string? EvidenceId = null, string? WorkspaceRevision = null);
+public sealed record OperationExecution(string Profile, string[] Command, string WorkingDirectory, string Stdout, string Stderr);
+public sealed record ToolResult(bool Success, string Output, string? EvidenceId = null, string? WorkspaceRevision = null, int? ExitCode = null, OperationExecution? Execution = null);
 public sealed class SandboxExecutionLimits { public int TimeoutSeconds { get; set; } = 120; public int CpuLimit { get; set; } = 1; public int MemoryMb { get; set; } = 1024; public int OutputLimitBytes { get; set; } = 100000; }
 public sealed record SandboxRequest(string OperationId, string RunId, RepositoryConnection Repository, string Operation, JsonElement Arguments, int TimeoutSeconds = 60, int CpuLimit = 1, int MemoryMb = 512, int OutputLimitBytes = 100000, bool NetworkEnabled = false, long Fence = 0, string? LeaseOwner = null);
-public sealed record SandboxResponse(bool Success, string Output, string EvidenceId, int? ExitCode, string WorkspaceId, string? DiffHash = null);
+public sealed record SandboxResponse(bool Success, string Output, string EvidenceId, int? ExitCode, string WorkspaceId, string? DiffHash = null, OperationExecution? Execution = null);
 public interface IExecutionSandbox { bool Configured { get; } Task<bool> IsReadyAsync(CancellationToken ct) => Task.FromResult(Configured); Task<SandboxResponse> ExecuteAsync(SandboxRequest request, CancellationToken ct); }
 public interface IAgentTool { string Name { get; } Task<ToolResult> ExecuteAsync(AgentContext context, JsonElement arguments, string operationId, CancellationToken ct); }
 public interface ISourceControl

@@ -25,9 +25,10 @@ public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, st
         await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
         using var buffer = new MemoryStream();
         var bytes = new byte[8192]; int length;
-        while ((length = await stream.ReadAsync(bytes, timeout.Token)) > 0) { if (buffer.Length + length > 200000) throw new InvalidOperationException("Sandbox response exceeds size limit."); await buffer.WriteAsync(bytes.AsMemory(0, length), timeout.Token); }
+        while ((length = await stream.ReadAsync(bytes, timeout.Token)) > 0) { if (buffer.Length + length > Math.Min(1_232_000L, request.OutputLimitBytes * 12L + 32000)) throw new InvalidOperationException("Sandbox response exceeds size limit."); await buffer.WriteAsync(bytes.AsMemory(0, length), timeout.Token); }
         var result = System.Text.Json.JsonSerializer.Deserialize<SandboxResponse>(buffer.ToArray(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("Sandbox returned no result.");
         if (string.IsNullOrWhiteSpace(result.EvidenceId) || result.WorkspaceId != request.RunId || result.Output is null || System.Text.Encoding.UTF8.GetByteCount(result.Output) > request.OutputLimitBytes) throw new InvalidOperationException("Sandbox evidence or workspace identity is invalid.");
+        if (result.Execution is { } execution && (execution.Stdout == null || execution.Stderr == null || System.Text.Encoding.UTF8.GetByteCount(execution.Stdout) + System.Text.Encoding.UTF8.GetByteCount(execution.Stderr) > request.OutputLimitBytes || execution.Command == null || execution.Command.Length > 32 || execution.Command.Any(x => x == null || x.Length > 1000) || execution.WorkingDirectory?.Length > 1024 || execution.Profile?.Length > 1000)) throw new InvalidOperationException("Sandbox execution details exceed bounded output limits.");
         return result;
     }
 }

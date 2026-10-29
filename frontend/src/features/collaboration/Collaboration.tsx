@@ -7,9 +7,12 @@ import { EvidenceDrawer } from "../../components/EvidenceDrawer";
 import { ReadableEntry } from "../../components/Readable";
 import { human, teamState, text, parse } from "../../lib/engineering";
 import { useLiveEvents, type RecordWindow } from "../../hooks/useLiveEvents";
+import { AgentFlow } from "../executions/AgentFlow";
+import { AgentConsole } from "../executions/AgentConsole";
 import type { Entry, Page, Project, Run } from "../../types";
 export function TeamWorkspace({ run, events }: { run: Run; events: Entry[] }) {
   const [selected, setSelected] = useState<Entry>();
+  const [agent, setAgent] = useState<string>();
   const [before, setBefore] = useState<number>();
   const handoffs = useApi<RecordWindow>(
     `/runs/${run.id}/stream?kind=handoff&limit=50`,
@@ -39,51 +42,60 @@ export function TeamWorkspace({ run, events }: { run: Run; events: Entry[] }) {
           </Typography.Text>
         }
       >
-        <div className="agent-team" aria-label="Selected engineering team">
-          {team.map(({ role, state }) => (
-            <button
-              className={`agent-tile ${state === "Working" || state === "Waiting for tool" ? "agent-active" : ""}`}
-              key={role}
-              onClick={() => {
-                const record =
-                  handoffs.data?.items.find((e) => e.name === role) ??
-                  events.find(
-                    (e) => e.name === "AgentStarted" && e.content === role,
-                  );
-                if (record) setSelected(record);
-              }}
-              disabled={
-                !handoffs.data?.items.some((e) => e.name === role) &&
-                !events.some(
-                  (e) => e.name === "AgentStarted" && e.content === role,
-                )
-              }
-            >
-              <Avatar icon={<RobotOutlined />} />
-              <strong>{human(role)}</strong>
-              <Status value={state} />
-            </button>
-          ))}
-        </div>
+        <AgentFlow
+          run={run}
+          events={events}
+          handoffs={handoffs.data?.items ?? []}
+          onSelect={setAgent}
+        />
         {!team.length && (
           <Empty description="This older execution has no persisted specialist selection." />
         )}
       </Card>
+      {(agent ??
+        team.find((a) =>
+          ["Working", "Waiting for tool", "Failed", "Blocked"].includes(
+            a.state,
+          ),
+        )?.role ??
+        team[0]?.role) && (
+        <AgentConsole
+          key={agent ?? "active"}
+          run={run}
+          role={
+            agent ??
+            team.find((a) =>
+              ["Working", "Waiting for tool", "Failed", "Blocked"].includes(
+                a.state,
+              ),
+            )?.role ??
+            team[0].role
+          }
+          handoffs={handoffs.data?.items ?? []}
+        />
+      )}
       <Card title="Recorded handoffs">
         <QueryState
           loading={handoffs.isLoading}
           error={handoffs.error}
           empty={!currentHandoffs.length}
         >
-          <div className="handoff-strip">
+          <div
+            className="handoff-strip"
+            style={{ maxHeight: 240, overflow: "auto" }}
+          >
             {[...currentHandoffs]
               .reverse()
               .filter((e) => e.status !== "Working")
               .map((entry) => {
                 const next =
-                  run.selectedAgents?.[
-                    run.selectedAgents.indexOf(entry.name) + 1
-                  ];
+                  entry.metadata?.targetAgent ||
+                  run.agentTransitions?.find(
+                    (t) =>
+                      String(t.sourceAgent) === entry.name &&
+                      t.iteration === Number(entry.metadata?.iteration) &&
+                      t.taskIndex === Number(entry.metadata?.taskIndex),
+                  )?.targetAgent;
                 return (
                   <button
                     key={entry.id}
@@ -92,7 +104,7 @@ export function TeamWorkspace({ run, events }: { run: Run; events: Entry[] }) {
                   >
                     <strong>
                       {human(entry.name)}{" "}
-                      {next ? `→ ${human(next)}` : "→ Delivery decision"}
+                      {next ? `→ ${human(String(next))}` : "· result recorded"}
                     </strong>
                     <span>
                       {text(parse(entry.content), "Summary").slice(0, 180)}
@@ -107,77 +119,82 @@ export function TeamWorkspace({ run, events }: { run: Run; events: Entry[] }) {
           </div>
         </QueryState>
       </Card>
-      <Card
-        title="Agent conversation"
-        extra={
-          <Typography.Text type="secondary">
-            Saved messages · chronological within page
-          </Typography.Text>
-        }
-      >
-        <QueryState
-          loading={messages.isLoading}
-          error={messages.error}
-          empty={!messages.data?.items.length}
+      <details>
+        <summary>Saved agent conversation</summary>
+        <Card
+          title="Agent conversation"
+          extra={
+            <Typography.Text type="secondary">
+              Saved messages · chronological within page
+            </Typography.Text>
+          }
         >
-          <div
-            className="message-list"
-            role="region"
-            aria-label="Agent conversation"
+          <QueryState
+            loading={messages.isLoading}
+            error={messages.error}
+            empty={!messages.data?.items.length}
           >
-            {[...(messages.data?.items ?? [])].reverse().map((entry) => (
-              <article className="message" key={entry.id}>
-                <Avatar
-                  icon={
-                    entry.name === "Client" ? (
-                      <UserOutlined />
-                    ) : (
-                      <RobotOutlined />
-                    )
-                  }
-                />
-                <div>
-                  <div className="message-meta">
-                    <strong>{human(entry.name)}</strong>
-                    <time>{new Date(entry.createdAt).toLocaleString()}</time>
-                    <Status
-                      value={
-                        entry.name === "Client"
-                          ? "Client message"
-                          : "Agent message"
-                      }
-                    />
+            <div
+              className="message-list"
+              style={{ maxHeight: 400, overflow: "auto" }}
+              role="region"
+              aria-label="Agent conversation"
+            >
+              {[...(messages.data?.items ?? [])].reverse().map((entry) => (
+                <article className="message" key={entry.id}>
+                  <Avatar
+                    icon={
+                      entry.name === "Client" ? (
+                        <UserOutlined />
+                      ) : (
+                        <RobotOutlined />
+                      )
+                    }
+                  />
+                  <div>
+                    <div className="message-meta">
+                      <strong>{human(entry.name)}</strong>
+                      <time>{new Date(entry.createdAt).toLocaleString()}</time>
+                      <Status
+                        value={
+                          entry.name === "Client"
+                            ? "Client message"
+                            : "Agent message"
+                        }
+                      />
+                    </div>
+                    <Typography.Paragraph type="secondary">
+                      {entry.metadata?.taskIndex != null
+                        ? (run.tasks?.[Number(entry.metadata.taskIndex)]
+                            ?.title ??
+                          `Task ${Number(entry.metadata.taskIndex) + 1}`)
+                        : "Task association not recorded in this legacy message"}
+                    </Typography.Paragraph>
+                    <ReadableEntry entry={entry} />
+                    <Button type="link" onClick={() => setSelected(entry)}>
+                      Inspect message & references
+                    </Button>
                   </div>
-                  <Typography.Paragraph type="secondary">
-                    {entry.metadata?.taskIndex != null
-                      ? (run.tasks?.[Number(entry.metadata.taskIndex)]?.title ??
-                        `Task ${Number(entry.metadata.taskIndex) + 1}`)
-                      : "Task association not recorded in this legacy message"}
-                  </Typography.Paragraph>
-                  <ReadableEntry entry={entry} />
-                  <Button type="link" onClick={() => setSelected(entry)}>
-                    Inspect message & references
-                  </Button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </QueryState>
-        <Space className="history-controls">
-          <Button
-            disabled={!messages.data?.hasMore}
-            onClick={() => setBefore(messages.data?.nextBefore)}
-          >
-            Older messages
-          </Button>
-          <Button
-            disabled={before == null}
-            onClick={() => setBefore(undefined)}
-          >
-            Latest messages
-          </Button>
-        </Space>
-      </Card>
+                </article>
+              ))}
+            </div>
+          </QueryState>
+          <Space className="history-controls">
+            <Button
+              disabled={!messages.data?.hasMore}
+              onClick={() => setBefore(messages.data?.nextBefore)}
+            >
+              Older messages
+            </Button>
+            <Button
+              disabled={before == null}
+              onClick={() => setBefore(undefined)}
+            >
+              Latest messages
+            </Button>
+          </Space>
+        </Card>
+      </details>
       <EvidenceDrawer
         key={selected?.id ?? "none"}
         entry={selected}

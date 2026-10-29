@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Text;
 namespace AIEngineeringPlatform.LocalExecutor;
 
-public sealed record ProcessResult(int ExitCode, string Output, bool TimedOut = false, bool OutputExceeded = false);
+public sealed record ProcessResult(int ExitCode, string Output, bool TimedOut = false, bool OutputExceeded = false, string Stdout = "", string Stderr = "");
 public sealed class ControlledProcess(ExecutorOptions options)
 {
     public async Task<ProcessResult> RunAsync(string executable, IEnumerable<string> arguments, string? directory, int seconds, int outputLimit, CancellationToken ct, byte[]? input = null, IReadOnlyDictionary<string, string>? environment = null)
@@ -23,8 +23,8 @@ public sealed class ControlledProcess(ExecutorOptions options)
         start.Environment["LC_ALL"] = "C.UTF-8";
         if (environment != null) foreach (var pair in environment) start.Environment[pair.Key] = pair.Value;
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start controlled host operation.");
-        var output = new StringBuilder(); var gate = new object(); var count = 0; var exceeded = false;
-        async Task ReadAsync(StreamReader reader)
+        var output = new StringBuilder(); var stdout = new StringBuilder(); var stderr = new StringBuilder(); var gate = new object(); var count = 0; var exceeded = false;
+        async Task ReadAsync(StreamReader reader, StringBuilder stream)
         {
             var buffer = new char[4096]; int length;
             while ((length = await reader.ReadAsync(buffer.AsMemory(), timeout.Token)) > 0)
@@ -33,7 +33,7 @@ public sealed class ControlledProcess(ExecutorOptions options)
                 {
                     var text = new string(buffer, 0, length); count += Encoding.UTF8.GetByteCount(text);
                     if (count > outputLimit) { exceeded = true; timeout.Cancel(); return; }
-                    output.Append(text);
+                    output.Append(text); stream.Append(text);
                 }
             }
         }
@@ -45,15 +45,15 @@ public sealed class ControlledProcess(ExecutorOptions options)
         }
         try
         {
-            await Task.WhenAll(ReadAsync(process.StandardOutput), ReadAsync(process.StandardError), WriteAsync(), process.WaitForExitAsync(timeout.Token));
-            return new(process.ExitCode, output.ToString());
+            await Task.WhenAll(ReadAsync(process.StandardOutput, stdout), ReadAsync(process.StandardError, stderr), WriteAsync(), process.WaitForExitAsync(timeout.Token));
+            return new(process.ExitCode, output.ToString(), Stdout: stdout.ToString(), Stderr: stderr.ToString());
         }
         catch (OperationCanceledException)
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync(CancellationToken.None);
             ct.ThrowIfCancellationRequested();
-            return new(exceeded ? 125 : 124, output.ToString(), !exceeded, exceeded);
+            return new(exceeded ? 125 : 124, output.ToString(), !exceeded, exceeded, stdout.ToString(), stderr.ToString());
         }
     }
 }

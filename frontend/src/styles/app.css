@@ -474,6 +474,8 @@ body {
   margin: 7px 0 0;
 }
 .collaboration-workspace {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   display: grid;
   gap: 16px;
 }
@@ -748,5 +750,81 @@ body {
     margin-inline-start: 0;
     max-width: 100%;
     font-size: 12px;
+  }
+}
+
+.agent-flow {
+  max-height: 320px;
+  overflow: auto;
+  max-width: 100%;
+}
+.agent-flow svg {
+  width: 100%;
+  max-height: 280px;
+}
+.flow-edge {
+  fill: none;
+  stroke: #8b98a6;
+  stroke-width: 2;
+  color: #8b98a6;
+}
+.flow-completed {
+  stroke: #658576;
+  color: #658576;
+  opacity: 0.65;
+}
+.flow-rework {
+  stroke: #d28b27;
+  color: #d28b27;
+}
+.flow-active {
+  stroke: #1677ff;
+  color: #1677ff;
+  stroke-dasharray: 6 4;
+  animation: flow-dash 1s linear infinite;
+}
+.flow-node {
+  cursor: pointer;
+}
+.flow-node rect {
+  fill: var(--ant-color-bg-container, #fff);
+  stroke: #8b98a6;
+}
+.flow-node text {
+  fill: var(--ant-color-text, #243549);
+  font-size: 13px;
+}
+.flow-node-active rect {
+  stroke: #1677ff;
+  stroke-width: 3;
+}
+.flow-status {
+  font-size: 12px !important;
+}
+.flow-node:focus rect {
+  stroke: #1677ff;
+  stroke-width: 3;
+}
+.agent-console {
+  max-height: 70vh;
+  overflow: auto;
+}
+.execution-terminal {
+  background: #101820;
+  color: #e6edf3;
+  padding: 16px;
+  white-space: pre-wrap;
+  overflow: auto;
+  max-height: 42vh;
+  overflow-wrap: anywhere;
+}
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-active {
+    animation: none;
   }
 }
