@@ -49,14 +49,34 @@ public sealed partial class MongoPlatformStore
             totals.TryGetValue(key, out var old);
             totals[key] = (old.Input + value.InputTokens, old.Output + value.OutputTokens, old.Cost + value.Cost, old.Calls + 1);
         }
-        using var cursor = await entries.Find(x => x.Kind == "task" || x.Kind == "usage").SortByDescending(x => x.Sequence).ToCursorAsync(ct);
+        // Provider envelopes are small metadata records; keep large task payloads streamed.
+        var requests = (await entries.Find(x => x.Kind == "providerRequest").SortByDescending(x => x.Sequence).ToListAsync(ct)).Select(x => Decode<RecordEntry>(x.Data)!).ToArray();
+        var requestResults = requests.GroupBy(x => x.Metadata["requestKey"]).Select(g => g.OrderBy(x => x.Status == "Reserved" ? 0 : 1).Last()).OrderByDescending(x => x.Sequence).ToArray();
+        var requestIds = requestResults.Select(x => JsonSerializer.Deserialize<ProviderCharge>(x.Content, Json)!.Diagnostics.ResponseId).Where(x => x != null).ToHashSet();
         var index = 0;
+        var requestIndex = 0;
+        using var cursor = await entries.Find(x => x.Kind == "task" || x.Kind == "usage").SortByDescending(x => x.Sequence).ToCursorAsync(ct);
         while (await cursor.MoveNextAsync(ct)) foreach (var doc in cursor.Current)
         {
-            var record = Decode<RecordEntry>(doc.Data)!;
-            var result = JsonSerializer.Deserialize<ModelExecutionResult>(record.Content, Json) ?? throw new InvalidOperationException("Persisted model usage is invalid.");
-            var agent = doc.Kind == "usage" ? "BusinessAnalyst (conversation)" : record.Name;
-            var model = doc.Kind == "usage" ? record.Name : record.Metadata.GetValueOrDefault("model") ?? "Unavailable (legacy record)";
+            while (requestIndex < requestResults.Length && requestResults[requestIndex].Sequence > doc.Sequence) Include(requestResults[requestIndex++]);
+            Include(Decode<RecordEntry>(doc.Data)!);
+        }
+        while (requestIndex < requestResults.Length) Include(requestResults[requestIndex++]);
+        void Include(RecordEntry record)
+        {
+            ModelExecutionResult result;
+            if (record.Kind == "providerRequest")
+            {
+                var charge = JsonSerializer.Deserialize<ProviderCharge>(record.Content, Json)!;
+                result = new(null!, charge.Diagnostics.ResponseId ?? "Unknown", charge.Diagnostics.InputTokens ?? 0, charge.Diagnostics.OutputTokens ?? 0, charge.Cost, charge.Diagnostics);
+            }
+            else
+            {
+                result = JsonSerializer.Deserialize<ModelExecutionResult>(record.Content, Json) ?? throw new InvalidOperationException("Persisted model usage is invalid.");
+                if (result.Diagnostics != null && requestIds.Contains(result.ResponseId)) return;
+            }
+            var agent = record.Kind == "usage" ? "BusinessAnalyst (conversation)" : record.Name;
+            var model = result.Diagnostics?.Model ?? (record.Kind == "usage" ? record.Name : record.Metadata.GetValueOrDefault("model") ?? "Unavailable (legacy record)");
             Add("total:", result); Add("project:" + record.ProjectId, result); Add("execution:" + (record.RunId ?? "Conversation"), result); Add("agent:" + agent, result); Add("model:" + model, result); Add("day:" + record.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd"), result);
             if (index >= offset && history.Count <= limit) history.Add(new(record.Id, record.CreatedAt, record.ProjectId, record.RunId, agent, model, result.ResponseId, result.InputTokens, result.OutputTokens, result.Cost));
             index++;

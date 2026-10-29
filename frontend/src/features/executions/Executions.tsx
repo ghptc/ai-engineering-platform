@@ -26,6 +26,7 @@ import { Collapse } from "antd";
 import { Markdown } from "../../components/Readable";
 import { EvidenceDrawer } from "../../components/EvidenceDrawer";
 import { ExecutionCapacity } from "./ExecutionCapacity";
+import { ProviderDiagnostics } from "./ProviderDiagnostics";
 import { ActivityFeed } from "./ActivityFeed";
 import type { Entry, Page, Run } from "../../types";
 export function Executions() {
@@ -351,6 +352,9 @@ export function ExecutionDetail() {
                 description={r.failureReason}
               />
             )}
+          {r.failureCategory?.startsWith("OpenAI") && (
+            <ProviderDiagnostics runId={r.id} />
+          )}
           {r.failureReason?.startsWith("Human clarification required:") && (
             <Clarification run={r} />
           )}

@@ -40,7 +40,7 @@ public sealed record RequirementProposal(string Title, string Description, strin
 public sealed record ReviewFinding(string Severity, string File, int? Line, string Description, string SuggestedCorrection);
 public sealed record QualityCheck(string RequirementId, string Scenario, bool Passed, string EvidenceId, string Details);
 public sealed record ArchitectureDecision(string Title, string Context, string Decision, string Consequences, string Mermaid);
-public sealed record ModelExecutionResult(AgentResult Output, string ResponseId, long InputTokens, long OutputTokens, decimal Cost);
+public sealed record ModelExecutionResult(AgentResult Output, string ResponseId, long InputTokens, long OutputTokens, decimal Cost, ProviderDiagnostics? Diagnostics = null);
 public interface ILanguageModelProvider { Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct); }
 public interface IEngineeringAgent { AgentRole Role { get; } Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct); }
 public sealed record OperationExecution(string Profile, string[] Command, string WorkingDirectory, string Stdout, string Stderr);

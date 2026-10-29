@@ -75,15 +75,170 @@ public class AdapterTests
         Assert.Equal("Verify offline cache", result.Output.Planning!.DependencyStrategy);
         using var body = JsonDocument.Parse(handler.Body); Assert.Equal("test-model", body.RootElement.GetProperty("model").GetString()); Assert.False(body.RootElement.GetProperty("store").GetBoolean()); Assert.Equal("json_schema", body.RootElement.GetProperty("text").GetProperty("format").GetProperty("type").GetString());
     }
+    private static (OpenAIProvider Provider, AgentContext Context, IPlatformStore Store, List<RecordEntry> Records) Fixture(ModelHandler handler, AgentRole role = AgentRole.BackendEngineer, LanguageModelOptions? options = null)
+    {
+        var records = new List<RecordEntry>();
+        var store = Substitute.For<IPlatformStore>();
+        store.RecordsAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<long>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>(), Arg.Any<string?>())
+            .Returns(c => (IReadOnlyList<RecordEntry>)records.Where(x => x.Kind == c.ArgAt<string>(0)).Skip(c.ArgAt<int>(5)).Take(c.ArgAt<int>(6)).ToArray());
+        store.AppendAsync(Arg.Any<RecordEntry>(), Arg.Any<CancellationToken>()).Returns(c => { records.Add(c.ArgAt<RecordEntry>(0)); return Task.CompletedTask; });
+        var client = new OpenAI.Responses.ResponsesClient(new System.ClientModel.ApiKeyCredential("test-key"), new OpenAI.Responses.ResponsesClientOptions { Endpoint = new Uri("https://example.invalid/v1/"), Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(new HttpClient(handler)), RetryPolicy = new System.ClientModel.Primitives.ClientRetryPolicy(0) });
+        var definition = new AgentDefinition("a", role, "Agent", "", "test-model", "test instructions", [], ["WriteFile", "Commit", "CreatePullRequest"], InputCostPerMillion: 1, OutputCostPerMillion: 2);
+        return (new("test-key", options, client, store), new(new Project(), new ExecutionRun(), "context", definition), store, records);
+    }
+    private static void Output(System.Text.Json.Nodes.JsonObject payload, Func<System.Text.Json.Nodes.JsonObject, string> transform)
+    {
+        var content = payload["output"]![0]!["content"]![0]!;
+        var original = System.Text.Json.Nodes.JsonNode.Parse(content["text"]!.GetValue<string>())!.AsObject();
+        content["text"] = transform(original);
+    }
+    [Theory]
+    [InlineData("malformed", ProviderErrorCategory.MalformedJson)]
+    [InlineData("truncated", ProviderErrorCategory.MalformedJson)]
+    [InlineData("empty", ProviderErrorCategory.EmptyOutput)]
+    [InlineData("arguments", ProviderErrorCategory.InvalidToolArguments)]
+    [InlineData("arrayArguments", ProviderErrorCategory.InvalidToolArguments)]
+    [InlineData("schema", ProviderErrorCategory.InvalidSchema)]
+    [InlineData("incomplete", ProviderErrorCategory.IncompleteResponse)]
+    [InlineData("status", ProviderErrorCategory.UnexpectedContent)]
+    [InlineData("failed", ProviderErrorCategory.ResponseFailed)]
+    [InlineData("usage", ProviderErrorCategory.MissingUsage)]
+    [InlineData("refusal", ProviderErrorCategory.UnexpectedContent)]
+    [InlineData("noMessages", ProviderErrorCategory.EmptyOutput)]
+    public async Task ProviderValidatesBeforeAnyToolCanExecute(string scenario, ProviderErrorCategory category)
+    {
+        var handler = new ModelHandler { Transform = payload =>
+        {
+            if (scenario == "refusal") { payload["output"]![0]!["content"]![0] = System.Text.Json.Nodes.JsonNode.Parse("{\"type\":\"refusal\",\"refusal\":\"sensitive refusal\"}"); }
+            else if (scenario == "noMessages") payload["output"] = new System.Text.Json.Nodes.JsonArray();
+            else if (scenario == "incomplete") { payload["status"] = "incomplete"; payload["incomplete_details"] = new System.Text.Json.Nodes.JsonObject { ["reason"] = "max_output_tokens" }; }
+            else if (scenario == "status") payload["status"] = "in_progress";
+            else if (scenario == "failed") payload["status"] = "failed";
+            else if (scenario == "usage") payload["usage"] = null;
+            else Output(payload, output =>
+            {
+                if (scenario == "malformed") return "sensitive-invalid-output";
+                if (scenario == "truncated") return "{\"summary\":\"unfinished";
+                if (scenario == "empty") return "";
+                if (scenario == "schema") output.Remove("summary");
+                else output["toolCalls"] = System.Text.Json.Nodes.JsonNode.Parse("[{\"name\":\"WriteFile\",\"arguments\":\"{}\"},{\"name\":\"Commit\",\"arguments\":\"" + (scenario == "arrayArguments" ? "[]" : "sensitive-invalid-arguments") + "\"}]");
+                return output.ToJsonString();
+            });
+        } };
+        var f = Fixture(handler);
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context, default));
+        Assert.Equal(category, error.Diagnostics.ErrorCategory);
+        Assert.Equal("req_contract", error.Diagnostics.RequestId);
+        Assert.Equal(scenario == "usage" ? (long?)null : 100, error.Diagnostics.InputTokens);
+        Assert.DoesNotContain("sensitive", JsonSerializer.Serialize(error.Diagnostics));
+        Assert.DoesNotContain("sensitive", error.ToString());
+        Assert.Equal(1, handler.Requests);
+        Assert.DoesNotContain(f.Records, x => x.Kind is "tool" or "task");
+        Assert.True((await ProviderAccounting.ChargesAsync(f.Store, f.Context.Run.Id, default)).Single().Cost >= .0002m);
+    }
+    [Theory]
+    [InlineData(AgentRole.BusinessAnalyst)] [InlineData(AgentRole.Architect)]
+    [InlineData(AgentRole.BackendEngineer)] [InlineData(AgentRole.FrontendEngineer)]
+    [InlineData(AgentRole.TestEngineer)] [InlineData(AgentRole.QAEngineer)] [InlineData(AgentRole.CodeReviewer)]
+    public async Task EveryRoleUsesTheSameValidatedProvider(AgentRole role)
+    {
+        var handler = new ModelHandler(); var f = Fixture(handler, role);
+        var result = await f.Provider.ExecuteAsync(f.Context, default);
+        Assert.Equal("completed", result.Diagnostics!.ResponseStatus);
+        Assert.Equal("req_contract", result.Diagnostics.RequestId);
+        Assert.Equal(result.Cost, (await ProviderAccounting.ChargesAsync(f.Store, f.Context.Run.Id, default)).Single().Cost);
+    }
+    [Fact]
+    public async Task CallerCancellationPropagatesWithoutRetry()
+    {
+        using var caller = new CancellationTokenSource();
+        var handler = new ModelHandler { Before = (_, ct) => { caller.Cancel(); ct.ThrowIfCancellationRequested(); return Task.CompletedTask; } };
+        var f = Fixture(handler);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => f.Provider.ExecuteAsync(f.Context, caller.Token));
+        Assert.Equal(1, handler.Requests);
+        Assert.Equal(ProviderErrorCategory.CallerCancellation, (await ProviderAccounting.ChargesAsync(f.Store, f.Context.Run.Id, default)).Single().Diagnostics.ErrorCategory);
+    }
+    [Fact]
+    public async Task SdkTimeoutIsDistinctFromCallerCancellation()
+    {
+        var handler = new ModelHandler { Before = (_, _) => throw new TaskCanceledException() }; var f = Fixture(handler);
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context, default));
+        Assert.Equal(ProviderErrorCategory.SdkTimeout, error.Diagnostics.ErrorCategory);
+        Assert.Equal(1, handler.Requests);
+    }
+    [Fact]
+    public async Task ProviderDeadlineIsTypedAndDoesNotReplayStage()
+    {
+        var handler = new ModelHandler { Before = (_, ct) => Task.Delay(Timeout.Infinite, ct) };
+        var f = Fixture(handler, options: new() { TimeoutSeconds = 5 });
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context, default));
+        Assert.Equal(ProviderErrorCategory.RequestTimeout, error.Diagnostics.ErrorCategory);
+        Assert.Equal(1, handler.Requests);
+    }
+    [Fact]
+    public async Task RunDeadlineIsDistinctAndBounded()
+    {
+        var handler = new ModelHandler { Before = (_, ct) => Task.Delay(Timeout.Infinite, ct) }; var f = Fixture(handler);
+        var context = f.Context with { Run = f.Context.Run with { StartedAt = DateTimeOffset.UtcNow.AddMinutes(-60).AddSeconds(1) } };
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(context, default));
+        Assert.Equal(ProviderErrorCategory.RunDeadline, error.Diagnostics.ErrorCategory);
+    }
+    [Fact]
+    public async Task TransientRetryOnlyRepeatsModelRequestAndPreservesCheckpoints()
+    {
+        var handler = new ModelHandler { Before = (n, _) => n == 1 ? throw new HttpRequestException("sensitive transport details") : Task.CompletedTask };
+        var f = Fixture(handler);
+        var checkpoints = new[] { "WriteFile", "Commit", "CreatePullRequest" }.Select(name => new RecordEntry { Id = name + "-operation", Kind = "tool", Name = name, Content = "workspace-revision-and-artifact", Status = "Succeeded" }).ToArray();
+        f.Records.AddRange(checkpoints);
+        await f.Provider.ExecuteAsync(f.Context, default);
+        Assert.Equal(2, handler.Requests);
+        Assert.Equal(checkpoints, f.Records.Where(x => x.Kind == "tool"));
+        var charges = await ProviderAccounting.ChargesAsync(f.Store, f.Context.Run.Id, default);
+        Assert.Equal(2, charges.Length);
+        Assert.Contains(charges, x => x.Diagnostics.ErrorCategory == ProviderErrorCategory.TransportFailure && x.Cost > 0);
+        Assert.DoesNotContain("sensitive", JsonSerializer.Serialize(charges));
+    }
+    [Theory]
+    [InlineData(HttpStatusCode.ServiceUnavailable, 2)]
+    [InlineData(HttpStatusCode.Unauthorized, 1)]
+    public async Task HttpFailuresAreSanitizedAndRetriesAreBounded(HttpStatusCode status, int count)
+    {
+        var handler = new ModelHandler { Status = _ => status }; var f = Fixture(handler, options: new() { MaxRetries = 1 });
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context, default));
+        Assert.Equal(ProviderErrorCategory.HttpFailure, error.Diagnostics.ErrorCategory);
+        Assert.Equal((int)status, error.Diagnostics.HttpStatus);
+        Assert.Equal("req_contract", error.Diagnostics.RequestId);
+        Assert.Equal(count, handler.Requests);
+    }
+    [Fact]
+    public async Task BudgetReservationSurvivesFailureAndPreventsAnotherRequest()
+    {
+        var handler = new ModelHandler { Before = (_, _) => throw new HttpRequestException() }; var f = Fixture(handler, options: new() { MaxRetries = 0 });
+        await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context, default));
+        var charge = (await ProviderAccounting.ChargesAsync(f.Store, f.Context.Run.Id, default)).Single();
+        var context = f.Context with { Run = f.Context.Run with { Policy = f.Context.Run.Policy with { MaxBudgetUsd = charge.Cost } } };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.Provider.ExecuteAsync(context, default));
+        Assert.Equal(1, handler.Requests);
+    }
     private sealed class ModelHandler : HttpMessageHandler
     {
         public string Body = "";
+        public int Requests;
+        public Func<int, HttpStatusCode>? Status;
+        public Action<System.Text.Json.Nodes.JsonObject>? Transform;
+        public Func<int, CancellationToken, Task>? Before;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
+            Requests++;
+            if (Before != null) await Before(Requests, ct);
             Body = await request.Content!.ReadAsStringAsync(ct);
             var text = JsonSerializer.Serialize(new { summary = "Contract fixture", decision = "CONTINUE", acceptanceCriteria = new[] { "Validated contract" }, evidence = Array.Empty<string>(), assumptions = Array.Empty<string>(), toolCalls = Array.Empty<object>(), nextContext = "next", requirements = Array.Empty<object>(), findings = Array.Empty<object>(), checks = Array.Empty<object>(), openQuestions = Array.Empty<string>(), reworkTargets = Array.Empty<string>(), architectureDecisions = Array.Empty<object>(), planning = new { risks = Array.Empty<string>(), prerequisites = Array.Empty<string>(), blockers = Array.Empty<object>(), bootstrapStrategy = "WriteFile manifests", dependencyStrategy = "Verify offline cache", testStrategy = "Approved profiles" } });
             var response = new { id = "resp_contract", @object = "response", created_at = 1700000000, status = "completed", error = (object?)null, incomplete_details = (object?)null, model = "test-model", output = new[] { new { type = "message", id = "msg_contract", status = "completed", role = "assistant", content = new[] { new { type = "output_text", text, annotations = Array.Empty<object>() } } } }, usage = new { input_tokens = 100, output_tokens = 50, total_tokens = 150, input_tokens_details = new { cached_tokens = 0 }, output_tokens_details = new { reasoning_tokens = 0 } } };
-            return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(response), Encoding.UTF8, "application/json") };
+            var payload = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(response))!.AsObject();
+            Transform?.Invoke(payload);
+            var message = new HttpResponseMessage(Status?.Invoke(Requests) ?? HttpStatusCode.OK) { Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json") };
+            message.Headers.Add("x-request-id", "req_contract");
+            return message;
         }
     }
     [Fact]

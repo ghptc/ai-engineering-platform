@@ -43,6 +43,58 @@ public sealed partial class RuntimeFlowTests
         Assert.Equal(JsonSerializer.Serialize(run.ReworkPlan), JsonSerializer.Serialize(recovered!.ReworkPlan)); Assert.Equal(tools.Count, recovered.ToolCalls);
     }
     [Fact]
+    public async Task ProviderFailureAndExplicitResumePreserveSuccessfulWritesAndDeliveryIds()
+    {
+        await using var root = new PlatformFactory();
+        var sandbox = new DeterministicSandbox();
+        await using var factory = root.WithWebHostBuilder(builder => builder.ConfigureServices(services => {
+            services.RemoveAll<ILanguageModelProvider>(); services.AddSingleton<ILanguageModelProvider>(new FailAfterWrite());
+            services.RemoveAll<IExecutionSandbox>(); services.AddSingleton<IExecutionSandbox>(sandbox);
+        }));
+        using var client = factory.CreateClient(); await Login(client);
+        var store = factory.Services.GetRequiredService<IPlatformStore>();
+        var run = await Start(client, store, ExecutionPresets.StandardDevelopment);
+        run = await Wait(store, run.Id, r => !r.IsRunnable);
+        Assert.Equal(RunStage.Failed, run.CurrentStage);
+        Assert.Equal("OpenAIMalformedJson", run.FailureCategory);
+        Assert.Contains("MalformedJson", run.FailureReason);
+        var before = await store.RecordsAsync("tool", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        var write = Assert.Single(before, x => x.Name == "WriteFile");
+        var artifacts = await store.RecordsAsync("artifact", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.DoesNotContain(before, x => x.Name is "CreateCommit" or "CreatePullRequest");
+        (await client.PostAsJsonAsync($"/api/v1/runs/{run.Id}/retry", new { })).EnsureSuccessStatusCode();
+        run = await Wait(store, run.Id, r => !r.IsRunnable);
+        Assert.Equal(RunStage.AwaitingHumanApproval, run.CurrentStage);
+        var after = await store.RecordsAsync("tool", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.Equal(write.Content, Assert.Single(after, x => x.Id == write.Id).Content);
+        Assert.Equal(3, sandbox.Operations.Count(x => x == "WriteFile"));
+        var afterArtifacts = await store.RecordsAsync("artifact", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.All(artifacts, artifact => Assert.Contains(afterArtifacts, x => x.Id == artifact.Id && x.Content == artifact.Content));
+        var approvals = await store.RecordsAsync("approval", run.ProjectId, run.Id, null, 0, 0, 100, default);
+        var approval = Assert.Single(approvals, x => x.Status == "Pending");
+        (await client.PostAsJsonAsync($"/api/v1/approvals/{approval.Id}/decision", new { approve = true, reason = "Test-only delivery approval" })).EnsureSuccessStatusCode();
+        run = await Wait(store, run.Id, r => r.CurrentStage is RunStage.Completed or RunStage.Failed or RunStage.Paused);
+        Assert.Equal(RunStage.Completed, run.CurrentStage);
+        var delivered = await store.RecordsAsync("tool", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.Single(delivered, x => x.Name == "CreateCommit");
+        Assert.Single(delivered, x => x.Name == "CreatePullRequest");
+        Assert.All(before, entry => Assert.Single(delivered, x => x.Id == entry.Id && x.Content == entry.Content));
+    }
+    private sealed class FailAfterWrite : ILanguageModelProvider
+    {
+        private bool failed;
+        private readonly DeterministicModel inner = new();
+        public Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct)
+        {
+            if (!failed && context.Definition.Role == AgentRole.BackendEngineer && context.Context.Contains("written backend/Feature.cs"))
+            {
+                failed = true;
+                throw new ProviderException(new(context.Definition.Model, "resp_failed", "req_failed", "completed", null, ProviderErrorCategory.MalformedJson, 100, 50, 1));
+            }
+            return inner.ExecuteAsync(context, ct);
+        }
+    }
+    [Fact]
     public async Task PublishedReviewReworkTargetsDeveloperAndRequiresAnotherOwnerDecision()
     {
         await using var root = new PlatformFactory();
