@@ -1,0 +1,234 @@
+{
+  "sourceCommit": "ff528ba7a85e4617625c6372e86d69f3fbf896cf",
+  "sourceBranch": "detached origin/master snapshot; merged PR #9",
+  "verificationWorktree": "/tmp/aep-m0-stable-20261029",
+  "reportBranch": "feat/certification-baseline-audit",
+  "applicationSourceManifestSha256": "ab872be2e20baae2104f053aa2608b6bed790031efc7f9a6ec29d50cb50dbc58",
+  "postVerificationApplicationSourceMismatches": [],
+  "testGeneratedDocumentationChanges": [
+    {
+      "path": "backend/docs/ux-evidence/dashboard-dark.png",
+      "before": "c98d9210e1f65779f871350def42a25b8a9581ff38ca9bad61c2cfc664caed8e",
+      "after": "ce7ad4985066009b3ab53e7f18e383709d5793dafba75a04f9a2b068d510794d"
+    },
+    {
+      "path": "backend/docs/ux-evidence/evidence-drawer-dark.png",
+      "before": "c1cba850a167cb6d7a266ffce3dd7b9f1f75c2cff2794979bea8dcf85ad62060",
+      "after": "97aa26afa8d914121d00d90cf304aea6d09783ec3e6366b2a386cc73ae17b24c"
+    },
+    {
+      "path": "backend/docs/ux-evidence/execution-dark.png",
+      "before": "67ae84b592838d14feadbc72a307180affa8c78b4869091664f6fadc5e5fa7ca",
+      "after": "b6ac9d4e04c7147894e80bf0e6a4a2e4537df9ac0257bd6c9268426f460935dd"
+    },
+    {
+      "path": "backend/docs/ux-evidence/mobile-light.png",
+      "before": "285d12f47742d82aa74181678f1bbf77de76a50237127563934b7e9e786e6bf2",
+      "after": "bc7b8a99863088dc4c3ae321f074735bed4b1bb233b6a4bee2a4fe5cb1c9a9a3"
+    },
+    {
+      "path": "backend/docs/ux-evidence/usage-dark.png",
+      "before": "6384daa079345e9ac3ca9db7049c2ff7a241a025da5c97615d3b5bcc394ad3fb",
+      "after": "5159bcf186aecdfd6670024e1ded5a6d752c945b952f321bf60352004751e553"
+    }
+  ],
+  "commands": [
+    {
+      "command": "dotnet restore backend/AIEngineeringPlatform.sln",
+      "exitCode": 0,
+      "log": "/tmp/aep-m0-evidence-20261029/dotnet-restore.log"
+    },
+    {
+      "command": "dotnet build backend/AIEngineeringPlatform.sln --no-restore -m:1",
+      "exitCode": 0,
+      "log": "/tmp/aep-m0-evidence-20261029/dotnet-build.log"
+    },
+    {
+      "command": "RUN_LIVE_AGENT_TESTS=0 RUN_LOCAL_EXECUTOR_TESTS=0 TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27028/aep_certification_test dotnet test backend/AIEngineeringPlatform.sln --no-restore -m:1 --logger trx --results-directory /tmp/aep-m0-evidence-20261029/trx",
+      "exitCode": 0,
+      "log": "/tmp/aep-m0-evidence-20261029/dotnet-test.log"
+    },
+    {
+      "command": "npm ci --prefix frontend",
+      "exitCode": 0,
+      "log": "/tmp/aep-m0-evidence-20261029/npm-ci.log"
+    },
+    {
+      "command": "npm run typecheck --prefix frontend",
+      "exitCode": 0,
+      "log": "/tmp/aep-m0-evidence-20261029/frontend-typecheck.log"
+    },
+    {
+      "command": "npm test --prefix frontend",
+      "exitCode": 0,
+      "log": "/tmp/aep-m0-evidence-20261029/frontend-test.log"
+    },
+    {
+      "command": "npm run build --prefix frontend",
+      "exitCode": 0,
+      "log": "/tmp/aep-m0-evidence-20261029/frontend-build.log"
+    },
+    {
+      "command": "RUN_LIVE_AGENT_TESTS=0 RUN_LOCAL_EXECUTOR_TESTS=0 TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27028/aep_certification_test E2E_API_PORT=18088 E2E_FRONTEND_PORT=18173 npm run e2e --prefix frontend",
+      "exitCode": 0,
+      "log": "/tmp/aep-m0-evidence-20261029/playwright.log"
+    },
+    {
+      "command": "docker build --iidfile /tmp/aep-m0-evidence-20261029/image-id.txt -t ai-engineering-platform:m0-audit-20261029 .",
+      "exitCode": 0,
+      "log": "/tmp/aep-m0-evidence-20261029/docker-build.log"
+    }
+  ],
+  "dotnet": {
+    "passed": 123,
+    "failed": 0,
+    "skipped": 7,
+    "integrationPassed": 45
+  },
+  "frontend": {
+    "unitPassed": 30,
+    "browserPassed": 2
+  },
+  "mongo": {
+    "name": "aep-cert-m0-20261029-1329",
+    "image": "sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142",
+    "containerId": "c963ca57e01049ccd2ad5d4d0074df04b86f70d4aa29f38c1005fc1c0df1762c",
+    "bind": "127.0.0.1:27028",
+    "storage": "new container-local tmpfs for /data/db and /data/configdb; no mounts or existing volumes",
+    "status": "stopped after successful verification; ephemeral test data expired",
+    "existingPortOwner": "aep-mongo-test: exit 139; OOMKilled false; 485 Too many open files markers in latest 500 log lines"
+  },
+  "imageBuilt": "sha256:ba7cf04ae3b0d7e871187b01c631d7c5fdc62abad931b39492e8667033901ae0",
+  "productionApiProbe": {
+    "url": "http://127.0.0.1:8080",
+    "healthLive": 200,
+    "authMe": 401,
+    "credentialsAccessed": false,
+    "authenticatedSessionSupplied": false
+  },
+  "githubHistoricalFixture": {
+    "url": "https://github.com/ghptc/aep-sandbox-m8-20261028-3a0ed9/pull/1",
+    "state": "closed",
+    "merged": true,
+    "headSha": "1eb536ce57b8ebc0f5346f7d6f5572f142abdd85",
+    "author": "ai-engineering-platform-local[bot]",
+    "limitation": "Read via connected GitHub identity, not proof of current platform installation token access."
+  },
+  "challengeVersion": null,
+  "liveModelInvocations": 0,
+  "providerTokenUsage": null,
+  "providerCostUsd": null,
+  "M0": "PENDING: current agent configuration and persisted application failure events unavailable through approved authentication",
+  "artifacts": [
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/backend-failure-receipts.json",
+      "bytes": 24716,
+      "sha256": "46f11879f70355d2aa0616189800bbb8aa2bcd049c38f1362ce58e1dfe5b9215"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/disposable-mongo-final-health.json",
+      "bytes": 26,
+      "sha256": "0eed19b5d56397a0d6e6bf5ab910e5e1fe6d21749f1bbdb3ccdca72029ba46db"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/disposable-mongo-inspect.txt",
+      "bytes": 153,
+      "sha256": "3baf644ef70e0c385436b49bfffb1f10e3eb4e0647a3f1d2256933c21c6de6eb"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/docker-build.log",
+      "bytes": 14499,
+      "sha256": "cbe28f99e50a89faec9ddaf28b4c85c2f1df80dea65e5f43d0f7db9cf263f913"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/dotnet-build.log",
+      "bytes": 2478,
+      "sha256": "3892ad1d1550b5afb3abeb00b0454c27a34ca19ffe42f1faab92785574492afe"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/dotnet-restore.log",
+      "bytes": 2018,
+      "sha256": "2028564b8aac1a0a9572d6fa1982762fef5c8bea3fd4c314b6cf6def30a7d192"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/dotnet-test.log",
+      "bytes": 6917,
+      "sha256": "963d4df0b49bf6671aea9d4ad203ba659463ff47053bd5f732e278be540a17e8"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/frontend-build.log",
+      "bytes": 8170,
+      "sha256": "5b1bcdddd76bb6abf697811fa6639fd2802c935af3dddc6a4e564b8ec24fcb3e"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/frontend-test.log",
+      "bytes": 1933,
+      "sha256": "99777e5d5420a012f8f93a6d8e5109b7b4ea09aeef2d399a1ddcf5734a416bba"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/frontend-typecheck.log",
+      "bytes": 53,
+      "sha256": "4d35b5fe574f50746ee32b94246a5ff384af9e601c32882897ceeaca3f4768fb"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/image-id.txt",
+      "bytes": 71,
+      "sha256": "e4d245cd5aa8ee58356e41f98fadcfe85f09aa2ca9d973f82f19cf49ac5c8c4f"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/npm-ci.log",
+      "bytes": 143,
+      "sha256": "a4cce0dff81332e753627ac5d0a467206fe99ac33edfb5d79ad6894b48ae1134"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/playwright.log",
+      "bytes": 724,
+      "sha256": "6aa1d4934559ddde035299df041b68ce43f9b3166d8de0bde409d8c98d98ef80"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/stable-source-manifest.json",
+      "bytes": 19177,
+      "sha256": "150b5511b5084a868898d68174651e38ca12ed8f60b45befed1d2dd005f0559c"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/stopped-test-mongo.log",
+      "bytes": 119173,
+      "sha256": "f31233560a6194972a5d5d583d3bed46a5d71a04bee69d597583414e0862ac8e"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/test-results.json",
+      "bytes": 26041,
+      "sha256": "42718e0a1fc50308115f068d351fb327ecdbff4f43e4092b17677b1839d3cad2"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/tested-source-manifest.json",
+      "bytes": 15032,
+      "sha256": "ab872be2e20baae2104f053aa2608b6bed790031efc7f9a6ec29d50cb50dbc58"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/trx/_arch_2026-10-29_10_32_30.trx",
+      "bytes": 62694,
+      "sha256": "52353bf20b02ef2cdf626de53c38c28e50e65f749b8d1ecb5e1150c46709850d"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/trx/_arch_2026-10-29_10_32_31.trx",
+      "bytes": 4503,
+      "sha256": "f593e898b245ced536b8d4b34662724127f9bee5eca051622deaef4a948526b4"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/trx/_arch_2026-10-29_10_32_32.trx",
+      "bytes": 26564,
+      "sha256": "58c0f28c896bbdf7b90e3273fd306c011a6d22845b42f7d7141256b642212238"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/trx/_arch_2026-10-29_10_32_32[1].trx",
+      "bytes": 665404,
+      "sha256": "6095b3b65ce69b1205186b550eb5c810048cbbd5017283e5dc1801e76854ca05"
+    },
+    {
+      "path": "/tmp/aep-m0-evidence-20261029/trx/_arch_2026-10-29_10_32_52.trx",
+      "bytes": 41284,
+      "sha256": "f20ed8528e4b0eb87c87d3b73b3b8bf4e79f2ae62ed51527d7ffb5cfc7a8d684"
+    }
+  ]
+}

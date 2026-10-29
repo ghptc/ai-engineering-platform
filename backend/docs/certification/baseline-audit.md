@@ -1,6 +1,6 @@
 # Certification baseline audit — 29 October 2026
 
-Status: discovery report delivered; **M0 acceptance pending**. No agent is certified. M1–M6 have not been executed. Missing runtime inventory and current integration evidence prevent declaring a stable production baseline. This report does not authorize paid model execution, delivery approval, deployment or merging.
+Status: **M0 acceptance pending**. The follow-up below verifies merged PR #9 on a stable snapshot: 123 .NET tests, 30 frontend tests and two browser workflows passed. Current authenticated runtime inventory and application failure events remain unavailable. No agent is certified; M1–M6 have not been executed. This report does not authorize paid model execution, delivery approval, deployment or merging. The original discovery sections below remain historical; the final M0 follow-up supersedes their regression and database-availability blockers.
 
 ## Scope and source identity
 
@@ -135,3 +135,81 @@ M0 remains pending for the following explicit prerequisites:
 5. Human review/delivery approval for subsequent implementation. This report grants no certification or automatic merge permission.
 
 After M0 is accepted, M1 should add trusted versioned challenge/rubric definitions, pinned model/instruction/source identity, append-only evidence and deterministic decisions through Domain/Application/Infrastructure boundaries, with tests for missing evidence, failed critical gates, stale revisions, forged agent claims and three-distinct-variant eligibility. Do not modify production orchestration before its stable baseline is established. All specialty challenge execution and TEAM-001 remain downstream, unexecuted work.
+
+## M0 stable-snapshot follow-up — 29 October 2026
+
+This follow-up is limited to M0. It changes this audit and its evidence in PR #10 only; no production source, agent instructions, orchestration, credentials, installation permissions or historical runtime data were changed. No branch/PR was merged, reset, rebased or force-pushed. Existing owner worktrees and servers were preserved.
+
+### Stable revision and test attribution
+
+Fetched `origin/master` and the existing audit branch. GitHub's authenticated repository interface confirms PR #9 merged as **`ff528ba7a85e4617625c6372e86d69f3fbf896cf`**, with head `7f499c90710f8563ee05abf40ad7469de1a920b0`. A new detached worktree at `/tmp/aep-m0-stable-20261029` tests that exact master revision. The existing audit branch remains `feat/certification-baseline-audit`; it was not merged with master to obtain a test snapshot. Only audit documentation/evidence is committed on that branch.
+
+The initial 151-file tracked manifest is [stable-source-manifest.json](reports/2026-10-29/m0-followup/stable-source-manifest.json), SHA-256 `150b5511b5084a868898d68174651e38ca12ed8f60b45befed1d2dd005f0559c`. The application/test/configuration subset is [tested-source-manifest.json](reports/2026-10-29/m0-followup/tested-source-manifest.json), SHA-256 **`ab872be2e20baae2104f053aa2608b6bed790031efc7f9a6ec29d50cb50dbc58`**. It includes tracked backend/src, backend/tests, frontend, AGENTS.md, Dockerfile and .dockerignore. Final byte comparisons found **no application/test/configuration source changes**. This resolves the original concurrent-source attribution blocker.
+
+Playwright intentionally regenerated five tracked `backend/docs/ux-evidence/*.png` files in the detached worktree. These are generated screenshots, excluded from the application source manifest; their before/after hashes are recorded. They were retained in that isolated worktree and were not staged, copied to the owner worktree or added to PR #10. The report therefore does not claim an entirely unchanged documentation tree.
+
+[verification-evidence.json](reports/2026-10-29/m0-followup/verification-evidence.json) records commands, exit codes, source identity, environment, storage boundaries and hashes of 22 local evidence files. [test-results.json](reports/2026-10-29/m0-followup/test-results.json) records individual .NET outcomes. Raw logs/TRX remain under `/tmp/aep-m0-evidence-20261029/`; hashes establish identity but do not make missing raw files available on another machine. No raw credentials, runtime output bodies or production records are committed.
+
+### MongoDB refusal and disposable recovery
+
+Read-only Docker metadata identified `aep-mongo-test` as the prior owner of loopback 27028. It had exited **139** at `2026-10-29T12:55:53.853254045Z`, with `OOMKilled=false` and no Docker state error. Its last 500 log lines contain **485 “Too many open files” markers**. This supports file-descriptor exhaustion as the immediate availability problem; it does not prove the underlying cause of the subsequent process crash. Its container, logs and volumes were not restarted, removed or modified. The production MongoDB containers were untouched.
+
+Started only a new disposable container, `aep-cert-m0-20261029-1329`, ID `c963ca57e01049ccd2ad5d4d0074df04b86f70d4aa29f38c1005fc1c0df1762c`, using cached immutable image `sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142`. It bound `127.0.0.1:27028`, used fresh container-local tmpfs at `/data/db` (1 GiB) and `/data/configdb` (16 MiB), 2 GiB memory, two CPUs, `nofile=65536:65536`, and a 0.25 GiB WiredTiger cache. Inspection confirmed no mounts or existing volumes. Health ping passed before and after verification.
+
+All database/browser commands explicitly set `TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27028/aep_certification_test`. The test fixture creates uniquely named `aep_test_*`/other dedicated test databases on this new server; the URI database name is not a claim that all fixtures share one database. No test connected to the production server. After evidence capture, only this audit-owned disposable container was stopped. Its temporary test data expired; the stopped container metadata and test receipts remain. No production migration or database cleanup occurred.
+
+### Current pass/fail matrix
+
+Commands ran from the detached worktree. .NET and browser commands explicitly set `RUN_LIVE_AGENT_TESTS=0` and `RUN_LOCAL_EXECUTOR_TESTS=0`. Browser hosts used dedicated initially free ports **18088 / 18173**, with `reuseExistingServer=false`. Production adapters were not loaded with test fixtures; the deterministic adapters remain in test assemblies.
+
+| Check | Status | Exit / evidence |
+| --- | --- | --- |
+| Fetch master; confirm merged PR #9; isolated stable source | **passed** | GitHub merge SHA equals tested commit; final source hashes unchanged |
+| Restore solution | **passed** | 0; `dotnet restore backend/AIEngineeringPlatform.sln` |
+| Build solution | **passed** | 0; `dotnet build backend/AIEngineeringPlatform.sln --no-restore -m:1`; zero warnings/errors |
+| Full solution test invocation, unfiltered | **passed with opt-in skips** | 0; `dotnet test backend/AIEngineeringPlatform.sln --no-restore -m:1 --logger trx --results-directory /tmp/aep-m0-evidence-20261029/trx`; **123 passed, 0 failed, 7 skipped** |
+| Complete deterministic integration suite | **passed** | **45 passed**, 2 paid/live opt-in tests skipped; real disposable MongoDB |
+| Other .NET suites | **passed** | Application 40, Domain 18, Architecture 2, LocalExecutor 18 passed; 5 real-workload opt-in tests skipped |
+| Locked frontend dependency installation | **passed** | 0; `npm ci --prefix frontend`; 212 packages installed, reported 0 vulnerabilities |
+| TypeScript | **passed** | 0; `npm run typecheck --prefix frontend` |
+| Frontend unit/component tests | **passed** | 0; `npm test --prefix frontend`; **30 passed** in four files |
+| Frontend production build | **passed** | 0; `npm run build --prefix frontend`; existing large-chunk warnings |
+| Complete browser suite | **passed** | 0; `npm run e2e --prefix frontend`; **2 passed** in 17.9 seconds |
+| Application Docker packaging | **passed** | 0; unique audit tag `ai-engineering-platform:m0-audit-20261029`; image `sha256:ba7cf04ae3b0d7e871187b01c631d7c5fdc62abad931b39492e8667033901ae0`; not started/deployed |
+| Current authenticated agent configuration metadata | **blocked** | Existing API health 200; `/api/v1/auth/me` 401 without a supplied session; no authentication bypass or credential access |
+| Persisted application run/event evidence | **blocked** | Same authentication boundary; direct production database access was not substituted |
+| Historical executor failures | **passed, limited scope** | Original 47 receipt hashes/diagnostics independently inspected read-only; not application context-event evidence |
+| Current platform GitHub App repository permission | **blocked / not verified** | No approved platform-authenticated read-only access check available; connector identity is a different authorization path |
+| Real OpenAI / GitHub engineering cycle | **not executed** | No paid request or disposable remote delivery authorized or attempted in this M0 follow-up |
+| Real isolated generated-workload tests | **skipped** | Five explicit opt-ins; Docker image packaging success does not prove workload isolation |
+
+These are platform regression results, not specialty challenge execution. Model/challenge/instruction revision for certification: N/A. No live model was invoked; no provider token usage or estimated live cost is claimed. Test-only approval actions belong exclusively to the deterministic fixture, not production human approval or certification.
+
+The integration results now directly exercise QA → Backend, QA → Frontend, Review → Backend and Review → Frontend rework, retesting and persistent plan/counter recovery (`RuntimeFlowTests.ReworkRunsOnlyResponsibleDeveloperThenRepeatsTestsQaAndReview`), published-review rework with another owner decision, MongoDB lease fencing/idempotency, committed-transition recovery, stale-revision no-op rejection and approval workflows. The bounded BackendEngineer protected-overflow regression and every-role long-loop tests also passed at the exact tested revision. This closes the original unexecuted deterministic rework/restart/regression uncertainty, without establishing agent competence or live provider behavior.
+
+### Historical BackendEngineer failure: two distinct evidence classes
+
+[backend-failure-receipts.json](reports/2026-10-29/m0-followup/backend-failure-receipts.json) records direct receipt hashes, outcomes, evidence IDs, workspace revisions, output lengths and diagnostic markers for run `c8413d772ebd4246816ce89aef159163`. Access was read-only and restricted to direct operation receipts; no state.json, credentials, control-home or repository code was read/executed.
+
+Of 47 receipts, 43 succeeded and four failed with exit code 1. Three failures (`ccaaa985340f…`, `6338fee8602a…`, `a283cafb6701…`) contain **MSB1003** and the standard “Specify a project or solution file” message. The fourth (`af5597a84b95…`) contains **MSB1001** and “Unknown switch.” These establish MSBuild project/argument execution errors, not provider context-window errors. Full receipt names and hashes are retained in the evidence JSON. No context-budget marker was present in these executor outputs; this absence is expected to be inconclusive because context assembly runs in the application before a provider request, not in MSBuild.
+
+At tested commit `ff528ba`, `backend/docs/architecture/008-agent-runtime-reliability.md` and `backend/docs/runtime-reliability-verification.md` document a separate application failure: roughly 33 KB initial context grew through repeated model output to 95,908 conservative context tokens plus instructions/framing. These are now committed historical engineering reports, corroborated as a documented rationale by merged PR #9. They are **not a newly retrieved persisted ContextBudgetExceeded event**. The current passing bounded fixture proves explicit fail-closed overflow behavior, not exact replay of the historical transcript or proof that an MSBuild error caused the context overflow. That causal chain remains **not verified** until the authenticated run/event ledger can be inspected.
+
+### Agent metadata and GitHub App permission boundary
+
+The running platform is reachable at loopback port 8080: `/health/live` returned 200 and `/api/v1/auth/me` returned 401 without a session. An approved authenticated read-only interface/session was requested; none was supplied during this verification. No password, token, private key, browser credential store, production database or container environment was accessed. Consequently the current persisted agent definitions, exact instruction/model/pricing revisions, run terminal state, event ordering and context-budget payload cannot be reported as observed facts. Source-default inventories above remain explicitly separate from runtime metadata.
+
+The old installation-token 422/owner CLI 403 blocker is historical. Via the connected GitHub read interface, the historical disposable fixture [PR 1](https://github.com/ghptc/aep-sandbox-m8-20261028-3a0ed9/pull/1) now reports **closed and merged**, authored by **`ai-engineering-platform-local[bot]`**, with head commit `1eb536ce57b8ebc0f5346f7d6f5572f142abdd85`. This corroborates that platform App access worked at that earlier delivery. It also supersedes the original report's historical “open and unmerged” state for that PR; this audit did not merge it.
+
+A connected GitHub identity reading that PR does **not** establish current repository-scoped installation-token access for the running platform App. Its current installation/repository mapping and permissions remain unverified. The old blocker must therefore not be presented as a confirmed current failure, nor declared permanently resolved. No installation permissions, credentials, repository settings or remote artifacts were changed to test access.
+
+### M0 disposition and remaining blockers
+
+**M0 remains pending.** Stable-snapshot attribution, clean installation, complete deterministic backend/integration/browser regression and Docker packaging are verified. The database refusal was investigated and safely bypassed using disposable infrastructure; it no longer blocks these completed checks. Existing source architecture and seven independent roles remain intact. No M1–M6 work was performed.
+
+Remaining mandatory evidence:
+
+1. Approved authenticated read-only export of current agent IDs/roles, enabled state, prompt revision/hash, model/configuration/pricing and tool permissions. Do not infer runtime state from AgentCatalog defaults.
+2. Authenticated persisted run/events for the historical BackendEngineer failure and latest relevant execution, including ordering, stage/terminal failure, ContextBudgetExceeded inventory and instruction/model identity. Executor MSBuild receipts alone cannot satisfy this.
+3. A current read-only repository-access result from the actual running platform GitHub App identity, without changing its credentials or installation permissions. Historical bot delivery and separate connector access are insufficient.
+4. Human review/acceptance of the updated audit. PR #10 remains a draft; no merge or agent certification is requested or claimed.
