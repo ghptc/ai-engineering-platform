@@ -212,4 +212,4 @@ Remaining mandatory evidence:
 1. Approved authenticated read-only export of current agent IDs/roles, enabled state, prompt revision/hash, model/configuration/pricing and tool permissions. Do not infer runtime state from AgentCatalog defaults.
 2. Authenticated persisted run/events for the historical BackendEngineer failure and latest relevant execution, including ordering, stage/terminal failure, ContextBudgetExceeded inventory and instruction/model identity. Executor MSBuild receipts alone cannot satisfy this.
 3. A current read-only repository-access result from the actual running platform GitHub App identity, without changing its credentials or installation permissions. Historical bot delivery and separate connector access are insufficient.
-4. Human review/acceptance of the updated audit. PR #10 remains a draft; no merge or agent certification is requested or claimed.
+4. Human review/acceptance of the updated audit. PR #10 remains unmerged; no merge or agent certification is requested or claimed.
