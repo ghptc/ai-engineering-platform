@@ -1,0 +1,46 @@
+ M backend/docs/implementation-status.md
+ M backend/docs/ux-evidence/dashboard-dark.png
+ M backend/docs/ux-evidence/evidence-drawer-dark.png
+ M backend/docs/ux-evidence/execution-dark.png
+ M backend/docs/ux-evidence/mobile-light.png
+ M backend/docs/ux-evidence/usage-dark.png
+ M backend/src/AIEngineeringPlatform.Api/EngineeringHub.cs
+ M backend/src/AIEngineeringPlatform.Api/Program.cs
+ M backend/src/AIEngineeringPlatform.Application/ContextBuilder.cs
+ M backend/src/AIEngineeringPlatform.Application/Contracts.cs
+ M backend/src/AIEngineeringPlatform.Application/PlatformService.cs
+ M backend/src/AIEngineeringPlatform.Application/RecordPresentation.cs
+ M backend/src/AIEngineeringPlatform.Domain/Model.cs
+ M backend/src/AIEngineeringPlatform.Infrastructure/EngineeringTool.cs
+ M backend/src/AIEngineeringPlatform.Infrastructure/MongoPlatformStore.cs
+ M backend/src/AIEngineeringPlatform.Infrastructure/MongoWorkspaceQueries.cs
+ M backend/src/AIEngineeringPlatform.Infrastructure/OpenAIProvider.cs
+ M backend/src/AIEngineeringPlatform.Infrastructure/RemoteExecutionSandbox.cs
+ M backend/src/AIEngineeringPlatform.Infrastructure/SecretRedactor.cs
+ M backend/src/AIEngineeringPlatform.LocalExecutor/ControlledProcess.cs
+ M backend/src/AIEngineeringPlatform.LocalExecutor/LocalExecutionService.cs
+ M backend/src/AIEngineeringPlatform.Orchestration/EngineeringWorkflow.cs
+ M backend/src/AIEngineeringPlatform.Worker/EngineeringWorker.cs
+ M backend/tests/AIEngineeringPlatform.Domain.Tests/ExecutionTests.cs
+ M backend/tests/AIEngineeringPlatform.Integration.Tests/AdapterTests.cs
+ M backend/tests/AIEngineeringPlatform.LocalExecutor.Tests/ExecutorTests.cs
+ M frontend/playwright.config.ts
+ M frontend/src/features/collaboration/Collaboration.tsx
+ M frontend/src/features/executions/Executions.tsx
+ M frontend/src/features/projects/Projects.tsx
+ M frontend/src/features/projects/TaskLauncher.tsx
+ M frontend/src/lib/engineering.ts
+ M frontend/src/styles/app.css
+ M frontend/src/types/index.ts
+ M frontend/tests/e2e/workflow.spec.ts
+ M frontend/tests/workspace.test.tsx
+?? backend/docs/architecture/008-agent-runtime-reliability.md
+?? backend/src/AIEngineeringPlatform.Application/ExecutionCapacity.cs
+?? backend/src/AIEngineeringPlatform.Application/FailureDiagnosis.cs
+?? backend/src/AIEngineeringPlatform.Application/ReworkPlanner.cs
+?? backend/tests/AIEngineeringPlatform.Application.Tests/RuntimeReliabilityTests.cs
+?? backend/tests/AIEngineeringPlatform.Integration.Tests/RuntimeFlowTests.cs
+?? frontend/src/features/executions/AgentConsole.tsx
+?? frontend/src/features/executions/AgentFlow.tsx
+?? frontend/src/features/executions/ExecutionCapacity.tsx
+?? frontend/tests/runtime.test.tsx

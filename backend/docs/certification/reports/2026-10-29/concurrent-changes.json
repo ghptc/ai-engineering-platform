@@ -1,0 +1,65 @@
+{
+  "limitation": "Concurrent edits prevent associating test success with a single exact source snapshot. No concurrent work was modified by the audit.",
+  "changes": [
+    {
+      "path": "backend/docs/architecture/008-agent-runtime-reliability.md",
+      "initialSha256": "a3ddd6d76dfc667d981ad1b8ab9620dd7302aaae413a4f6b677d5cc3a630b2b9",
+      "observedSha256": "a22cf82950d7f5f6a46d1736fe73f9031fb1f73999bab5f9693359f2e6c36baf"
+    },
+    {
+      "path": "backend/docs/ux-evidence/dashboard-dark.png",
+      "initialSha256": "ee33d884820175e9daf109503847657c603ae0e952983ea6711968ed9b9da5be",
+      "observedSha256": "c98d9210e1f65779f871350def42a25b8a9581ff38ca9bad61c2cfc664caed8e"
+    },
+    {
+      "path": "backend/docs/ux-evidence/evidence-drawer-dark.png",
+      "initialSha256": "4c3e3aba8455fc382d3eb26d1e2da350e20f85fbfe12021fe445a28e6f054fca",
+      "observedSha256": "c1cba850a167cb6d7a266ffce3dd7b9f1f75c2cff2794979bea8dcf85ad62060"
+    },
+    {
+      "path": "backend/docs/ux-evidence/execution-dark.png",
+      "initialSha256": "ab517d1ab8f86dc047cb22f43982689fdef6ab67fa65555bc2548f22b4622287",
+      "observedSha256": "67ae84b592838d14feadbc72a307180affa8c78b4869091664f6fadc5e5fa7ca"
+    },
+    {
+      "path": "backend/docs/ux-evidence/mobile-light.png",
+      "initialSha256": "cbbe2d08383c9ddb0a5e74d201d9bf072c92d37ea6634fad6d6a970b20682fd8",
+      "observedSha256": "285d12f47742d82aa74181678f1bbf77de76a50237127563934b7e9e786e6bf2"
+    },
+    {
+      "path": "backend/docs/ux-evidence/usage-dark.png",
+      "initialSha256": "2c6fd6df4e5c5f5def5eeffa669863da1c611df54dab49c6d4ce261c23bb1411",
+      "observedSha256": "6384daa079345e9ac3ca9db7049c2ff7a241a025da5c97615d3b5bcc394ad3fb"
+    },
+    {
+      "path": "backend/docs/verification.md",
+      "initialSha256": "a5d3740be30bfb7147af1a1e63092724f716401e2392118cb5b1d4468760096d",
+      "observedSha256": "e4cc9076ce45f189e3cbcefd63688eda9bbe69217931cafb3b30887844d127d8"
+    },
+    {
+      "path": "backend/src/AIEngineeringPlatform.Application/ReworkPlanner.cs",
+      "initialSha256": "a8618880f55dd2f8951848b1da402f5dcdd3d43bb55dffe5c73dafda81ef05db",
+      "observedSha256": "7feaae40835512b8a10839e71935d9017a0ce96d4dc29e96da459b6b1908362d"
+    },
+    {
+      "path": "backend/src/AIEngineeringPlatform.Orchestration/EngineeringWorkflow.cs",
+      "initialSha256": "4c0d983e4f8a0307a128b68b171bd8de314c1c2257acfa03cfe9dbf6eb3aa61c",
+      "observedSha256": "610a134c2ecad0eff78a39159afb15d03beb437f5a449d2842e80d3b65cf1406"
+    },
+    {
+      "path": "backend/tests/AIEngineeringPlatform.Integration.Tests/RuntimeFlowTests.cs",
+      "initialSha256": "95d393d14c75c866e5582ae534bdd9bd7e8c592ac41dd7b7b293cb972be18a85",
+      "observedSha256": "1b7b96fddf6815da5575e981bc52c066bffcda9716e146b889bdea9e9315b736"
+    },
+    {
+      "path": "frontend/src/features/executions/AgentFlow.tsx",
+      "initialSha256": "f3831a40bfc0499068b859cd3599bc87179851ee373305dd68c7331db832be72",
+      "observedSha256": "441d95ab285f3799468b486fb58c01e671277bf5014c137746130de606e4ceb8"
+    },
+    {
+      "path": "frontend/src/styles/app.css",
+      "initialSha256": "e43232ac0b151268ce8eb3c8ed9439d212eeddbd959e5dc32c0a9a4db7d42a71",
+      "observedSha256": "d3ab95716d872ef8fb676d22a7ba237614b29ced58aa952b77ef2fcc4f4dbe56"
+    }
+  ]
+}

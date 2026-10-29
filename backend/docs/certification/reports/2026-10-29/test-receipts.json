@@ -1,0 +1,458 @@
+{
+  "head": "dc73999fc4cace94730b4717b4ac7f7742d46b21",
+  "sourceManifestSha256": "8dc18b82cf8c4d41d752bf174b3dda66edc9d786a4c6300cb22b5539992e226b",
+  "receipts": [
+    {
+      "path": "/tmp/aep-certification-baseline-20261029/non-database/_arch_2026-10-29_10_14_00.trx",
+      "sha256": "0616f9b7b8417045d6f3f875669ffd249c34a1afa908084c9bd1f057bf15bde4",
+      "counters": {
+        "total": "40",
+        "executed": "40",
+        "passed": "40",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.ExtensionKeepsUsageCheckpointsAndPolicyAndDoesNotResumeAutomatically",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: QAEngineer)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.TestReportSummaryPreservesActualEvidenceAndRevision",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: BackendEngineer)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: FrontendEngineer)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.LongToolLoopCompactsEarlierOutputsWithoutLosingEvidenceStatus",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.RejectionPersistsExplicitTargetAndActualFindingReference(source: QAEngineer, target: \"FrontendEngineer\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.FocusedTaskTests.FocusedTaskDoesNotLoadConversationsOrProjectArtifactHistory",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.ToolCompactionRetainsFailureRevisionAndRetrievableId",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.UnicodeUsesConservativeTokenBoundAndOutputIsReserved",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.LargeSnapshotsDoNotAccumulateAcrossStages",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.FocusedTaskTests.TaskReferencesCannotImportAnotherProjectsRequirementsOrHumanInstructions(human: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.StartRequiresIdempotencyKey",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: BackendEngineer)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.BothTargetsAreBoundedAndAmbiguityNeverSelectsArbitrarily",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: FrontendEngineer)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: Architect)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: CodeReviewer)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.MessagesPersistBeforeDelivery",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: TestEngineer)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.RejectionPersistsExplicitTargetAndActualFindingReference(source: CodeReviewer, target: \"BackendEngineer\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.FocusedTaskTests.TaskReferencesCannotImportAnotherProjectsRequirementsOrHumanInstructions(human: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: BusinessAnalyst)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.ContextIncludesEvidenceAndUserContext",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: BusinessAnalyst)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.QualityGateTests.QaApprovalRequiresExactRequiredEvidenceIdsRatherThanProseClaims",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.PublishedReviewContainsActionableFindingsWithoutInventedInlinePositions",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.RejectionPersistsExplicitTargetAndActualFindingReference(source: QAEngineer, target: \"BackendEngineer\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.ConcurrencyConflictIsSurfaced",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ClarificationTests.OwnerAnswerIsPersistedAttachedAndResumedWithoutResettingLimits",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.ArchitectContextDoesNotGrowWithHistoricalAgentProposals",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.CompactionPreservesProtectedContentAndCurrentEvidence",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: CodeReviewer)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.NonPausedRunCannotResume",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: Architect)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.RejectionPersistsExplicitTargetAndActualFindingReference(source: CodeReviewer, target: \"FrontendEngineer\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.ProtectedOverflowFailsExplicitlyInsteadOfTruncating",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.StartCopiesProjectPolicy",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: QAEngineer)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: TestEngineer)",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/aep-certification-baseline-20261029/non-database/_arch_2026-10-29_10_14_01.trx",
+      "sha256": "ce2e803224284f0d5eff4cf2335a805a6582a0de1bb469d890f81bc0e9337821",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "AIEngineeringPlatform.Architecture.Tests.DependencyTests.DomainHasNoOuterDependencies",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Architecture.Tests.DependencyTests.ApplicationDoesNotReferenceInfrastructureOrApi",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/aep-certification-baseline-20261029/non-database/_arch_2026-10-29_10_14_02.trx",
+      "sha256": "fb7ff506a7e49953a447244e75377b0159e57b6149fc1f2a31b57110a178928a",
+      "counters": {
+        "total": "18",
+        "executed": "18",
+        "passed": "18",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.RetryAllowancesAreIndependentPerStage",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.ToolLimitStopsExecution",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.CompletedRunCannotResume",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.TaskPlanTests.AdvancingTaskPreservesCumulativeBudgetsAndRequiresDeliveryStage",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.IterationLimitRejectsCorrection",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.CorrectionsConsumeIteration",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.TaskPlanTests.DesignTaskIncludesBothDesignSpecialists",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.PolicyRejectsUnsafeLimits",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.AutomaticMergeRemainsDisabled",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.PauseResumesCorrectStage",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.DurationExhaustionStopsExecution",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.ProjectRequiresName",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.ReviewCannotCompleteDelivery",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.BudgetExhaustionStopsExecution",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.FailedRunCanBeCancelled",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.CannotSkipQualityGates",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.TaskPlanTests.SimpleTaskSkipsDesignAndKeepsValidationSpecialists",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.RetryResumesFailedStageAndIsBounded",
+          "outcome": "Passed"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/aep-certification-baseline-20261029/non-database/_arch_2026-10-29_10_14_02[1].trx",
+      "sha256": "7029e5375473e4940c24812f9f4906b5cf541dbc36620ae27740c2253cbb9d03",
+      "counters": {
+        "total": "0",
+        "executed": "0",
+        "passed": "0",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": []
+    },
+    {
+      "path": "/tmp/aep-certification-baseline-20261029/non-database/_arch_2026-10-29_10_14_03.trx",
+      "sha256": "28f08fd6e5d903a6da19bc36d1223cc1be7a656f81a1ee77b44706b49503ecf1",
+      "counters": {
+        "total": "23",
+        "executed": "18",
+        "passed": "18",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(output: \"\u2139 tests 1\\n\u2139 pass 1\\n\u2139 fail 0\\n\", expected: 1)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.RealUnixDaemonRequiresAuthenticationAndSurvivesRestart",
+          "outcome": "NotExecuted"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.NodeTestProfileCannotSubstituteShellOrArbitraryNodeArguments",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NetworkingIsNeverModelControlled",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.ExistingFeatureBranchIsVerifiedWithoutChangingDefaultBranch",
+          "outcome": "NotExecuted"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.NpmCiRequiresBothManifestAndLockfile(manifest: True, locked: True)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.ConfigRequiresPinnedImagesAndRejectsProductionFileRemotes",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.DisposableRepositoryTests.ExistingDisposableDefaultRevisionPassesNodeTestsWithoutNewDelivery",
+          "outcome": "NotExecuted"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.RealDockerEnforcesIsolationTimeoutOutputLimitsAndCleanup",
+          "outcome": "NotExecuted"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PathsRejectSecretsAndTraversal(path: \".git/config\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.NodeOnlyRepositoryAdvertisesOnlyFixedNodeTests",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PathsRejectSecretsAndTraversal(path: \"/etc/passwd\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PathsRejectSecretsAndTraversal(path: \".env.local\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(output: \"# tests 2\\n# pass 2\\n\", expected: 2)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.RealDisposableRepositoryCompletesIsolatedNodeAndDotnetCycle",
+          "outcome": "NotExecuted"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PathsRejectSecretsAndTraversal(path: \"../escape\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(output: \"\\x1b[32m\u2139 tests 1\\x1b[0m\\n\", expected: 1)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PathsRejectSecretsAndTraversal(path: \"private.pem\")",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.NpmCiRequiresBothManifestAndLockfile(manifest: True, locked: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(output: \"\u2139 tests 0\\n\", expected: 0)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.NpmCiRequiresBothManifestAndLockfile(manifest: False, locked: False)",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PatchesRequireUniqueMatchesAndRevisionIncludesNewFiles",
+          "outcome": "Passed"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(output: \"arbitrary output, no tests executed\", expected: 0)",
+          "outcome": "Passed"
+        }
+      ]
+    }
+  ],
+  "sourceAttribution": "Not verified: concurrent source/test changes detected after execution; initial manifest is inventory only."
+}
