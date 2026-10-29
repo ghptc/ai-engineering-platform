@@ -55,6 +55,36 @@ public sealed class ExecutorTests
         finally { Directory.Delete(root, recursive: true); }
     }
     [DockerFact]
+    public async Task ExistingFeatureBranchIsVerifiedWithoutChangingDefaultBranch()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        fixture.Options.Repositories[0].Profiles["node"] = new() { Image = Environment.GetEnvironmentVariable("EXECUTOR_TEST_IMAGE")!, Command = ["node", "--test"] };
+        var executor = fixture.Executor;
+        await executor.ExecuteAsync(Request("original", "source", "WriteFile", new { path = "feature.mjs", content = "export function answer() { return 2; }\n" }), default);
+        await executor.ExecuteAsync(Request("original", "test", "ApplyPatch", new { patch = JsonSerializer.Serialize(new { path = "feature.test.mjs", search = "answer(), 1", replacement = "answer(), 2" }) }), default);
+        var verified = await executor.ExecuteAsync(Request("original", "tests", "RunTests", new { profile = "node" }), default);
+        Assert.True(verified.Success, verified.Output);
+        var commit = await executor.ExecuteAsync(Request("original", "commit", "CreateCommit", new { branch = "engineering/original", message = "fix: answer returns 2", expectedRevision = verified.DiffHash }), default);
+        await executor.ExecuteAsync(Request("original", "push", "PushBranch", new { branch = "engineering/original" }), default);
+        using var json = JsonDocument.Parse(commit.Output);
+        var sha = json.RootElement.GetProperty("sha").GetString();
+        var initial = await executor.ExecuteAsync(Request("repeat", "default", "ReadFile", new { path = "feature.mjs" }), default);
+        Assert.Contains("return 1", initial.Output);
+        await executor.ExecuteAsync(Request("repeat", "select", "SelectBranch", new { branch = "engineering/original", commit = sha }), default);
+        var selected = await executor.ExecuteAsync(Request("repeat", "selected", "ReadFile", new { path = "feature.mjs" }), default);
+        Assert.Contains("return 2", selected.Output);
+        var facts = await executor.ExecuteAsync(Request("repeat", "facts", "ReadRepository", new { }), default);
+        using var inventory = JsonDocument.Parse(facts.Output);
+        Assert.False(inventory.RootElement.GetProperty("HasSourceChanges").GetBoolean());
+        var diff = await executor.ExecuteAsync(Request("repeat", "diff", "InspectDiff", new { }), default);
+        Assert.Contains("return 2", diff.Output);
+        var tests = await executor.ExecuteAsync(Request("repeat", "tests", "RunTests", new { profile = "node" }), default);
+        Assert.True(tests.Success, tests.Output); Assert.Equal(diff.DiffHash, tests.DiffHash); Assert.Equal(verified.DiffHash, tests.DiffHash);
+        var main = await fixture.Process.RunAsync("/usr/bin/git", ["--git-dir", fixture.Remote, "rev-parse", "refs/heads/main"], null, 10, 10000, default);
+        Assert.Equal(fixture.OriginalHead, main.Output.Trim());
+        await Assert.ThrowsAsync<ArgumentException>(() => executor.ExecuteAsync(Request("repeat", "unsafe", "SelectBranch", new { branch = "main", commit = sha }), default));
+    }
+    [DockerFact]
     public async Task RealDisposableRepositoryCompletesIsolatedNodeAndDotnetCycle()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -86,7 +116,7 @@ public sealed class ExecutorTests
         var isolation = await fixture.Executor.ExecuteAsync(Request("isolation", "isolation-check", "RunCommand", new { profile = "build" }), default); Assert.True(isolation.Success, isolation.Output); Assert.Contains("isolation verified", isolation.Output);
         var timeout = await fixture.Executor.ExecuteAsync(Request("isolation", "timeout", "RunCommand", new { profile = "lint" }) with { TimeoutSeconds = 1 }, default); Assert.False(timeout.Success); Assert.Equal(124, timeout.ExitCode);
         var flood = await fixture.Executor.ExecuteAsync(Request("isolation", "flood", "RunCommand", new { profile = "format" }) with { OutputLimitBytes = 1024 }, default); Assert.False(flood.Success); Assert.Equal(125, flood.ExitCode);
-        var zero = await fixture.Executor.ExecuteAsync(Request("isolation", "zero-tests", "RunTests", new { profile = "frontend" }), default); Assert.False(zero.Success);
+        await Assert.ThrowsAsync<ConfigurationException>(() => fixture.Executor.ExecuteAsync(Request("isolation", "zero-tests", "RunTests", new { profile = "frontend" }), default));
         var containers = await fixture.Process.RunAsync("/usr/bin/docker", ["ps", "-aq", "--filter", "label=aep.executor"], null, 10, 10000, default); Assert.Equal("", containers.Output.Trim());
     }
     [DockerFact]
@@ -147,7 +177,7 @@ public sealed class ExecutorTests
             var root = Path.Combine(Path.GetTempPath(), "aep-executor-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root); Directory.CreateDirectory(Path.Combine(root, "control-home"));
             var remote = Path.Combine(root, "fixtures", "remote.git"); Directory.CreateDirectory(Path.GetDirectoryName(remote)!);
             var repository = new AuthorizedRepository { Owner = "test-owner", Name = "aep-fixture", InstallationId = 1, TestRemotePath = remote };
-            repository.Profiles["all"] = new() { Image = image, Command = ["python3", "-c", "import subprocess; subprocess.run(['dotnet','run','--project','fixture.csproj','--no-launch-profile'],check=True); subprocess.run(['node','--test','--test-reporter=tap','feature.test.mjs'],check=True)"] };
+            repository.Profiles["all"] = new() { Image = image, RequiredFiles = ["fixture.csproj", "feature.test.mjs"], Command = ["python3", "-c", "import subprocess; subprocess.run(['dotnet','run','--project','fixture.csproj','--no-launch-profile'],check=True); subprocess.run(['node','--test','--test-reporter=tap','feature.test.mjs'],check=True)"] };
             repository.Profiles["frontend"] = new() { Image = image, Command = ["node", "-e", "console.log('no tests executed')"] };
             repository.Profiles["lint"] = new() { Image = image, Command = ["node", "-e", "setTimeout(()=>{},60000)"] };
             repository.Profiles["format"] = new() { Image = image, Command = ["node", "-e", "process.stdout.write('x'.repeat(200000))"] };

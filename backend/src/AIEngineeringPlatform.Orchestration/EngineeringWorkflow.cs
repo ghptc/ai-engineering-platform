@@ -53,37 +53,84 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 await ArtifactAsync("context", ArtifactType.DevelopmentContext, JsonSerializer.Serialize(new { project.Id, run.RequirementIds, Source = "Live project, requirements, human instructions and architecture records; assembled on demand." })); next = RunStage.Implementing; break;
             case RunStage.Implementing:
                 if (!sandbox.Configured) throw new ConfigurationException("Configure and start the secure execution sandbox before implementing source changes.");
+                var repositoryFacts = await ToolAsync("ReadRepository", "repository-facts", JsonSerializer.SerializeToElement(new { }), AgentRole.BackendEngineer);
+                if (!repositoryFacts.Success) throw new InvalidOperationException("Repository inspection failed.");
+                await ToolAsync("ReconcileRepository", "git-reconciliation", JsonSerializer.SerializeToElement(new { }), AgentRole.BackendEngineer);
                 var before = await ToolAsync("InspectDiff", "pre-implementation", JsonSerializer.SerializeToElement(new { }), AgentRole.BackendEngineer);
                 foreach (var developer in run.SelectedAgents.Where(x => x is AgentRole.BackendEngineer or AgentRole.FrontendEngineer))
                     await AgentAsync(developer, ArtifactType.CodeDiff);
                 var after = await ToolAsync("InspectDiff", "post-implementation", JsonSerializer.SerializeToElement(new { }), AgentRole.BackendEngineer);
-                if (!after.Success || string.IsNullOrWhiteSpace(after.Output) || before.Output == after.Output) throw new InvalidOperationException("Implementation produced no verified repository changes.");
-                next = RunStage.GeneratingTests; break;
+                if (!before.Success || !after.Success) throw new InvalidOperationException("Cannot establish actual repository changes.");
+                var implementedFacts = await ToolAsync("ReadRepository", "implemented-repository-facts", JsonSerializer.SerializeToElement(new { }), AgentRole.BackendEngineer);
+                using (var implementedJson = JsonDocument.Parse(implementedFacts.Output))
+                    run = run with { NoSourceChanges = implementedFacts.Success && implementedJson.RootElement.TryGetProperty("HasSourceChanges", out var changed) ? !changed.GetBoolean() : before.WorkspaceRevision == after.WorkspaceRevision };
+                await service.EventAsync(run, "TaskReconciled", JsonSerializer.Serialize(new { State = run.NoSourceChanges ? "CompletedButUnverified" : string.IsNullOrWhiteSpace(before.Output) ? "WorkNotStarted" : "PartiallyCompleted", before.WorkspaceRevision, CurrentRevision = after.WorkspaceRevision }), ct);
+                next = run.NoSourceChanges ? RunStage.RunningTests : RunStage.GeneratingTests; break;
             case RunStage.GeneratingTests:
                 await AgentAsync(AgentRole.TestEngineer, ArtifactType.TestReport); next = RunStage.RunningTests; break;
             case RunStage.RunningTests:
-                var tests = await ToolAsync("RunTests", "required-tests", JsonSerializer.SerializeToElement(new { profile = "all" }), AgentRole.TestEngineer);
+            {
+                var testFacts = await ToolAsync("ReadRepository", "test-profile-facts", JsonSerializer.SerializeToElement(new { }), AgentRole.TestEngineer);
+                using var testFactsJson = JsonDocument.Parse(testFacts.Output);
+                var profiles = testFactsJson.RootElement.GetProperty("TestProfiles").EnumerateArray().Select(x => x.GetString()!).ToArray();
+                var selectedProfile = profiles.Contains("all") ? "all" : profiles.Length == 1 ? profiles[0] : throw new ConfigurationException("Configure one applicable test profile or an aggregate profile for this repository.");
+                var tests = await ToolAsync("RunTests", "required-tests", JsonSerializer.SerializeToElement(new { profile = selectedProfile }), AgentRole.TestEngineer);
                 await ArtifactAsync("test-report", ArtifactType.TestReport, JsonSerializer.Serialize(tests));
                 await service.EventAsync(run, "TestExecutionCompleted", JsonSerializer.Serialize(tests), ct);
                 next = tests.Success && tests.EvidenceId != null && tests.WorkspaceRevision != null ? RunStage.Validating : RunStage.Implementing; break;
+            }
             case RunStage.Validating:
                 var testEvidence = await RequiredTestsAsync();
                 context += "\nRequired test evidence: " + JsonSerializer.Serialize(new { testEvidence.Success, testEvidence.EvidenceId, testEvidence.WorkspaceRevision }) + "\nSelected requirement IDs: " + JsonSerializer.Serialize(run.RequirementIds);
                 var qa = await AgentAsync(AgentRole.QAEngineer, ArtifactType.ValidationReport);
                 var qaPassed = QualityGate.Approves(qa, testEvidence, run.RequirementIds);
+                if (qaPassed && run.NoSourceChanges) await service.EventAsync(run, "TaskReconciled", JsonSerializer.Serialize(new { State = "CompletedAndVerified", testEvidence.EvidenceId, testEvidence.WorkspaceRevision }), ct);
                 next = qaPassed ? RunStage.Reviewing : RunStage.Implementing; break;
             case RunStage.Reviewing:
-                if (!run.Policy.ReviewBeforeCommit)
+                if (!run.Policy.ReviewBeforeCommit && !run.NoSourceChanges)
                 {
                     await RequestApprovalAsync("Create a commit and draft pull request after successful QA, then inspect and publish the review against that PR. This does not authorize merging.");
                     next = RunStage.AwaitingHumanApproval; break;
                 }
                 var diff = await ToolAsync("InspectDiff", "review-diff", JsonSerializer.SerializeToElement(new { }), AgentRole.CodeReviewer);
-                if (!diff.Success || string.IsNullOrWhiteSpace(diff.Output) || diff.WorkspaceRevision != (await RequiredTestsAsync()).WorkspaceRevision) throw new InvalidOperationException("No actual diff is available for review.");
+                if (!diff.Success || (!run.NoSourceChanges && string.IsNullOrWhiteSpace(diff.Output)) || diff.WorkspaceRevision != (await RequiredTestsAsync()).WorkspaceRevision) throw new InvalidOperationException("No actual diff is available for review.");
                 await ArtifactAsync("actual-diff", ArtifactType.CodeDiff, diff.Output);
                 var review = await AgentAsync(AgentRole.CodeReviewer, ArtifactType.CodeReview);
                 await UpsertRecordAsync(new() { Id = Key(run.Id + "/review/" + run.Iteration), Kind = "review", RunId = run.Id, ProjectId = run.ProjectId, Name = "Local code review", Content = JsonSerializer.Serialize(review), Status = review.Decision });
                 await service.EventAsync(run, "ReviewCompleted", review.Summary, ct);
+                if (review.Decision == "APPROVE" && run.NoSourceChanges)
+                {
+                    var finalFacts = await ToolAsync("ReadRepository", "satisfied-revision", JsonSerializer.SerializeToElement(new { }), AgentRole.CodeReviewer);
+                    var evidence = await RequiredTestsAsync();
+                    if (!finalFacts.Success || finalFacts.WorkspaceRevision != evidence.WorkspaceRevision) throw new InvalidOperationException("Satisfied-task evidence revision mismatch.");
+                    using var factsJson = JsonDocument.Parse(finalFacts.Output);
+                    var selected = factsJson.RootElement.TryGetProperty("SelectedBranch", out var branchValue) && branchValue.ValueKind == JsonValueKind.String ? branchValue.GetString() : null;
+                    await ArtifactAsync("existing-commit", ArtifactType.Commit, JsonSerializer.Serialize(new { sha = factsJson.RootElement.GetProperty("HeadCommit").GetString(), existing = true, evidence.WorkspaceRevision }));
+                    var reconciled = await ToolAsync("ReconcileRepository", "satisfied-delivery", JsonSerializer.SerializeToElement(new { }), AgentRole.CodeReviewer);
+                    if (!reconciled.Success) throw new ConfigurationException("Cannot reconcile existing delivery.");
+                    using var prs = JsonDocument.Parse(reconciled.Output);
+                    var head = factsJson.RootElement.GetProperty("HeadCommit").GetString();
+                    if (selected != null)
+                    {
+                        var matching = prs.RootElement.GetProperty("pullRequests").EnumerateArray().Where(x => x.GetProperty("branch").GetString() == selected && x.GetProperty("commit").GetString() == head && (x.GetProperty("state").GetString() == "open" || x.GetProperty("merged").ValueKind != JsonValueKind.Null)).ToArray();
+                        if (!reconciled.Success || matching.Length != 1) throw new ConfigurationException("Existing feature work is verified but has no matching active or merged PR; delivery requires human reconciliation.");
+                        await ArtifactAsync("existing-pull-request", ArtifactType.PullRequest, matching[0].GetRawText());
+                        await service.EventAsync(run, "TaskReconciled", JsonSerializer.Serialize(new { State = "AlreadyDelivered", PullRequest = matching[0], evidence.EvidenceId, evidence.WorkspaceRevision }), ct);
+                    }
+                    else
+                    {
+                        foreach (var existingPr in prs.RootElement.GetProperty("pullRequests").EnumerateArray().Where(x => x.GetProperty("merged").ValueKind != JsonValueKind.Null && (x.GetProperty("commit").GetString() == head || x.TryGetProperty("mergeCommit", out var mergedCommit) && mergedCommit.GetString() == head)))
+                        {
+                            await ArtifactAsync("existing-pull-request-" + existingPr.GetProperty("number").GetInt32(), ArtifactType.PullRequest, existingPr.GetRawText());
+                            await service.EventAsync(run, "TaskReconciled", JsonSerializer.Serialize(new { State = "AlreadyDelivered", PullRequest = existingPr, evidence.EvidenceId, evidence.WorkspaceRevision }), ct);
+                        }
+                    }
+                    await store.MarkRequirementsVerifiedAsync(run.RequirementIds, run.Id, evidence.EvidenceId!, ct);
+                    run = run with { Outcome = ExecutionOutcome.AlreadySatisfied };
+                    await service.EventAsync(run, "AlreadySatisfied", JsonSerializer.Serialize(new { evidence.EvidenceId, evidence.WorkspaceRevision, Repository = factsJson.RootElement, Delivery = selected == null ? "Verified on default-branch source" : "Existing PR; no duplicate delivery" }), ct);
+                    advanceTask = run.TaskIndex + 1 < run.Tasks.Length;
+                    next = RunStage.Completed; break;
+                }
                 next = review.Decision == "APPROVE" ? RunStage.AwaitingHumanApproval : RunStage.Implementing;
                 if (next == RunStage.AwaitingHumanApproval)
                 {
@@ -92,6 +139,10 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 break;
             case RunStage.PreparingDelivery:
                 var verifiedTests = await RequiredTestsAsync();
+                var deliveryFacts = await ToolAsync("ReadRepository", "delivery-repository-facts", JsonSerializer.SerializeToElement(new { }), AgentRole.CodeReviewer);
+                using (var deliveryJson = JsonDocument.Parse(deliveryFacts.Output))
+                    if (deliveryJson.RootElement.TryGetProperty("SelectedBranch", out var existingBranch) && existingBranch.ValueKind == JsonValueKind.String)
+                        throw new TaskReconciliationException(ExecutionOutcome.AwaitingHumanInput, "Reconciled feature work needs further changes. An explicit existing-branch update is required; duplicate PR delivery is blocked.");
                 var deliveryDiff = await ToolAsync("InspectDiff", "delivery-diff", JsonSerializer.SerializeToElement(new { }), AgentRole.CodeReviewer);
                 if (!deliveryDiff.Success || deliveryDiff.WorkspaceRevision != verifiedTests.WorkspaceRevision) throw new InvalidOperationException("Workspace changed after tests; rerun validation before delivery.");
                 var commit = await ToolAsync("CreateCommit", "commit", JsonSerializer.SerializeToElement(new { branch = "engineering/" + run.Id, message = "feat: " + (run.CurrentTask?.Title ?? "implement reviewed engineering task"), expectedReview = run.Policy.ReviewBeforeCommit ? Key(run.Id + "/review/" + run.Iteration) : null, expectedRevision = verifiedTests.WorkspaceRevision }), AgentRole.CodeReviewer, true);
@@ -132,6 +183,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                     await service.EventAsync(run, "TaskCompleted", JsonSerializer.Serialize(new { run.TaskIndex, run.RequirementIds, verifiedTests.EvidenceId, verifiedTests.WorkspaceRevision }), ct);
                     advanceTask = true;
                 }
+                run = run with { Outcome = ExecutionOutcome.Implemented };
                 next = RunStage.Completed; break;
         }
         var updated = advanceTask ? run.AdvanceTask() : run.Transition(next);
@@ -249,7 +301,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                     await store.AppendAsync(new() { Id = messageId, Kind = "message", ProjectId = project.Id, RunId = run.Id, ConversationId = conversationId, Name = role.ToString(), Content = JsonSerializer.Serialize(result), Metadata = new() { ["responseId"] = response.ResponseId } }, ct);
                     await service.EventAsync(run, "AgentMessageCreated", JsonSerializer.Serialize(new { messageId, role = role.ToString() }), ct);
                 }
-                if (result.Decision == "BLOCKED") throw new InvalidOperationException("Human clarification required: " + result.Summary);
+                if (result.Decision is "BLOCKED" or "AWAITING_HUMAN_INPUT") throw new TaskReconciliationException(result.Decision == "BLOCKED" ? ExecutionOutcome.Blocked : ExecutionOutcome.AwaitingHumanInput, result.Summary);
                 if (result.ToolCalls.Length == 0) { await ArtifactAsync(role.ToString(), artifactType, JsonSerializer.Serialize(result)); return result; }
                 for (var i = 0; i < result.ToolCalls.Length; i++)
                 {
