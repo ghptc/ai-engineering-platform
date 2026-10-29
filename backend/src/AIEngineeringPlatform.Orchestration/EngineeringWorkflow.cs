@@ -54,11 +54,28 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             case RunStage.PreparingContext:
                 await ArtifactAsync("context", ArtifactType.DevelopmentContext, JsonSerializer.Serialize(new { project.Id, run.RequirementIds, Source = "Live project, requirements, human instructions and architecture records; assembled on demand." })); next = RunStage.Implementing; break;
             case RunStage.Implementing:
+                // Deferred planning blockers are durable, and cannot be cleared by a developer suggestion.
+                var planningTasks = new List<RecordEntry>();
+                for (var offset = 0; ; offset += 1000)
+                {
+                    var page = await store.RecordsAsync("task", run.ProjectId, run.Id, null, 0, offset, 1000, ct);
+                    planningTasks.AddRange(page);
+                    if (page.Count < 1000) break;
+                }
+                var blockers = planningTasks.Where(x => x.Metadata.GetValueOrDefault("taskIndex", "0") == run.TaskIndex.ToString() && x.Name is "BusinessAnalyst" or "Architect")
+                    .Select(x => JsonSerializer.Deserialize<ModelExecutionResult>(x.Content)!.Output)
+                    .Where(x => x.ToolCalls.Length == 0).SelectMany(x => x.Planning?.Blockers ?? [])
+                    .Where(x => x.Stage is "Implementation" or "Delivery").ToArray();
+                if (blockers.Length > 0) throw new ConfigurationException("Planning identified execution prerequisites requiring owner reconciliation: " + string.Join("; ", blockers.Select(x => x.Reason)));
                 if (!sandbox.Configured) throw new ConfigurationException("Configure and start the secure execution sandbox before implementing source changes.");
                 var correctionTargets = run.ReworkPlan.Where(x => x.Iteration == run.Iteration).Select(x => x.TargetAgent).ToArray();
                 var inspectionRole = correctionTargets.FirstOrDefault(run.SelectedAgents.First(x => x is AgentRole.BackendEngineer or AgentRole.FrontendEngineer));
                 var repositoryFacts = await ToolAsync("ReadRepository", "repository-facts", JsonSerializer.SerializeToElement(new { }), inspectionRole);
                 if (!repositoryFacts.Success) throw new InvalidOperationException("Repository inspection failed.");
+                using (var capabilityFacts = JsonDocument.Parse(repositoryFacts.Output))
+                    if (capabilityFacts.RootElement.TryGetProperty("Capabilities", out var capabilities) && capabilities.TryGetProperty("Profiles", out var configuredProfiles) &&
+                        !configuredProfiles.EnumerateArray().Any(x => x.GetProperty("Purpose").GetString() == "Test"))
+                        throw new ConfigurationException("No administrator-approved test profiles are configured; reconcile executor capabilities before implementation.");
                 await ToolAsync("ReconcileRepository", "git-reconciliation", JsonSerializer.SerializeToElement(new { }), inspectionRole);
                 var before = await ToolAsync("InspectDiff", "pre-implementation", JsonSerializer.SerializeToElement(new { }), inspectionRole);
                 foreach (var developer in correctionTargets.Length > 0 ? correctionTargets : run.SelectedAgents.Where(x => x is AgentRole.BackendEngineer or AgentRole.FrontendEngineer))
@@ -356,6 +373,14 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 if (!await store.SaveRunAsync(run, run.Version, owner, ct)) throw new ConcurrencyException();
                 run = await service.RunAsync(run.Id, ct);
                 var result = response.Output;
+                if (run.CurrentStage is RunStage.Analyzing or RunStage.Planning && result.ToolCalls.Length == 0 && result.Planning?.Blockers.Any(x => x.Stage == "Planning") == true)
+                    result = result with { Decision = "BLOCKED" };
+                if (run.CurrentStage is RunStage.Analyzing or RunStage.Planning && PlanningPolicy.DefersExecutionBlockers(role, result))
+                {
+                    // Original model decision remains in task/message evidence; only routing is stage-aware.
+                    await service.EventAsync(run, "ExecutionBlockersDeferred", JsonSerializer.Serialize(new { role, result.Planning }), ct);
+                    result = result with { Decision = "CONTINUE" };
+                }
                 var handoffId = Key(taskId + "/handoff");
                 await UpsertRecordAsync(new() { Id = handoffId, Kind = "handoff", ProjectId = project.Id, RunId = run.Id, Name = role.ToString(), Status = result.Decision is "BLOCKED" or "AWAITING_HUMAN_INPUT" ? "Blocked" : result.ToolCalls.Length == 0 ? "Completed" : "Working", Content = JsonSerializer.Serialize(new AgentHandoff(result.Summary, result.ToolCalls.Length == 0 ? result.Summary : "Work in progress; use persisted tool evidence.", result.Evidence, result.Checks ?? [], result.OpenQuestions ?? [], result.NextContext)), Metadata = new() { ["taskIndex"] = run.TaskIndex.ToString(), ["iteration"] = run.Iteration.ToString(), ["targetAgent"] = result.ToolCalls.Length == 0 ? NextAgent(role) : role.ToString(), ["sourceTaskId"] = taskId } });
                 await service.EventAsync(run, "AgentHandoffCreated", JsonSerializer.Serialize(new { handoffId, role, run.TaskIndex }), ct);
@@ -363,7 +388,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 var messageId = Key(taskId + "/message");
                 if (await store.GetRecordAsync("message", messageId, ct) == null)
                 {
-                    await store.AppendAsync(new() { Id = messageId, Kind = "message", ProjectId = project.Id, RunId = run.Id, ConversationId = conversationId, Name = role.ToString(), Content = JsonSerializer.Serialize(result), Metadata = new() { ["responseId"] = response.ResponseId } }, ct);
+                    await store.AppendAsync(new() { Id = messageId, Kind = "message", ProjectId = project.Id, RunId = run.Id, ConversationId = conversationId, Name = role.ToString(), Content = JsonSerializer.Serialize(response.Output), Metadata = new() { ["responseId"] = response.ResponseId } }, ct);
                     await service.EventAsync(run, "AgentMessageCreated", JsonSerializer.Serialize(new { messageId, role = role.ToString() }), ct);
                 }
                 if (result.Decision is "BLOCKED" or "AWAITING_HUMAN_INPUT") throw new TaskReconciliationException(result.Decision == "BLOCKED" ? ExecutionOutcome.Blocked : ExecutionOutcome.AwaitingHumanInput, result.Summary);

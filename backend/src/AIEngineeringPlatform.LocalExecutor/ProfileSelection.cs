@@ -4,6 +4,20 @@ namespace AIEngineeringPlatform.LocalExecutor;
 // Decisions use repository files and administrator-owned argument arrays, never model shell text.
 public static class ProfileSelection
 {
+    public static object Capabilities(string[] files, IReadOnlyDictionary<string, ExecutionProfile> profiles) => new
+    {
+        BootstrapOperations = new[] { "WriteFile", "ApplyPatch" },
+        NetworkEnabled = false,
+        DependencyAvailability = "Unverified: configured images and commands do not prove SDK, package cache or browser availability. Verify through approved isolated profiles.",
+        Profiles = profiles.OrderBy(x => x.Key).Select(x => new
+        {
+            Name = x.Key, x.Value.Command, x.Value.RequiredFiles,
+            Applicable = Applicable(files, x.Value),
+            Purpose = x.Key is "all" or "backend" or "frontend" or "e2e" or "node" ? "Test" : "Command",
+            Image = x.Value.Image
+        }).ToArray()
+    };
+
     public static string[] Available(string[] files, IReadOnlyDictionary<string, ExecutionProfile> profiles)
         => profiles.Where(x => Applicable(files, x.Value)).Select(x => x.Key).Where(x => x is "all" or "backend" or "frontend" or "e2e" or "node").Order().ToArray();
 

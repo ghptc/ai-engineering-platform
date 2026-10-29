@@ -27,7 +27,7 @@ public sealed class DeterministicModel(bool alreadySatisfied = false) : ILanguag
         var requirements = role == AgentRole.BusinessAnalyst ? new[] { new RequirementProposal("Fixture requirement", "Deterministic test scenario", "As an owner, I need traceable delivery.", ["Persist and verify the fixture"], 1, [], false) } : [];
         var decisions = role == AgentRole.Architect ? new[] { new ArchitectureDecision("Test architecture", "Test-only context", "Use deterministic adapters", "External calls are not verified", "") } : [];
         var checks = role == AgentRole.QAEngineer ? context.Run.RequirementIds.Select(id => new QualityCheck(id, "Fixture test execution", true, tests, "Deterministic test evidence only")).ToArray() : [];
-        var output = new AgentResult("Deterministic test fixture: " + role, role is AgentRole.QAEngineer or AgentRole.CodeReviewer ? "APPROVE" : "CONTINUE", ["Persist and verify the fixture"], evidence, ["This is test-only simulated model output."], calls, "Next task must use verified artifacts.", requirements, [], checks, [], decisions);
+        var output = new AgentResult("Deterministic test fixture: " + role, role is AgentRole.QAEngineer or AgentRole.CodeReviewer ? "APPROVE" : "CONTINUE", ["Persist and verify the fixture"], evidence, ["This is test-only simulated model output."], calls, "Next task must use verified artifacts.", requirements, [], checks, [], decisions, Planning: new([], [], [], "Write fixture files", "Test-only adapters; external dependencies unverified", "Deterministic required-test evidence"));
         return Task.FromResult(new ModelExecutionResult(output, "fake-response-" + role, 100, 50, 0.001m));
     }
 }

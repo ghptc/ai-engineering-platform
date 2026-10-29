@@ -22,6 +22,12 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
             properties[name] = new JsonObject { ["type"] = "array", ["description"] = description, ["items"] = JsonNode.Parse(itemSchema) };
             required.Add(name);
         }
+        properties["decision"]!["description"] = "Decision for the CURRENT stage only. CONTINUE planning with future execution prerequisites or risks. BLOCKED requires a genuine current-stage impediment; missing later tests/approval is not a planning blocker. Critical business ambiguity uses AWAITING_HUMAN_INPUT.";
+        properties["planning"] = JsonNode.Parse("""
+        {"type":"object","additionalProperties":false,"required":["risks","prerequisites","blockers","bootstrapStrategy","dependencyStrategy","testStrategy"],"properties":{"risks":{"type":"array","items":{"type":"string"}},"prerequisites":{"type":"array","items":{"type":"string"}},"blockers":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["stage","reason","evidence"],"properties":{"stage":{"type":"string","enum":["Planning","Implementation","Delivery"]},"reason":{"type":"string"},"evidence":{"type":"string"}}}},"bootstrapStrategy":{"type":"string"},"dependencyStrategy":{"type":"string"},"testStrategy":{"type":"string"}}}
+        """);
+        properties["planning"]!["description"] = "BA separates risks and unverified prerequisites from confirmed blockers. Architect must supply explicit bootstrap, offline dependency verification and approved test strategies. Empty arrays/strings for other roles. Blockers require evidence and the stage they prevent; do not block planning for missing future execution evidence.";
+        required.Add("planning");
         Array("requirements", """
         {"type":"object","additionalProperties":false,"required":["title","description","userStory","acceptanceCriteria","priority","dependencies","nonFunctional"],"properties":{"title":{"type":"string"},"description":{"type":"string"},"userStory":{"type":"string"},"acceptanceCriteria":{"type":"array","items":{"type":"string"}},"priority":{"type":"integer","minimum":1,"maximum":5},"dependencies":{"type":"array","items":{"type":"string"}},"nonFunctional":{"type":"boolean"}}}
         """, role == AgentRole.BusinessAnalyst ? "Required nonempty final business backlog. Include functional and nonfunctional requirements, stories, acceptance criteria and dependencies." : "Use an empty array unless proposing a requirement.");
@@ -31,7 +37,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         Array("checks", """
         {"type":"object","additionalProperties":false,"required":["requirementId","scenario","passed","evidenceId","details"],"properties":{"requirementId":{"type":"string"},"scenario":{"type":"string"},"passed":{"type":"boolean"},"evidenceId":{"type":"string"},"details":{"type":"string"}}}
         """, role == AgentRole.QAEngineer ? "Required nonempty final QA checks mapping each acceptance criterion to an actual RunTests evidenceId." : "Use an empty array unless validating actual execution evidence.");
-        Array("openQuestions", "{\"type\":\"string\"}", "Unresolved decisions. Return BLOCKED for critical unresolved business decisions.");
+        Array("openQuestions", "{\"type\":\"string\"}", "Unresolved questions; label assumptions and prerequisites separately. Critical business ambiguity preventing current planning uses AWAITING_HUMAN_INPUT. An empty repository or absent current test profiles alone must not block planning.");
         Array("architectureDecisions", """
         {"type":"object","additionalProperties":false,"required":["title","context","decision","consequences","mermaid"],"properties":{"title":{"type":"string"},"context":{"type":"string"},"decision":{"type":"string"},"consequences":{"type":"string"},"mermaid":{"type":"string"}}}
         """, role == AgentRole.Architect ? "Required nonempty final architectural decisions with constraints, API contracts, auth and persistence; use Mermaid only when useful." : "Use an empty array unless proposing an ADR.");
@@ -73,7 +79,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         using var json = JsonDocument.Parse(response.GetOutputText()); var root = json.RootElement;
         string[] Strings(string name) => root.GetProperty(name).EnumerateArray().Select(x => x.GetString() ?? "").ToArray();
         var calls = root.GetProperty("toolCalls").EnumerateArray().Select(x => new ToolCall(x.GetProperty("name").GetString()!, JsonDocument.Parse(x.GetProperty("arguments").GetString()!).RootElement.Clone())).ToArray();
-        var output = new AgentResult(root.GetProperty("summary").GetString()!, root.GetProperty("decision").GetString()!, Strings("acceptanceCriteria"), Strings("evidence"), Strings("assumptions"), calls, root.GetProperty("nextContext").GetString()!, Read<RequirementProposal[]>("requirements"), Read<ReviewFinding[]>("findings"), Read<QualityCheck[]>("checks"), Strings("openQuestions"), Read<ArchitectureDecision[]>("architectureDecisions"), Strings("reworkTargets"));
+        var output = new AgentResult(root.GetProperty("summary").GetString()!, root.GetProperty("decision").GetString()!, Strings("acceptanceCriteria"), Strings("evidence"), Strings("assumptions"), calls, root.GetProperty("nextContext").GetString()!, Read<RequirementProposal[]>("requirements"), Read<ReviewFinding[]>("findings"), Read<QualityCheck[]>("checks"), Strings("openQuestions"), Read<ArchitectureDecision[]>("architectureDecisions"), Strings("reworkTargets"), Read<PlanningAssessment>("planning"));
         T? Read<T>(string name) => root.GetProperty(name).Deserialize<T>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         var input = response.Usage?.InputTokenCount ?? throw new InvalidOperationException("Provider usage is missing.");
         var completion = response.Usage.OutputTokenCount;

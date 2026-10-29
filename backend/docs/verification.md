@@ -182,3 +182,7 @@ Final delivery repetition after the artifact metadata correction: TypeScript and
 ## Agent runtime reliability and execution capacity — 2026-10-29
 
 The current milestone's source manifest, complete test results, real local Docker/Git evidence, browser coverage, infrastructure retry notes and live-provider limitations are recorded in [runtime-reliability-verification.md](runtime-reliability-verification.md). Its [architecture decision](architecture/008-agent-runtime-reliability.md) records the persisted context inventory root cause and context/rework/capacity contracts. Prior milestone evidence above remains historical.
+
+## README-only planning regression — 2026-10-29
+
+See [planning investigation](planning-handoff-investigation.md) for persisted run evidence, root cause, exact source/test manifest, isolated database setup, failed intermediate attempts and final results. Restore/build passed; backend suite passed 136 tests with 7 explicit opt-in skips; separate-tag application image build passed. No live agent cycle, production run resume or runtime deployment was performed. Frontend-specific checks were not rerun for this backend-only change.

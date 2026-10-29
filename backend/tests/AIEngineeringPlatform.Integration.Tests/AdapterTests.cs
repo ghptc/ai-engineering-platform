@@ -72,6 +72,7 @@ public class AdapterTests
         var definition = new AgentDefinition("architect", AgentRole.Architect, "Architect", "", "test-model", "test instructions", [], [], InputCostPerMillion: 1, OutputCostPerMillion: 2);
         var result = await adapter.ExecuteAsync(new(new Project(), new ExecutionRun(), "test context", definition), default);
         Assert.Equal("resp_contract", result.ResponseId); Assert.Equal(100, result.InputTokens); Assert.Equal(50, result.OutputTokens); Assert.Equal(0.0002m, result.Cost);
+        Assert.Equal("Verify offline cache", result.Output.Planning!.DependencyStrategy);
         using var body = JsonDocument.Parse(handler.Body); Assert.Equal("test-model", body.RootElement.GetProperty("model").GetString()); Assert.False(body.RootElement.GetProperty("store").GetBoolean()); Assert.Equal("json_schema", body.RootElement.GetProperty("text").GetProperty("format").GetProperty("type").GetString());
     }
     private sealed class ModelHandler : HttpMessageHandler
@@ -80,7 +81,7 @@ public class AdapterTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Body = await request.Content!.ReadAsStringAsync(ct);
-            var text = JsonSerializer.Serialize(new { summary = "Contract fixture", decision = "CONTINUE", acceptanceCriteria = new[] { "Validated contract" }, evidence = Array.Empty<string>(), assumptions = Array.Empty<string>(), toolCalls = Array.Empty<object>(), nextContext = "next", requirements = Array.Empty<object>(), findings = Array.Empty<object>(), checks = Array.Empty<object>(), openQuestions = Array.Empty<string>(), reworkTargets = Array.Empty<string>(), architectureDecisions = Array.Empty<object>() });
+            var text = JsonSerializer.Serialize(new { summary = "Contract fixture", decision = "CONTINUE", acceptanceCriteria = new[] { "Validated contract" }, evidence = Array.Empty<string>(), assumptions = Array.Empty<string>(), toolCalls = Array.Empty<object>(), nextContext = "next", requirements = Array.Empty<object>(), findings = Array.Empty<object>(), checks = Array.Empty<object>(), openQuestions = Array.Empty<string>(), reworkTargets = Array.Empty<string>(), architectureDecisions = Array.Empty<object>(), planning = new { risks = Array.Empty<string>(), prerequisites = Array.Empty<string>(), blockers = Array.Empty<object>(), bootstrapStrategy = "WriteFile manifests", dependencyStrategy = "Verify offline cache", testStrategy = "Approved profiles" } });
             var response = new { id = "resp_contract", @object = "response", created_at = 1700000000, status = "completed", error = (object?)null, incomplete_details = (object?)null, model = "test-model", output = new[] { new { type = "message", id = "msg_contract", status = "completed", role = "assistant", content = new[] { new { type = "output_text", text, annotations = Array.Empty<object>() } } } }, usage = new { input_tokens = 100, output_tokens = 50, total_tokens = 150, input_tokens_details = new { cached_tokens = 0 }, output_tokens_details = new { reasoning_tokens = 0 } } };
             return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(response), Encoding.UTF8, "application/json") };
         }

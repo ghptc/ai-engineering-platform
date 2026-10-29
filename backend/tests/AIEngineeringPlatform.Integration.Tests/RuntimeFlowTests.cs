@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 using Xunit;
 namespace AIEngineeringPlatform.Integration.Tests;
 
-public sealed class RuntimeFlowTests
+public sealed partial class RuntimeFlowTests
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
     [Theory]
@@ -144,12 +144,12 @@ public sealed class RuntimeFlowTests
         client.DefaultRequestHeaders.Add("X-Requested-With", "AIEngineeringPlatform");
         (await client.PostAsJsonAsync("/api/v1/auth/login", new { password = PlatformFactory.Password })).EnsureSuccessStatusCode();
     }
-    private static async Task<ExecutionRun> Start(HttpClient client, IPlatformStore store, ExecutionPolicy policy)
+    private static async Task<ExecutionRun> Start(HttpClient client, IPlatformStore store, ExecutionPolicy policy, bool planning = false)
     {
         var project = new Project { Name = "Runtime fixture", RepositoryConnection = new("owner", "fixture", 1) };
         await store.SaveProjectAsync(project, null, default);
         client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
-        var response = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/tasks", new { policy, tasks = new[] { new EngineeringTask("Answer", "Correct the fixture", ["Tests pass"], Developers: [AgentRole.BackendEngineer, AgentRole.FrontendEngineer]) } });
+        var response = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/tasks", new { policy, tasks = new[] { new EngineeringTask("Answer", "Correct the fixture", ["Tests pass"], RequiresBusinessAnalysis: planning, RequiresArchitecture: planning, Developers: [AgentRole.BackendEngineer, AgentRole.FrontendEngineer]) } });
         response.EnsureSuccessStatusCode(); return (await response.Content.ReadFromJsonAsync<ExecutionRun>(Json))!;
     }
     private static async Task<ExecutionRun> Wait(IPlatformStore store, string id, Func<ExecutionRun, bool> done)
