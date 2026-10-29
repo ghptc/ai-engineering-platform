@@ -71,7 +71,7 @@ In the uncommitted snapshot, `ReworkPlanner.Create` persists source/target, reas
 | AUD-05 | P0 / Partially Verified | Workspace hashes fence tests/commit/push, but certification needs explicit tested commit SHA, challenge/version, evaluator version and immutable evidence references in one traceable decision. Sources: LocalExecutionService.cs, WorkspaceFiles.cs, ToolResult and ModelExecutionResult. |
 | AUD-06 | P0 / Partially Verified | MongoPlatformStore has existing records indexes by kind/project/run/sequence and append behavior. Certification-specific lookup, immutability permissions, retention and restart recovery are undefined and untested. Do not claim permanent immutable evidence from insert-only application methods alone. |
 | AUD-07 | P1 / Not Implemented | Infrastructure role, stable versioned specialization, routing, permission boundary and architecture disagreement challenge are absent. Preserve seven historical role IDs and Test/QA/Reviewer separation when introducing it. Source: Model.cs; EngineeringAgents.cs. |
-| AUD-08 | P0 / Not Verified | Actual current runtime registry, latest persisted real-run failure and original receipts for c8413d772ebd4246816ce89aef159163 have not been independently inspected. ADR 008 reports the run but is owner-authored uncommitted documentation, not fresh runtime proof. |
+| AUD-08 | P0 / Partially Verified | Read-only executor receipts for c8413d772ebd4246816ce89aef159163 are now inventoried below. The actual current agent registry, application run status/events and protected-context diagnostic remain unavailable. ADR 008 is owner-authored uncommitted documentation, not fresh application-runtime proof. |
 | AUD-09 | P0 / Not Verified | Required current full MongoDB/integration/browser regression is incomplete. Partial passing suites do not satisfy a stable baseline exit gate or justify production orchestration edits. Sources: verification table below; PlatformFactory.cs and playwright.config.ts prerequisites. |
 | AUD-10 | P0 / Not Verified | Concurrent source/test edits were detected between initial manifest and final comparison. Process exit success is observed, but exact tested source identity is not established. Capture an isolated reviewed snapshot before repeating acceptance checks. See reports/2026-10-29/concurrent-changes.json. |
 
@@ -79,7 +79,7 @@ In the uncommitted snapshot, `ReworkPlanner.Create` persists source/target, reas
 
 **Passed, bounded deterministic fixture.** `ContextBudgetTests.ProtectedOverflowFailsExplicitlyInsteadOfTruncating` constructs 180,000 ASCII characters in OriginalContext with BackendEngineer configured at 96,000 maximum input tokens, 128,000 model window and 4,000 reserved output tokens. It asserts an explicit exception containing “No protected requirements were discarded.” No provider request, repository workload or historical record mutation is needed. The same suite verifies output reservation, Unicode sizing and evidence/revision retention. RuntimeReliabilityTests separately verifies repetitive reply/evidence growth for every existing role.
 
-This reproduces fail-closed overflow, **not the exact historical BackendEngineer transcript**. `backend/docs/architecture/008-agent-runtime-reliability.md` reports run `c8413d772ebd4246816ce89aef159163`, approximately 33 KB initial inventory, 12,632 requirement bytes, 10,815 architecture bytes and 95,908 conservative context tokens plus instructions/framing. The proposed cause is tool-loop accumulation. Original receipt inspection and exact historical replay remain pending. ContextBudget uses a conservative UTF-8 byte upper bound rather than a provider tokenizer; those numbers must not be described as exact billed tokens.
+This reproduces fail-closed overflow, **not the exact historical BackendEngineer transcript**. `backend/docs/architecture/008-agent-runtime-reliability.md` reports run `c8413d772ebd4246816ce89aef159163`, approximately 33 KB initial inventory, 12,632 requirement bytes, 10,815 architecture bytes and 95,908 conservative context tokens plus instructions/framing. The proposed cause is tool-loop accumulation. Executor receipt inspection is recorded below; application context-event inspection and exact historical replay remain pending. ContextBudget uses a conservative UTF-8 byte upper bound rather than a provider tokenizer; those numbers must not be described as exact billed tokens.
 
 ## Historical real-run and GitHub permission investigation
 
@@ -90,6 +90,14 @@ Later `backend/docs/verification.md`, “Lightweight local task workflow,” rec
 Earlier failed test logs remain beside it: `test-attempt1.log`, `test-attempt2-environment.log` and `test-attempt3-evidence-contract.log`. The verification report attributes failures to zero recognized Node tests, MongoDB availability, and explanatory strings instead of exact QA evidence IDs. Their presence and failed-test markers were observed; a fresh causal replay was not performed. No failed receipt was removed. The latest runtime failure cannot be inferred from these dated test logs.
 
 Conclusion: the old permission blocker was followed by historical evidence of one successful authorized fixture delivery. Current installation permissions, current remote PR state and current live provider behavior remain Not Verified. No external requests or credential reuse were performed in this audit.
+
+### Authorized local-location follow-up
+
+The owner supplied `mongodb://127.0.0.1:27028/aep_certification_test` and `backend/.local-runtime/state/`, authorizing isolated test data and read-only receipt access, with instructions to mark unavailable locations BLOCKED. The receipt directory exists. A TCP connection to 127.0.0.1:27028 returned ConnectionRefusedError (errno 111), and the local socket table showed no listener. MongoDB-backed integration, registry inventory and browser checks are therefore **BLOCKED**. No database was created, no service was started and no credential file was accessed.
+
+Read-only inspection was restricted to direct operation receipt JSON files under `state/runs/`; state.json, control-home, executor.lock, repository workspaces and credential/configuration files were not read. [runtime-receipt-summary.json](reports/2026-10-29/runtime-receipt-summary.json) contains receipt hashes, evidence IDs, revisions, output sizes and outcomes without output bodies. It inventories five run directories. By receipt modification time, c8413d772ebd4246816ce89aef159163 is most recent (2026-10-29 12:23:15 UTC), with 47 receipts: 43 successful and 4 failed. Three failures contain MSB1003; one contains MSB1001; all have exit code 1. The recorded hashes permit comparison to the local originals. Initial keyword categories in the summary are mechanical hints, not diagnosed root causes.
+
+Executor receipts cannot establish the latest application run order, model/prompt configuration, context size, stage failure reason or successful certification. They corroborate real executor operations and failures for the documented BackendEngineer run. The application run/event ledger remains required to establish the reported overflow and its causal relationship to those operations. No prior run was retried or modified.
 
 ## Current verification
 
@@ -106,9 +114,9 @@ All successful current checks ran in the shared workspace. This audit made no ap
 | npm run typecheck --prefix frontend | passed | 0, installed dependency tree |
 | npm test --prefix frontend | passed | 0, 30 tests in 4 files |
 | npm run build --prefix frontend | passed | 0, large-chunk warning remains |
-| Full unfiltered dotnet test backend/AIEngineeringPlatform.sln --no-restore -m:1 | not executed | Isolated MongoDB endpoint not confirmed; existing tests target 27028 or TEST_MONGODB_CONNECTION_STRING |
+| Full unfiltered dotnet test backend/AIEngineeringPlatform.sln --no-restore -m:1 | blocked | Owner-approved isolated endpoint on 27028 refused TCP connections; no database tests executed |
 | npm ci --prefix frontend | not executed | Existing dependency tree used; clean-install verification remains pending |
-| npm run e2e --prefix frontend | not executed | Requires isolated MongoDB and dedicated non-reused ports; no owner service reused |
+| npm run e2e --prefix frontend | blocked | Approved isolated MongoDB unavailable; no browser host or owner service started/reused |
 | docker build -t ai-engineering-platform:local . | not executed | No current packaging/isolation claim |
 | Real Docker workload tests | skipped | No RUN_LOCAL_EXECUTOR_TESTS opt-in or immutable image selected |
 | Live OpenAI / GitHub / daemon cycle | not executed | No live opt-in, budget, credentials, installation or disposable repository inferred |
@@ -121,8 +129,8 @@ Discovery made no application source changes and preserved prior modifications, 
 M0 remains pending for the following explicit prerequisites:
 
 1. Read-only export of current agent definitions and revisions, model/configuration and tool permissions, without secrets. Source defaults cannot answer this.
-2. Read-only latest run/event/task/tool inventory, including the BackendEngineer failure's original diagnostics and receipts. Establish which run is actually latest.
-3. Confirmed disposable MongoDB endpoint and current full integration/rework/restart regression; then dedicated browser regression and clean dependency verification.
+2. Read-only latest application run/event/task/tool inventory, including the BackendEngineer failure's context diagnostics. Executor receipt inventory is available, but does not establish which application run is actually latest.
+3. Restore availability of the approved disposable MongoDB endpoint and run current full integration/rework/restart regression; then dedicated browser regression and clean dependency verification. Connection refusal currently blocks these checks; no owner services were modified.
 4. Independent review of the preserved runtime source diff and accepted baseline revision. Capture a stable isolated snapshot, then repeat tests against its exact revision: concurrent changes currently prevent that evidence binding. Passing unit tests on uncommitted owner work do not authorize committing that work.
 5. Human review/delivery approval for subsequent implementation. This report grants no certification or automatic merge permission.
 
