@@ -2,12 +2,17 @@ import { Alert, Empty, Spin, Tag, Typography } from "antd";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../services/api";
 import type { ReactNode } from "react";
-export function useApi<T>(path: string, enabled = true) {
+export function useApi<T>(
+  path: string,
+  enabled = true,
+  interval: number | false = false,
+) {
   return useQuery({
     queryKey: [path],
     queryFn: () => api<T>(path),
     enabled,
-    refetchInterval: 5000,
+    refetchInterval: interval,
+    staleTime: 2000,
     retry: (count, error) =>
       !("status" in error && [401, 403, 404].includes(Number(error.status))) &&
       count < 2,
@@ -16,7 +21,7 @@ export function useApi<T>(path: string, enabled = true) {
 export function Status({ value }: { value: string }) {
   const color = /Completed|Approved|APPROVE|Succeeded|Healthy/.test(value)
     ? "green"
-    : /Failed|Rejected|REQUEST_CHANGES|Cancelled/.test(value)
+    : /Failed|Rejected|REQUEST_CHANGES|Cancelled|Blocked/.test(value)
       ? "red"
       : /Paused|Approval|Pending/.test(value)
         ? "gold"
@@ -36,7 +41,7 @@ export function QueryState({
 }) {
   if (loading)
     return (
-      <div className="loading">
+      <div className="loading" role="status" aria-label="Loading content">
         <Spin size="large" />
       </div>
     );

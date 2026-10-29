@@ -7,7 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { App, ConfigProvider } from "antd";
 import { Projects } from "../src/features/projects/Projects";
 import { Approvals } from "../src/features/reviews/Approvals";
@@ -24,7 +24,7 @@ function wrapper(element: React.ReactNode) {
         })
       }
     >
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/executions/run"]}>
         <ConfigProvider wave={{ disabled: true }}>
           <App>{element}</App>
         </ConfigProvider>
@@ -105,7 +105,7 @@ describe("connected screens", () => {
   it("renders persisted agent messages", async () => {
     vi.mocked(fetch).mockImplementation((url) =>
       respond(
-        String(url).includes("/messages")
+        String(url).includes("/messages") || String(url).includes("/feed")
           ? {
               items: [
                 {
@@ -172,7 +172,7 @@ describe("execution boundaries", () => {
   it("shows real policy budgets, iterations and tool limits", async () => {
     vi.mocked(fetch).mockImplementation((url) =>
       respond(
-        String(url).includes("/events") || String(url).includes("/artifacts") || String(url).includes("/handoffs")
+        String(url).includes("/stream")
           ? { items: [] }
           : {
               id: "run",
@@ -193,12 +193,17 @@ describe("execution boundaries", () => {
             },
       ),
     );
-    wrapper(<ExecutionDetail />);
+    wrapper(
+      <Routes>
+        <Route path="/executions/:id" element={<ExecutionDetail />} />
+      </Routes>,
+    );
     expect(
       await screen.findByText("Development iteration"),
     ).toBeInTheDocument();
-    expect(screen.getByText("/ 3")).toBeInTheDocument();
-    expect(screen.getByText("/ $2")).toBeInTheDocument();
+    expect(screen.getByText("2 / 3")).toBeInTheDocument();
+    expect(screen.queryByText("Estimated cost")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tokens used")).not.toBeInTheDocument();
     expect(screen.getByText("7 / 25")).toBeInTheDocument();
     expect(screen.getByText("15 minutes")).toBeInTheDocument();
   });

@@ -111,7 +111,9 @@ export function ProjectForm({
             name={["executionPolicy", String(key)]}
           >
             <InputNumber
-              min={key === "maxRetries" ? 0 : 1}
+              min={
+                key === "maxRetries" ? 0 : key === "maxBudgetUsd" ? 0.001 : 1
+              }
               max={Number(max)}
               style={{ width: "100%" }}
             />

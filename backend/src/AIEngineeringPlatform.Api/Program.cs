@@ -29,6 +29,7 @@ builder.Services.AddOptions<ExecutionDefaults>().Configure(o =>
 var mongo = builder.Configuration["MONGODB_CONNECTION_STRING"];
 if (string.IsNullOrWhiteSpace(mongo)) throw new InvalidOperationException("MONGODB_CONNECTION_STRING is required.");
 builder.Services.AddSingleton<IPlatformStore>(new MongoPlatformStore(mongo, builder.Configuration["MONGODB_DATABASE"] ?? "ai_engineering_platform"));
+builder.Services.AddSingleton<IWorkspaceQueries>(sp => (MongoPlatformStore)sp.GetRequiredService<IPlatformStore>());
 builder.Services.Configure<LanguageModelOptions>(builder.Configuration.GetSection("LanguageModel"));
 builder.Services.AddSingleton<ILanguageModelProvider>(sp => new OpenAIProvider(builder.Configuration["OPENAI_API_KEY"], sp.GetRequiredService<IOptions<LanguageModelOptions>>().Value));
 builder.Services.AddHttpClient("sandbox", h => h.Timeout = TimeSpan.FromSeconds(140)).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
@@ -191,6 +192,32 @@ app.MapPost("/api/v1/webhooks/github", async (HttpContext ctx, ISourceControl so
     var inserted = await store.IngestWebhookAsync(new() { Id = delivery, ExternalId = delivery, Kind = "webhook", Status = "Pending", Name = ctx.Request.Headers["X-GitHub-Event"].ToString(), Content = payload.RootElement.GetRawText() }, ct);
     return inserted ? Results.Accepted() : Results.Ok(new { duplicate = true });
 }).RequireRateLimiting("api");
+api.MapGet("/runs/{id}/stream", async (string id, string? kind, long? before, int? limit, IWorkspaceQueries queries, PlatformService service, CancellationToken ct) =>
+{
+    await service.RunAsync(id, ct);
+    kind ??= "event";
+    if (kind is not ("event" or "message" or "handoff" or "artifact" or "approval")) throw new ArgumentException("Unsupported activity kind.");
+    return await queries.WindowAsync(kind, id, null, before, Math.Clamp(limit ?? 50, 1, 100), ct);
+});
+api.MapGet("/conversations/{id}/feed", async (string id, long? before, int? limit, IWorkspaceQueries queries, CancellationToken ct) => await queries.WindowAsync("message", null, id, before, Math.Clamp(limit ?? 30, 1, 100), ct));
+api.MapGet("/runs/{id}/details/{kind}/{recordId}", async (string id, string kind, string recordId, IWorkspaceQueries queries, CancellationToken ct) =>
+{
+    if (kind is not ("event" or "tool" or "artifact" or "task" or "handoff" or "message")) throw new ArgumentException("Unsupported evidence kind.");
+    return await queries.DetailsAsync(id, recordId, kind, ct);
+});
+api.MapPost("/runs/{id}/clarification", (string id, ClarificationInput input, PlatformService service, CancellationToken ct) => service.ClarifyAsync(id, input.Content, input.Version, ct));
+api.MapGet("/reviews/feed", (long? before, int? limit, IWorkspaceQueries queries, CancellationToken ct) => queries.WindowAsync("review", null, null, before, Math.Clamp(limit ?? 30, 1, 100), ct));
+api.MapGet("/approvals/feed", (long? before, int? limit, IWorkspaceQueries queries, CancellationToken ct) => queries.WindowAsync("approval", null, null, before, Math.Clamp(limit ?? 30, 1, 100), ct));
+api.MapGet("/usage/ledger", (int? offset, int? limit, IWorkspaceQueries queries, CancellationToken ct) => queries.UsageAsync(Offset(offset), Math.Clamp(limit ?? 25, 1, 100), ct));
+api.MapPatch("/agents/{id}/pricing", async (string id, PricingInput input, IPlatformStore store, CancellationToken ct) =>
+{
+    if (input.InputCostPerMillion <= 0 || input.OutputCostPerMillion <= 0) throw new ArgumentException("Model prices must be positive.");
+    var agent = (await store.AgentsAsync(ct)).SingleOrDefault(x => x.Id == id) ?? throw new KeyNotFoundException();
+    await store.AppendAsync(new() { Kind = "instructionVersion", Name = id, Content = JsonSerializer.Serialize(agent) }, ct);
+    var updated = agent with { InputCostPerMillion = input.InputCostPerMillion, OutputCostPerMillion = input.OutputCostPerMillion, InstructionVersion = agent.InstructionVersion + 1 };
+    await store.SaveAgentAsync(updated, ct);
+    return updated;
+});
 api.MapGet("/usage", (IPlatformStore store, CancellationToken ct) => store.StatisticsAsync(ct));
 api.MapGet("/activity", (IPlatformStore store, CancellationToken ct) => store.RecentActivityAsync(ct));
 api.MapGet("/settings", async (IExecutionSandbox sandbox, ISourceControl source, IConfiguration configuration, CancellationToken ct) => new { sandboxConfigured = sandbox.Configured, sandboxReady = await sandbox.IsReadyAsync(ct), sandboxProvider = configuration["EXECUTION_SANDBOX_PROVIDER"] ?? "Remote", githubConfigured = source.Configured, openAIConfigured = !string.IsNullOrWhiteSpace(configuration["OPENAI_API_KEY"]), authenticationMode = "Single owner", mergeRequiresHumanApproval = true });
@@ -210,6 +237,8 @@ static async Task<Page<RecordEntry>> Records(string kind, string? projectId, str
 public sealed record ProjectInput(string Name, string Description, string OriginalContext, string[] TechnologyStack, ExecutionPolicy? ExecutionPolicy, long Version = 0) { public Project ToProject() => new() { Name = Name, Description = Description, OriginalContext = OriginalContext, TechnologyStack = TechnologyStack, ExecutionPolicy = ExecutionPolicy ?? new() }; }
 public sealed record LoginRequest(string Password);
 public sealed record ContentInput(string Content);
+public sealed record ClarificationInput(string Content, long Version);
+public sealed record PricingInput(decimal InputCostPerMillion, decimal OutputCostPerMillion);
 public sealed record TaskQueueInput(EngineeringTask[] Tasks);
 public sealed record DecisionInput(bool Approve, string Reason);
 public sealed record RequirementInput(string Title, string Description, string[] AcceptanceCriteria, int Priority = 1, string[]? Dependencies = null, string AssignedRole = "BackendEngineer");

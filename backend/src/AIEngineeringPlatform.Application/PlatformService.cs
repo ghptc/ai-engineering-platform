@@ -23,6 +23,35 @@ public sealed class PlatformService(IPlatformStore store, IExecutionPublisher pu
         }
         return await store.CreateRunAsync(new() { ProjectId = projectId, IdempotencyKey = key, ProjectSnapshot = project, Policy = project.ExecutionPolicy, Tasks = tasks, RequirementIds = tasks[0].RequirementIds ?? [] }, ct);
     }
+    public async Task<ExecutionRun> ClarifyAsync(string id, string content, long expectedVersion, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(content) || content.Length > 12000) throw new ArgumentException("Clarification requires 1–12000 characters.");
+        var run = await RunAsync(id, ct);
+        if (run.Version != expectedVersion) throw new ConcurrencyException();
+        if (run.CurrentStage != RunStage.Failed || run.FailureReason?.StartsWith("Human clarification required:", StringComparison.Ordinal) != true) throw new InvalidOperationException("This execution is not awaiting clarification.");
+        run.CheckLimits(DateTimeOffset.UtcNow);
+        var next = run.Transition(run.ResumeStage);
+        var conversationId = run.Id + "-clarifications";
+        if (await store.GetRecordAsync("conversation", conversationId, ct) == null) await store.AppendAsync(new() { Id = conversationId, Kind = "conversation", ProjectId = run.ProjectId, RunId = run.Id, Name = "ClientConversation", Content = "Execution clarifications" }, ct);
+        var messageId = run.Id + "-clarification-" + expectedVersion;
+        var message = new RecordEntry { Id = messageId, Kind = "message", ProjectId = run.ProjectId, RunId = run.Id, ConversationId = conversationId, Name = "Client", Content = content };
+        var existingMessage = await store.GetRecordAsync("message", messageId, ct);
+        if (existingMessage != null && existingMessage.Content != content) throw new ConcurrencyException();
+        if (existingMessage == null) await store.AppendAsync(message, ct);
+        if (next.CurrentTask != null)
+        {
+            var tasks = next.Tasks.ToArray();
+            tasks[next.TaskIndex] = tasks[next.TaskIndex] with { HumanInstructionIds = (tasks[next.TaskIndex].HumanInstructionIds ?? []).Append(messageId).Distinct().ToArray() };
+            tasks[next.TaskIndex].Validate();
+            var revisionId = run.Id + "-instruction-version-" + expectedVersion;
+            if (await store.GetRecordAsync("instructionVersion", revisionId, ct) == null) await store.AppendAsync(new() { Id = revisionId, Kind = "instructionVersion", ProjectId = run.ProjectId, RunId = run.Id, Name = "TaskInstructions", Content = JsonSerializer.Serialize(run.CurrentTask) }, ct);
+            next = next with { Tasks = tasks };
+        }
+        if (!await store.SaveRunAsync(next, expectedVersion, null, ct)) throw new ConcurrencyException();
+        await publisher.PublishAsync(message, ct);
+        await EventAsync(next, "HumanClarificationReceived", "Owner clarification saved; resuming the blocked stage with existing limits.", ct);
+        return await RunAsync(id, ct);
+    }
     public async Task<Project> ProjectAsync(string id, CancellationToken ct) => await store.GetProjectAsync(id, ct) ?? throw new KeyNotFoundException("Project not found.");
     public async Task<ExecutionRun> RunAsync(string id, CancellationToken ct) => await store.GetRunAsync(id, ct) ?? throw new KeyNotFoundException("Execution not found.");
     public async Task<Project> SaveProjectAsync(Project project, long? version, CancellationToken ct)

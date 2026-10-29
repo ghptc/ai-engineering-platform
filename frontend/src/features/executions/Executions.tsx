@@ -1,60 +1,73 @@
-import { useState, lazy, Suspense } from "react";
+import { useState } from "react";
 import {
   App,
+  Alert,
   Button,
   Card,
   Descriptions,
-  Modal,
+  Empty,
+  Input,
+  Popconfirm,
+  Select,
   Space,
   Table,
   Tabs,
-  Timeline,
   Typography,
-  Statistic,
-  Alert,
-  Select,
 } from "antd";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
-import {
-  Heading,
-  QueryState,
-  Status,
-  useApi,
-  jsonText,
-} from "../../components/Common";
-import { useLiveEvents } from "../../hooks/useLiveEvents";
+import { Heading, QueryState, Status, useApi } from "../../components/Common";
+import { useLiveEvents, type RecordWindow } from "../../hooks/useLiveEvents";
+import { human, summary, teamState, terminal } from "../../lib/engineering";
+import { TeamWorkspace } from "../collaboration/Collaboration";
+import { ApprovalCard } from "../reviews/Approvals";
+import { Collapse } from "antd";
+import { Markdown } from "../../components/Readable";
+import { EvidenceDrawer } from "../../components/EvidenceDrawer";
+import { ActivityFeed } from "./ActivityFeed";
 import type { Entry, Page, Run } from "../../types";
-const CodeViewer = lazy(() => import("../../components/CodeViewer"));
 export function Executions() {
-  const query = useApi<Page<Run>>("/projects/all/runs");
   const [status, setStatus] = useState<string>();
+  const [offset, setOffset] = useState(0);
+  const query = useApi<Page<Run>>(
+    `/projects/all/runs?limit=25&offset=${offset}${status ? `&status=${status}` : ""}`,
+    true,
+    10000,
+  );
   return (
     <>
       <Heading
-        eyebrow="DURABLE WORKFLOWS"
+        eyebrow="LIVE ENGINEERING"
         title="Executions"
-        description="Follow each engineering cycle from context to reviewed delivery."
+        description="Follow tasks, specialists, validation and delivery decisions."
       />
       <Select
         allowClear
         placeholder="Filter status"
         aria-label="Filter status"
+        className="view-toolbar"
+        style={{ width: 240 }}
         value={status}
-        onChange={setStatus}
-        style={{ width: 220, marginBottom: 20 }}
+        onChange={(s) => {
+          setStatus(s);
+          setOffset(0);
+        }}
         options={[
           "Pending",
           "Analyzing",
+          "Planning",
           "Implementing",
+          "GeneratingTests",
           "RunningTests",
+          "Validating",
+          "Reviewing",
           "AwaitingHumanApproval",
           "Completed",
           "Failed",
           "Paused",
           "Cancelled",
-        ].map((value) => ({ value }))}
+        ].map((value) => ({ value, label: human(value) }))}
       />
       <QueryState
         loading={query.isLoading}
@@ -63,83 +76,159 @@ export function Executions() {
       >
         <Table
           rowKey="id"
-          dataSource={query.data?.items.filter(
-            (x) => !status || x.currentStage === status,
-          )}
+          size="small"
+          pagination={false}
           scroll={{ x: 720 }}
+          dataSource={query.data?.items}
           columns={[
             {
-              title: "Execution",
-              dataIndex: "id",
-              render: (value: string) => (
-                <Link to={"/executions/" + value}>{value.slice(0, 12)}</Link>
+              title: "Task / execution",
+              render: (_, r: Run) => (
+                <Link to={`/executions/${r.id}`}>
+                  {r.tasks?.[r.taskIndex]?.title ?? r.id.slice(0, 12)}
+                </Link>
               ),
             },
             {
               title: "Stage",
               dataIndex: "currentStage",
-              render: (value: string) => <Status value={value} />,
+              render: (v: string) => <Status value={v} />,
             },
             { title: "Iteration", dataIndex: "iteration" },
-            { title: "Tokens", dataIndex: "tokenUsage" },
-            {
-              title: "Cost (USD)",
-              dataIndex: "cost",
-              render: (value: number) => value.toFixed(4),
-            },
+            { title: "Tools", dataIndex: "toolCalls" },
             {
               title: "Started",
               dataIndex: "startedAt",
-              render: (value: string) => new Date(value).toLocaleString(),
+              render: (v: string) => new Date(v).toLocaleString(),
             },
           ]}
         />
       </QueryState>
+      <Space className="history-controls">
+        <Button
+          disabled={offset === 0}
+          onClick={() => setOffset(Math.max(0, offset - 25))}
+        >
+          Newer executions
+        </Button>
+        <Button
+          disabled={(query.data?.items.length ?? 0) < 25}
+          onClick={() => setOffset(offset + 25)}
+        >
+          Older executions
+        </Button>
+      </Space>
     </>
+  );
+}
+function Clarification({ run }: { run: Run }) {
+  const [content, setContent] = useState("");
+  const client = useQueryClient();
+  const { message } = App.useApp();
+  const mutation = useMutation({
+    mutationFn: () =>
+      api(`/runs/${run.id}/clarification`, "POST", {
+        content,
+        version: run.version,
+      }),
+    onSuccess: () => {
+      setContent("");
+      void client.invalidateQueries({ queryKey: [`/runs/${run.id}`] });
+      message.success("Clarification saved; blocked stage resumed");
+    },
+    onError: (e) => message.error(e.message),
+  });
+  return (
+    <Card title="Your input is needed" className="section-gap">
+      <Typography.Paragraph>
+        {run.failureReason?.replace("Human clarification required:", "")}
+      </Typography.Paragraph>
+      <Input.TextArea
+        aria-label="Clarification for engineering team"
+        rows={3}
+        maxLength={12000}
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="Answer the blocker. This will be attached to this task's human instructions."
+      />
+      <Button
+        className="section-gap"
+        type="primary"
+        disabled={!content.trim()}
+        loading={mutation.isPending}
+        onClick={() => mutation.mutate()}
+      >
+        Send clarification & retry
+      </Button>
+    </Card>
   );
 }
 export function ExecutionDetail() {
   const { id = "" } = useParams();
-  const run = useApi<Run>("/runs/" + id);
-  useLiveEvents(run.data?.projectId);
-  const events = useApi<Page<Entry>>("/runs/" + id + "/events?limit=500");
-  const handoffs = useApi<Page<Entry>>("/runs/" + id + "/handoffs?limit=500");
-  const artifacts = useApi<Page<Entry>>("/runs/" + id + "/artifacts?limit=500");
+  const [params, setParams] = useSearchParams();
+  const run = useApi<Run>(`/runs/${id}`, !!id, 10000);
+  const live = useLiveEvents(run.data?.projectId);
+  const events = useApi<RecordWindow>(
+    `/runs/${id}/stream?limit=50`,
+    !!id,
+    10000,
+  );
+  const handoffs = useApi<RecordWindow>(
+    `/runs/${id}/stream?kind=handoff&limit=50`,
+    !!id,
+    10000,
+  );
+  const [artifactBefore, setArtifactBefore] = useState<number>();
+  const artifacts = useApi<RecordWindow>(
+    `/runs/${id}/stream?kind=artifact&limit=50${artifactBefore != null ? `&before=${artifactBefore}` : ""}`,
+    !!id,
+    10000,
+  );
+  const approvals = useApi<RecordWindow>(
+    `/runs/${id}/stream?kind=approval&limit=30`,
+    !!id && run.data?.currentStage === "AwaitingHumanApproval",
+    10000,
+  );
   const [artifact, setArtifact] = useState<Entry>();
-  const { message } = App.useApp();
   const client = useQueryClient();
+  const { message } = App.useApp();
   const control = useMutation({
-    mutationFn: (action: string) =>
-      api("/runs/" + id + "/" + action, "POST", {}),
+    mutationFn: (action: string) => api(`/runs/${id}/${action}`, "POST", {}),
     onSuccess: () => {
-      void client.invalidateQueries();
+      void client.invalidateQueries({ queryKey: [`/runs/${id}`] });
     },
     onError: (e) => message.error(e.message),
   });
-  const stage = run.data?.currentStage;
-  const runnable =
-    stage &&
-    ![
-      "Completed",
-      "Failed",
-      "Paused",
-      "Cancelled",
-      "AwaitingHumanApproval",
-    ].includes(stage);
+  const r = run.data;
+  const team = r
+    ? teamState(r, events.data?.items ?? [], handoffs.data?.items ?? [])
+    : [];
+  const current = team.find((a) =>
+    ["Working", "Waiting for tool", "Failed", "Blocked"].includes(a.state),
+  );
+  const next = team.find((a) => a.state === "Queued");
   return (
     <QueryState loading={run.isLoading} error={run.error}>
-      {run.data && (
+      {r && (
         <>
           <Heading
-            eyebrow="EXECUTION DETAIL"
-            title={"Run " + id.slice(0, 12)}
-            description="Persisted stages and artifacts are the source of truth."
+            eyebrow={`LIVE EXECUTION · ${id.slice(0, 12)}`}
+            title={r.tasks?.[r.taskIndex]?.title ?? "Engineering execution"}
+            description={
+              r.tasks?.[r.taskIndex]?.description?.slice(0, 220) ??
+              "Persisted engineering progress and owner decisions."
+            }
             actions={
-              <Space>
-                {runnable && (
-                  <Button onClick={() => control.mutate("pause")}>Pause</Button>
+              <Space wrap>
+                {!terminal.has(r.currentStage) && (
+                  <Button
+                    loading={control.isPending}
+                    onClick={() => control.mutate("pause")}
+                  >
+                    Pause
+                  </Button>
                 )}
-                {stage === "Paused" && (
+                {r.currentStage === "Paused" && (
                   <Button
                     type="primary"
                     onClick={() => control.mutate("resume")}
@@ -147,192 +236,234 @@ export function ExecutionDetail() {
                     Resume
                   </Button>
                 )}
-                {stage === "Failed" && (
-                  <Button
-                    type="primary"
-                    onClick={() => control.mutate("retry")}
+                {r.currentStage === "Failed" &&
+                  !r.failureReason?.startsWith(
+                    "Human clarification required:",
+                  ) && (
+                    <Button
+                      type="primary"
+                      onClick={() => control.mutate("retry")}
+                    >
+                      Retry stage
+                    </Button>
+                  )}
+                {!["Completed", "Cancelled"].includes(r.currentStage) && (
+                  <Popconfirm
+                    title="Cancel this execution?"
+                    description="Saved messages, source evidence and execution history will be retained."
+                    onConfirm={() => control.mutate("cancel")}
                   >
-                    Retry stage
-                  </Button>
-                )}
-                {!["Completed", "Cancelled"].includes(stage || "") && (
-                  <Button danger onClick={() => control.mutate("cancel")}>
-                    Cancel
-                  </Button>
+                    <Button danger>Cancel</Button>
+                  </Popconfirm>
                 )}
               </Space>
             }
           />
-          {run.data.failureReason && (
-            <Alert
-              type="error"
-              showIcon
-              title="Stage failed"
-              description={run.data.failureReason}
-              style={{ marginBottom: 24 }}
-            />
-          )}
-          <div className="metrics">
-            <Card>
-              <Statistic
-                title="Current stage"
-                valueRender={() => <Status value={run.data!.currentStage} />}
-              />
-            </Card>
-            <Card>
-              <Statistic
-                title="Development iteration"
-                value={run.data.iteration}
-                suffix={
-                  run.data.policy
-                    ? `/ ${run.data.policy.maxIterations}`
-                    : undefined
-                }
-              />
-            </Card>
-            <Card>
-              <Statistic title="Tokens used" value={run.data.tokenUsage} />
-            </Card>
-            <Card>
-              <Statistic
-                title="Estimated cost"
-                prefix="$"
-                value={run.data.cost}
-                suffix={
-                  run.data.policy
-                    ? `/ $${run.data.policy.maxBudgetUsd}`
-                    : undefined
-                }
-                precision={4}
-              />
-            </Card>
-          </div>
-          <Card size="small" style={{ marginBottom: 24 }}>
+          <Card className="execution-strip" size="small">
             <Descriptions
               size="small"
+              column={{ xs: 1, sm: 2, md: 3, lg: 4 }}
               items={[
+                {
+                  key: "stage",
+                  label: "Current stage",
+                  children: <Status value={r.currentStage} />,
+                },
+                {
+                  key: "agent",
+                  label: "Current agent",
+                  children: current
+                    ? `${human(current.role)} · ${current.state}`
+                    : r.currentStage === "Completed"
+                      ? "Team finished"
+                      : "No agent currently working",
+                },
+                {
+                  key: "next",
+                  label: "Next specialist",
+                  children: next
+                    ? human(next.role)
+                    : r.currentStage === "AwaitingHumanApproval"
+                      ? "Owner delivery decision"
+                      : "No further agent queued",
+                },
+                {
+                  key: "iteration",
+                  label: "Development iteration",
+                  children: `${r.iteration} / ${r.policy?.maxIterations ?? "—"}`,
+                },
                 {
                   key: "tools",
                   label: "Tool calls",
-                  children: `${run.data.toolCalls} / ${run.data.policy?.maxToolCalls ?? "—"}`,
+                  children: `${r.toolCalls} / ${r.policy?.maxToolCalls ?? "—"}`,
                 },
                 {
                   key: "time",
                   label: "Time limit",
-                  children: `${run.data.policy?.maxDurationMinutes ?? "—"} minutes`,
+                  children: `${r.policy?.maxDurationMinutes ?? "—"} minutes`,
                 },
                 {
-                  key: "retry",
-                  label: "Stage retries",
-                  children: `${run.data.retryCount} / ${run.data.policy?.maxRetries ?? "—"}`,
+                  key: "task",
+                  label: "Task",
+                  children: `${(r.taskIndex ?? 0) + 1} / ${r.tasks?.length || 1}`,
+                },
+                {
+                  key: "live",
+                  label: "Updates",
+                  children: (
+                    <span role="status">{live} · persisted replay</span>
+                  ),
                 },
               ]}
             />
           </Card>
-          {run.data.tasks?.length > 0 && <Card title={"Task " + (run.data.taskIndex + 1) + " of " + run.data.tasks.length} style={{ marginBottom: 24 }}><Typography.Title level={4}>{run.data.tasks[run.data.taskIndex]?.title}</Typography.Title><Typography.Paragraph>{run.data.tasks[run.data.taskIndex]?.description}</Typography.Paragraph><Typography.Text>Selected agents: {run.data.selectedAgents?.join(", ")}</Typography.Text></Card>}
-          <Tabs
-            defaultActiveKey="timeline"
-            items={[
-              { key: "handoffs", label: "Agent handoffs", children: <Space orientation="vertical" style={{ width: "100%" }}>{handoffs.data?.items.map(entry => <Card key={entry.id} title={entry.name}><pre className="artifact-preview">{jsonText(entry.content)}</pre></Card>)}</Space> },
-              {
-                key: "timeline",
-                label: "Execution timeline",
-                children: (
-                  <Card>
-                    <QueryState
-                      loading={events.isLoading}
-                      error={events.error}
-                      empty={!events.data?.items.length}
-                    >
-                      <Timeline
-                        items={events.data?.items.map((event) => ({
-                          color:
-                            event.name === "RunFailed"
-                              ? "red"
-                              : event.name === "RunCompleted"
-                                ? "green"
-                                : "blue",
-                          content: (
-                            <div>
-                              <Space>
-                                <strong>
-                                  {event.name.replace(
-                                    /([a-z])([A-Z])/g,
-                                    "$1 $2",
-                                  )}
-                                </strong>
-                                <Typography.Text type="secondary">
-                                  {new Date(event.createdAt).toLocaleString()}
-                                </Typography.Text>
-                              </Space>
-                              <pre className="event-content">
-                                {jsonText(event.content)}
-                              </pre>
-                            </div>
+          {r.tasks?.[r.taskIndex] && (
+            <Collapse
+              className="section-gap"
+              items={[
+                {
+                  key: "task",
+                  label: "Task details & acceptance criteria",
+                  children: (
+                    <>
+                      <Markdown content={r.tasks[r.taskIndex].description} />
+                      <ul>
+                        {r.tasks[r.taskIndex].acceptanceCriteria.map(
+                          (criterion, index) => (
+                            <li key={index}>{criterion}</li>
                           ),
-                        }))}
-                      />
-                    </QueryState>
-                  </Card>
+                        )}
+                      </ul>
+                    </>
+                  ),
+                },
+              ]}
+            />
+          )}
+          {r.failureReason &&
+            !r.failureReason.startsWith("Human clarification required:") && (
+              <Alert
+                className="section-gap"
+                type="error"
+                showIcon
+                title="Stage failed"
+                description={r.failureReason}
+              />
+            )}
+          {r.failureReason?.startsWith("Human clarification required:") && (
+            <Clarification run={r} />
+          )}
+          {/budget/i.test(r.failureReason ?? "") && (
+            <Alert
+              className="section-gap"
+              type="warning"
+              title="Budget attention required"
+              description={
+                <Link to="/usage">
+                  Inspect enforced limits and recorded usage
+                </Link>
+              }
+            />
+          )}
+          {r.currentStage === "AwaitingHumanApproval" &&
+            approvals.data?.items
+              .filter((a) => a.status === "Pending")
+              .map((a) => (
+                <div className="section-gap" key={a.id}>
+                  <ApprovalCard entry={a} />
+                </div>
+              ))}
+          {r.currentStage === "AwaitingHumanApproval" &&
+            !approvals.data?.items.some((a) => a.status === "Pending") && (
+              <Alert
+                className="section-gap"
+                type="warning"
+                title="Owner delivery decision required"
+                description={
+                  <Link to="/approvals">
+                    Open pending approvals and delivery evidence
+                  </Link>
+                }
+              />
+            )}
+          <Tabs
+            activeKey={params.get("tab") ?? "team"}
+            onChange={(tab) => setParams({ tab }, { replace: true })}
+            items={[
+              {
+                key: "team",
+                label: "Agent collaboration",
+                children: (
+                  <TeamWorkspace
+                    key={r.id}
+                    run={r}
+                    events={events.data?.items ?? []}
+                  />
                 ),
               },
               {
+                key: "timeline",
+                label: "Execution timeline",
+                children: <ActivityFeed key={id} runId={id} />,
+              },
+              {
                 key: "artifacts",
-                label: `Artifacts (${artifacts.data?.items.length || 0})`,
+                label: `Artifacts (${artifacts.data?.items.length ?? 0})`,
                 children: (
-                  <Table
-                    rowKey="id"
-                    dataSource={artifacts.data?.items}
-                    columns={[
-                      { title: "Artifact", dataIndex: "name" },
-                      {
-                        title: "Created",
-                        dataIndex: "createdAt",
-                        render: (value: string) =>
-                          new Date(value).toLocaleString(),
-                      },
-                      {
-                        title: "Inspect",
-                        render: (_: unknown, value: Entry) => (
-                          <Button onClick={() => setArtifact(value)}>
-                            Open artifact
-                          </Button>
-                        ),
-                      },
-                    ]}
-                  />
+                  <Card title="Source, validation and delivery evidence">
+                    <QueryState
+                      loading={artifacts.isLoading}
+                      error={artifacts.error}
+                      empty={!artifacts.data?.items.length}
+                    >
+                      <Table
+                        size="small"
+                        rowKey="id"
+                        pagination={{ pageSize: 10 }}
+                        dataSource={artifacts.data?.items}
+                        columns={[
+                          { title: "Artifact", dataIndex: "name" },
+                          {
+                            title: "Summary",
+                            render: (_, e: Entry) => summary(e),
+                          },
+                          {
+                            title: "Inspect",
+                            render: (_, e: Entry) => (
+                              <Button onClick={() => setArtifact(e)}>
+                                Open artifact
+                              </Button>
+                            ),
+                          },
+                        ]}
+                      />
+                    </QueryState>
+                    <Space className="history-controls">
+                      <Button
+                        disabled={!artifacts.data?.hasMore}
+                        onClick={() =>
+                          setArtifactBefore(artifacts.data?.nextBefore)
+                        }
+                      >
+                        Older artifacts
+                      </Button>
+                      <Button
+                        disabled={artifactBefore == null}
+                        onClick={() => setArtifactBefore(undefined)}
+                      >
+                        Latest artifacts
+                      </Button>
+                    </Space>
+                  </Card>
                 ),
               },
             ]}
           />
-          <Modal
-            open={!!artifact}
-            title={artifact?.name}
-            onCancel={() => setArtifact(undefined)}
-            footer={null}
-            width="90vw"
-            destroyOnHidden
-          >
-            {artifact && (
-              <>
-                <Descriptions
-                  items={[
-                    {
-                      key: "hash",
-                      label: "SHA-256",
-                      children: artifact.metadata.sha256,
-                    },
-                  ]}
-                />
-                <Suspense fallback="Loading code viewer…">
-                  <CodeViewer
-                    content={jsonText(artifact.content)}
-                    language={artifact.name === "CodeDiff" ? "diff" : "json"}
-                  />
-                </Suspense>
-              </>
-            )}
-          </Modal>
+          <EvidenceDrawer
+            key={artifact?.id ?? "none"}
+            entry={artifact}
+            onClose={() => setArtifact(undefined)}
+          />
         </>
       )}
     </QueryState>

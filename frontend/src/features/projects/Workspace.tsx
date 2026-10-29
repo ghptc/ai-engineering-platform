@@ -29,6 +29,13 @@ import {
   useApi,
   jsonText,
 } from "../../components/Common";
+import { Requirements } from "./Requirements";
+import { Markdown, ReadableEntry } from "../../components/Readable";
+import { EvidenceDrawer } from "../../components/EvidenceDrawer";
+import { TeamWorkspace } from "../collaboration/Collaboration";
+import { summary } from "../../lib/engineering";
+import type { RecordWindow } from "../../hooks/useLiveEvents";
+import { Collapse, Dropdown } from "antd";
 import { TaskLauncher } from "./TaskLauncher";
 import { ProjectForm } from "./Projects";
 import { ConversationPanel } from "../conversations/Conversations";
@@ -40,6 +47,15 @@ export function Workspace() {
   const project = useApi<Project>("/projects/" + id);
   const runs = useApi<Page<Run>>("/projects/" + id + "/runs");
   const memory = useApi<Entry[]>("/projects/" + id + "/memory");
+  const currentRun = runs.data?.items[0];
+  const requirements = useApi<Page<Entry>>(
+    `/projects/${id}/requirements?limit=50`,
+  );
+  const events = useApi<RecordWindow>(
+    `/runs/${currentRun?.id}/stream?limit=50`,
+    !!currentRun,
+  );
+  const [selectedArtifact, setSelectedArtifact] = useState<Entry>();
   const [edit, setEdit] = useState(false);
   const [connect, setConnect] = useState(false);
   const { message } = App.useApp();
@@ -83,22 +99,30 @@ export function Workspace() {
             actions={
               <Space wrap>
                 <TaskLauncher project={project.data} />
-                <Button icon={<EditOutlined />} onClick={() => setEdit(true)}>
-                  Edit
-                </Button>
-                <Button
-                  icon={<LinkOutlined />}
-                  onClick={() => setConnect(true)}
+                <Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: "edit",
+                        label: "Edit project",
+                        onClick: () => setEdit(true),
+                      },
+                      {
+                        key: "repository",
+                        label: "Connect repository",
+                        onClick: () => setConnect(true),
+                      },
+                      {
+                        key: "plan",
+                        label: "Plan complete project",
+                        onClick: () => start.mutate(),
+                      },
+                    ],
+                  }}
+                  trigger={["click"]}
                 >
-                  Connect repository
-                </Button>
-                <Button
-                  icon={<PlayCircleOutlined />}
-                  loading={start.isPending}
-                  onClick={() => start.mutate()}
-                >
-                  Start execution
-                </Button>
+                  <Button loading={start.isPending}>Project actions ⌄</Button>
+                </Dropdown>
               </Space>
             }
           />
@@ -108,39 +132,127 @@ export function Workspace() {
                 key: "overview",
                 label: "Overview",
                 children: (
-                  <div className="workspace-grid">
-                    <Card title="Product context">
-                      <Typography.Paragraph className="preserve">
-                        {project.data.originalContext}
-                      </Typography.Paragraph>
-                      <Space wrap>
-                        {project.data.technologyStack.map((x) => (
-                          <span className="stack-chip" key={x}>
-                            {x}
-                          </span>
+                  <Space orientation="vertical" style={{ width: "100%" }}>
+                    <div className="operations-grid">
+                      <Card title="Product objective">
+                        <Markdown
+                          content={
+                            project.data.description ||
+                            project.data.originalContext
+                              .split("\n")
+                              .find((line) => line.trim())
+                              ?.slice(0, 300) ||
+                            "Define your product objective."
+                          }
+                        />
+                        <Space wrap>
+                          {project.data.technologyStack.map((x) => (
+                            <span className="stack-chip" key={x}>
+                              {x}
+                            </span>
+                          ))}
+                        </Space>
+                        <Collapse
+                          className="section-gap"
+                          items={[
+                            {
+                              key: "context",
+                              label: "Full product context",
+                              children: (
+                                <div className="context-window">
+                                  <Markdown
+                                    content={project.data.originalContext}
+                                  />
+                                </div>
+                              ),
+                            },
+                          ]}
+                        />
+                      </Card>
+                      <Card title="Current milestone & task">
+                        {currentRun ? (
+                          <>
+                            <Status value={currentRun.currentStage} />
+                            <Typography.Title level={4}>
+                              {currentRun.tasks?.[currentRun.taskIndex]
+                                ?.title ?? "Engineering execution"}
+                            </Typography.Title>
+                            <Typography.Paragraph>
+                              {currentRun.tasks?.[
+                                currentRun.taskIndex
+                              ]?.description?.slice(0, 300)}
+                            </Typography.Paragraph>
+                            <Typography.Paragraph>
+                              Iteration {currentRun.iteration} /{" "}
+                              {currentRun.policy.maxIterations} ·{" "}
+                              {requirements.data?.items.filter(
+                                (r) => r.status === "Verified",
+                              ).length ?? 0}{" "}
+                              verified requirements in current page
+                            </Typography.Paragraph>
+                            {currentRun.failureReason && (
+                              <Alert
+                                type="warning"
+                                title={currentRun.failureReason}
+                              />
+                            )}
+                            <Link to={`/executions/${currentRun.id}`}>
+                              Open live engineering workspace ↗
+                            </Link>
+                          </>
+                        ) : (
+                          <Alert
+                            type="info"
+                            title="Ready for your first focused task"
+                            description="Describe a bounded change and choose only the specialists it needs."
+                          />
+                        )}
+                      </Card>
+                    </div>
+                    <Card title="Latest decisions & deliveries">
+                      {memory.data
+                        ?.filter((e) =>
+                          [
+                            "ArchitectureDecision",
+                            "PullRequest",
+                            "Commit",
+                            "ValidationReport",
+                            "CodeReview",
+                          ].includes(e.name),
+                        )
+                        .slice(-5)
+                        .reverse()
+                        .map((e) => (
+                          <div className="compact-row" key={e.id}>
+                            <div>
+                              <strong>{e.name}</strong>
+                              <p>{summary(e)}</p>
+                            </div>
+                            <Button onClick={() => setSelectedArtifact(e)}>
+                              Inspect
+                            </Button>
+                          </div>
                         ))}
-                      </Space>
+                      {!memory.data?.length && (
+                        <Typography.Text type="secondary">
+                          No decisions or deliveries recorded yet.
+                        </Typography.Text>
+                      )}
                     </Card>
                     <Card title="Execution boundaries">
                       <Descriptions
-                        column={1}
+                        column={{ xs: 1, sm: 2, md: 3 }}
                         items={[
                           {
                             key: "status",
-                            label: "Status",
+                            label: "Project",
                             children: <Status value={project.data.status} />,
                           },
                           {
                             key: "iterations",
-                            label: "Iterations",
+                            label: "Iteration limit",
                             children:
                               project.data.executionPolicy.maxIterations,
-                          },
-                          {
-                            key: "budget",
-                            label: "Budget per run",
-                            children:
-                              "$" + project.data.executionPolicy.maxBudgetUsd,
                           },
                           {
                             key: "duration",
@@ -160,13 +272,13 @@ export function Workspace() {
                           },
                           {
                             key: "merge",
-                            label: "Merge policy",
-                            children: "Human approval required",
+                            label: "Protected delivery",
+                            children: "Human approval; no automatic merge",
                           },
                         ]}
                       />
                     </Card>
-                  </div>
+                  </Space>
                 ),
               },
               {
@@ -198,11 +310,6 @@ export function Workspace() {
                         render: (value: string) => <Status value={value} />,
                       },
                       { title: "Iteration", dataIndex: "iteration" },
-                      {
-                        title: "Cost",
-                        dataIndex: "cost",
-                        render: (value: number) => "$" + value.toFixed(4),
-                      },
                     ]}
                   />
                 ),
@@ -218,14 +325,12 @@ export function Workspace() {
                           key={entry.id}
                           title={entry.name}
                           extra={
-                            <Typography.Text type="secondary">
-                              {new Date(entry.createdAt).toLocaleString()}
-                            </Typography.Text>
+                            <Button onClick={() => setSelectedArtifact(entry)}>
+                              Inspect artifact
+                            </Button>
                           }
                         >
-                          <pre className="artifact-preview">
-                            {jsonText(entry.content)}
-                          </pre>
+                          <ReadableEntry entry={entry} compact />
                         </Card>
                       ))
                     ) : (
@@ -241,17 +346,34 @@ export function Workspace() {
                 key: "conversation",
                 label: "Client conversation",
                 children: (
-                  <ConversationPanel projectId={id} type="ClientConversation" />
+                  <ConversationPanel
+                    projectId={id}
+                    type="ClientConversation"
+                    taskActions={false}
+                  />
                 ),
               },
               {
                 key: "collaboration",
                 label: "Agent collaboration",
-                children: (
-                  <ConversationPanel projectId={id} type="AgentConversation" />
+                children: currentRun ? (
+                  <TeamWorkspace
+                    run={currentRun}
+                    events={events.data?.items ?? []}
+                  />
+                ) : (
+                  <Alert
+                    type="info"
+                    title="Start an execution to see the selected engineering team."
+                  />
                 ),
               },
             ]}
+          />
+          <EvidenceDrawer
+            key={selectedArtifact?.id ?? "none"}
+            entry={selectedArtifact}
+            onClose={() => setSelectedArtifact(undefined)}
           />
           <Modal
             title="Edit project"
@@ -308,90 +430,5 @@ export function Workspace() {
         </>
       )}
     </QueryState>
-  );
-}
-function Requirements({ projectId }: { projectId: string }) {
-  const query = useApi<Page<Entry>>("/projects/" + projectId + "/requirements");
-  const [open, setOpen] = useState(false);
-  const { message } = App.useApp();
-  const client = useQueryClient();
-  const mutation = useMutation({
-    mutationFn: (values: {
-      title: string;
-      description: string;
-      criteria: string;
-    }) =>
-      api("/projects/" + projectId + "/requirements", "POST", {
-        ...values,
-        acceptanceCriteria: values.criteria.split("\n").filter(Boolean),
-        priority: 1,
-      }),
-    onSuccess: () => {
-      setOpen(false);
-      void client.invalidateQueries();
-    },
-    onError: (e) => message.error(e.message),
-  });
-  return (
-    <>
-      <Button onClick={() => setOpen(true)} style={{ marginBottom: 16 }}>
-        Add requirement
-      </Button>
-      <QueryState
-        loading={query.isLoading}
-        error={query.error}
-        empty={!query.data?.items.length}
-      >
-        <Table
-          rowKey="id"
-          dataSource={query.data?.items}
-          columns={[
-            { title: "Requirement", dataIndex: "name" },
-            {
-              title: "Status",
-              dataIndex: "status",
-              render: (value: string) => <Status value={value} />,
-            },
-            {
-              title: "Details",
-              dataIndex: "content",
-              render: (value: string) => (
-                <pre className="artifact-preview">{jsonText(value)}</pre>
-              ),
-            },
-          ]}
-        />
-      </QueryState>
-      <Modal
-        title="Add requirement"
-        open={open}
-        onCancel={() => setOpen(false)}
-        footer={null}
-        destroyOnHidden
-      >
-        <Form layout="vertical" onFinish={(values) => mutation.mutate(values)}>
-          <Form.Item name="title" label="Title" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="description"
-            label="Description"
-            rules={[{ required: true }]}
-          >
-            <Input.TextArea />
-          </Form.Item>
-          <Form.Item
-            name="criteria"
-            label="Acceptance criteria (one per line)"
-            rules={[{ required: true }]}
-          >
-            <Input.TextArea rows={5} />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" loading={mutation.isPending}>
-            Save requirement
-          </Button>
-        </Form>
-      </Modal>
-    </>
   );
 }

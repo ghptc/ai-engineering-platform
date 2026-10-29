@@ -12,6 +12,7 @@ import {
   Tag,
   Typography,
 } from "antd";
+import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { Heading, QueryState, useApi } from "../../components/Common";
@@ -24,7 +25,7 @@ export function Settings() {
       <Heading
         eyebrow="PLATFORM CONFIGURATION"
         title="Settings & agents"
-        description="Configure model behavior, pricing, and integration prerequisites. Secrets stay on the server."
+        description="Configure agent behavior, tool permissions, model selection and runtime prerequisites. Secrets stay on the server."
       />
       <div className="metrics">
         {[
@@ -50,14 +51,19 @@ export function Settings() {
         ))}
       </div>
       <Alert
-        title="Set integration secrets in the deployment environment. Each agent needs an available model and current input/output token prices before execution."
+        title={
+          <>
+            Integration secrets stay on the server. Manage prices in{" "}
+            <Link to="/usage">Usage & Costs</Link>.
+          </>
+        }
         type="info"
         showIcon
         style={{ marginBottom: 24 }}
       />
       <QueryState loading={agents.isLoading} error={agents.error}>
         <Tabs
-          tabPosition="left"
+          tabPlacement="top"
           items={agents.data?.map((agent) => ({
             key: agent.id,
             label: agent.name,
@@ -89,34 +95,32 @@ function AgentForm({ agent }: { agent: Agent }) {
         key={agent.id + agent.instructionVersion}
         initialValues={agent}
         layout="vertical"
-        onFinish={(values) => mutation.mutate(values)}
+        onFinish={(values) => mutation.mutate({ ...agent, ...values })}
       >
         <div className="form-grid">
           <Form.Item label="Model" name="model" rules={[{ required: true }]}>
             <Input placeholder="Available model identifier" />
           </Form.Item>
-          <Form.Item label="Model context window (tokens)" name="modelContextTokens" rules={[{ required: true }]}><InputNumber min={1025} /></Form.Item>
-          <Form.Item label="Agent input limit (tokens)" name="maxInputTokens" rules={[{ required: true }]}><InputNumber min={1} /></Form.Item>
+          <Form.Item
+            label="Model context window (tokens)"
+            name="modelContextTokens"
+            rules={[{ required: true }]}
+          >
+            <InputNumber min={1025} />
+          </Form.Item>
+          <Form.Item
+            label="Agent input limit (tokens)"
+            name="maxInputTokens"
+            rules={[{ required: true }]}
+          >
+            <InputNumber min={1} />
+          </Form.Item>
           <Form.Item
             label="Maximum output tokens"
             name="maxOutputTokens"
             rules={[{ required: true }]}
           >
             <InputNumber min={100} max={16000} />
-          </Form.Item>
-          <Form.Item
-            label="Input price / million tokens (USD)"
-            name="inputCostPerMillion"
-            rules={[{ required: true }]}
-          >
-            <InputNumber min={0.001} step={0.1} />
-          </Form.Item>
-          <Form.Item
-            label="Output price / million tokens (USD)"
-            name="outputCostPerMillion"
-            rules={[{ required: true }]}
-          >
-            <InputNumber min={0.001} step={0.1} />
           </Form.Item>
         </div>
         <Form.Item label="Enabled" name="enabled" valuePropName="checked">

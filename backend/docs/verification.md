@@ -146,3 +146,35 @@ Regression coverage includes already-completed criteria, no-op implementation, e
 The real repository was `ghptc/aep-sandbox-m8-20261028-3a0ed9`, current default/merge commit `eb4462114a9c7c5f95b4db99ee50013d5ea3f94a`. Source `feature.mjs` returns numeric 2; the existing Node assertion expects numeric 2. One test passed at source revision `987f8a8c0454441834b304fe3a57d6d84a559788433e09de60d73318ad9e5dae`. [Existing PR #1](https://github.com/ghptc/aep-sandbox-m8-20261028-3a0ed9/pull/1) is merged; its feature head is `1eb536ce57b8ebc0f5346f7d6f5572f142abdd85`. Repository `pushed_at` was unchanged across this check. Disposable fixture tests ran only inside the hardened Docker workload; no generated repository code ran on the workstation host.
 
 Reproduce the remote read-only check using `VERIFY_DISPOSABLE_REPOSITORY=1 EXECUTOR_CONFIG_PATH=<owner-managed-config> EXECUTOR_TEST_IMAGE=<immutable-image-id>` and the local executor test project. Add `RUN_LOCAL_EXECUTOR_TESTS=1` to include the four isolated Docker regressions. No OpenAI call or new sandbox delivery was needed or claimed. Owner development services and existing data remain intact; deploying the new daemon and configuring its `node`/composite profiles is separate from this verification. Further edits on an existing reconciled feature branch pause for explicit delivery handling instead of opening another PR.
+
+## Engineering workspace UX redesign — 2026-10-29
+
+Implemented in isolated worktree `/tmp/aep-ux-worktree` on `feat/engineering-workspace-ui`, preserving concurrent unrelated changes in the owner's original worktree. Audit preceded implementation; see [ux-audit.md](ux-audit.md). No production database migration, live provider call, deployment or automatic merge was performed.
+
+Verification of the UX milestone based on `54d13df`:
+
+| Check | Actual result |
+| --- | --- |
+| .NET restore and single-worker build | Passed; 0 warnings, 0 errors |
+| Full backend suite with isolated MongoDB | **84 passed, 5 explicit opt-in skips**: Application 20, Domain 17, Architecture 2, Integration 32, LocalExecutor 13 |
+| Frontend clean install | Passed; npm reported 0 vulnerabilities |
+| TypeScript typecheck | Passed |
+| Frontend unit/component tests | **25 passed**, three files |
+| Playwright browser suite | **2 passed**, 17.6 seconds, dedicated ports 16088/16173 |
+| Production React build | Passed; existing large Monaco/vendor chunk warning remains |
+| Production Docker build | Passed; separate tag `ai-engineering-platform:ux-review`, image config `sha256:6e9ff79594b13e9575d269ee71a777e185d49a4b552e5725161ec4818dd86739` |
+| Whitespace/source review | `git diff --check` passed; reviewed persisted-before-publish, owner authorization, scoped evidence, Markdown sanitization, price/history isolation and original budget/approval checks |
+
+Regression evidence includes 1,002+ persisted events replayed through real hub logic across multiple 500-record batches, reconnect from the completed watermark, no duplicates, cold snapshot behavior, latest-first cursor pagination, a preserved 100,000-character diagnostic original behind a preview, scoped evidence 404s, historical receipt arithmetic, price-only updates and owner authentication. Frontend tests cover shared subscriptions, out-of-order/deduplicated replay, initial connection retry and cleanup, selected specialists, recorded handoffs, scrolling/auto-follow freeze and Jump to Latest, readable Markdown, safe lazy JSON, cost separation, clarification and terminal states. Browser tests create a project, save instructions/messages, launch a focused four-specialist task, inspect actual persisted deterministic evidence, approve delivery through the existing backend and reload completed state; they also inspect 1,000 history events and mobile light-mode navigation without page overflow.
+
+The first final repetition failed when isolated `aep-ux-mongo` exhausted file descriptors and exited 139 (`OOMKilled=false`), producing Mongo connection/500 failures. Its container/data were retained. The complete successful repeat used fresh `aep-ux-final-mongo` at localhost:27031 with a 65,536 file-descriptor limit and bounded memory/cache. Test fixtures use unique databases. Owner services and production data were not restarted, replaced or modified. Vitest emits existing jsdom/Ant Design CSS and pseudo-element warnings; no test or unhandled-error failure is hidden.
+
+Screenshots from that successful deterministic browser run: [dashboard](ux-evidence/dashboard-dark.png), [execution/team/approval](ux-evidence/execution-dark.png), [usage/pricing separation](ux-evidence/usage-dark.png), [large diagnostic Drawer](ux-evidence/evidence-drawer-dark.png), [mobile light-mode team](ux-evidence/mobile-light.png). These are persisted test-host interactions, not new live OpenAI/GitHub/sandbox success. The two live integration tests and three real executor tests were deliberately skipped in this UX milestone; previous live evidence above remains historical evidence only.
+
+Remaining limits: dashboard/budget panels summarize recent runs and link to full history; legacy missing model/task/tool-input metadata is unavailable; usage totals stream the existing receipt ledger rather than introducing an analytics subsystem; existing Monaco chunks remain large. Full originals, old events and artifacts remain accessible. No imaginary activity, billing confirmation or source-control success is shown.
+
+### Compatibility with current protected master
+
+Integrated `baf7b72` (PR 7 execution reconciliation/profile fixes) using merge commit `90b5d74`, retaining both sets of implementation and verification notes. This PR does not reimplement or remove those execution fixes. The merged .NET restore/build passed with zero warnings/errors; the full merged backend suite passed **92 tests with 7 explicit opt-in skips** (Application 20, Architecture 2, Domain 17, Integration 35, LocalExecutor 18). The seven skips comprise two live-provider and five real-executor opt-in tests inherited from current master. Merged Playwright passed **2 tests in 16.6 seconds**, again using dedicated ports 16088/16173 and MongoDB 27031. Updated screenshots reflect that merged run. A final focused regression also checks artifact-reference navigation back to the source event and ensures displayed metadata comes from the fetched original.
+
+Final delivery repetition after the artifact metadata correction: TypeScript and production build passed; **26 frontend tests passed**, and Playwright **2 passed in 17.8 seconds**. Final Docker image config: `sha256:039acd2ce21a7257e277f2409b0c3e1477c4b5e4d6c2b6fa701139abceea6f9e`. The temporary verification MongoDB service was stopped after testing; both test containers/data remain retained. No owner service was stopped.

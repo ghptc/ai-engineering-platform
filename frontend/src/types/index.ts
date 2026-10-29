@@ -26,7 +26,14 @@ export interface Project {
     defaultBranch: string;
   };
 }
-export interface FocusedTask { title: string; description: string; acceptanceCriteria: string[]; requiresBusinessAnalysis?: boolean; requiresArchitecture?: boolean; developers?: string[]; }
+export interface FocusedTask {
+  title: string;
+  description: string;
+  acceptanceCriteria: string[];
+  requiresBusinessAnalysis?: boolean;
+  requiresArchitecture?: boolean;
+  developers?: string[];
+}
 export interface Run {
   tasks: FocusedTask[];
   taskIndex: number;

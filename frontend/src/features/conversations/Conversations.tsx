@@ -4,48 +4,51 @@ import {
   Avatar,
   Button,
   Card,
+  Empty,
   Input,
   Select,
   Space,
   Typography,
-  Empty,
 } from "antd";
-import { RobotOutlined, SendOutlined, UserOutlined } from "@ant-design/icons";
+import { RobotOutlined, UserOutlined, SendOutlined } from "@ant-design/icons";
+import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
-import { Heading, QueryState, useApi, jsonText } from "../../components/Common";
-import { useLiveEvents } from "../../hooks/useLiveEvents";
+import { Heading, QueryState, useApi } from "../../components/Common";
+import {
+  LongMarkdown,
+  ReadableEntry,
+  JsonDetails,
+} from "../../components/Readable";
+import { human, list, parse } from "../../lib/engineering";
+import { useLiveEvents, type RecordWindow } from "../../hooks/useLiveEvents";
+import { TaskLauncher } from "../projects/TaskLauncher";
+import { Collapse } from "antd";
 import type { Entry, Page, Project } from "../../types";
-export function Conversations({ agents = false }: { agents?: boolean }) {
+export function Conversations() {
   const projects = useApi<Page<Project>>("/projects");
   const [project, setProject] = useState<string>();
   return (
     <>
       <Heading
-        eyebrow={agents ? "ENGINEERING TEAM" : "CLIENT COMMUNICATION"}
-        title={agents ? "Agent collaboration" : "Conversations"}
-        description={
-          agents
-            ? "Persisted agent messages, tool evidence, and engineering decisions."
-            : "Share context and feedback with your engineering team."
-        }
+        eyebrow="CLIENT COMMUNICATION"
+        title="Conversations"
+        description="Saved client context and analyst replies. Sending a message does not start an execution."
       />
       <Select
         aria-label="Select project"
         placeholder="Select project"
-        style={{ minWidth: 260, marginBottom: 24 }}
+        className="view-toolbar"
+        style={{ width: 280 }}
+        value={project}
+        onChange={setProject}
         options={projects.data?.items.map((p) => ({
           label: p.name,
           value: p.id,
         }))}
-        value={project}
-        onChange={setProject}
       />
       {project ? (
-        <ConversationPanel
-          projectId={project}
-          type={agents ? "AgentConversation" : "ClientConversation"}
-        />
+        <ConversationPanel projectId={project} type="ClientConversation" />
       ) : (
         <Empty description="Select a project to view saved conversations." />
       )}
@@ -55,132 +58,195 @@ export function Conversations({ agents = false }: { agents?: boolean }) {
 export function ConversationPanel({
   projectId,
   type,
+  taskActions = true,
 }: {
   projectId: string;
   type: string;
+  taskActions?: boolean;
 }) {
   useLiveEvents(projectId);
+  const project = useApi<Project>(`/projects/${projectId}`);
   const conversations = useApi<Page<Entry>>(
-    "/projects/" + projectId + "/conversations",
+    `/projects/${projectId}/conversations`,
   );
   const [selected, setSelected] = useState<string>();
+  const [before, setBefore] = useState<number>();
   const options =
-    conversations.data?.items.filter((x) => x.name === type) || [];
-  const id = options.some((x) => x.id === selected) ? selected : options[0]?.id;
-  const messages = useApi<Page<Entry>>(
-    "/conversations/" + id + "/messages",
+    conversations.data?.items.filter((c) => c.name === type) ?? [];
+  const id = options.some((c) => c.id === selected)
+    ? selected
+    : options.at(-1)?.id;
+  const messages = useApi<RecordWindow>(
+    `/conversations/${id}/feed?limit=30${before != null ? `&before=${before}` : ""}`,
     !!id,
+    before == null ? 10000 : false,
   );
-  const [text, setText] = useState("");
+  const [content, setContent] = useState("");
   const { message } = App.useApp();
   const client = useQueryClient();
+  const refresh = () =>
+    void client.invalidateQueries({
+      predicate: (q) =>
+        String(q.queryKey[0]).includes(
+          `/projects/${projectId}/conversations`,
+        ) || String(q.queryKey[0]).includes(`/conversations/${id}/`),
+    });
   const create = useMutation({
     mutationFn: () =>
-      api<Entry>("/projects/" + projectId + "/conversations", "POST", {}),
-    onSuccess: (entry) => {
-      setSelected(entry.id);
-      void client.invalidateQueries();
+      api<Entry>(`/projects/${projectId}/conversations`, "POST", {}),
+    onSuccess: (e) => {
+      setSelected(e.id);
+      setBefore(undefined);
+      refresh();
     },
     onError: (e) => message.error(e.message),
   });
   const send = useMutation({
-    mutationFn: () =>
-      api("/conversations/" + id + "/messages", "POST", { content: text }),
+    mutationFn: () => api(`/conversations/${id}/messages`, "POST", { content }),
     onSuccess: () => {
-      setText("");
-      void client.invalidateQueries();
+      setContent("");
+      setBefore(undefined);
+      refresh();
+      message.success("Message saved. No execution started.");
     },
     onError: (e) => message.error(e.message),
   });
   const reply = useMutation({
-    mutationFn: () => api("/conversations/" + id + "/reply", "POST", {}),
-    onSuccess: () => {
-      void client.invalidateQueries();
-    },
+    mutationFn: () => api(`/conversations/${id}/reply`, "POST", {}),
+    onSuccess: refresh,
     onError: (e) => message.error(e.message),
   });
-  const submit = useMutation({
+  const context = useMutation({
     mutationFn: () =>
-      api("/projects/" + projectId + "/contexts", "POST", { content: text }),
+      api(`/projects/${projectId}/contexts`, "POST", { content }),
     onSuccess: () => {
-      setText("");
-      message.success("Context saved. Start an execution to process it.");
-      void client.invalidateQueries();
+      setContent("");
+      message.success("Project knowledge saved. No execution started.");
     },
     onError: (e) => message.error(e.message),
   });
   return (
-    <Card className="conversation">
+    <Card
+      title={
+        type === "ClientConversation"
+          ? "Client conversation"
+          : "Saved agent conversation"
+      }
+    >
       <div className="conversation-toolbar">
         <Select
           aria-label="Conversation"
           placeholder="Saved conversations"
+          style={{ minWidth: 220, maxWidth: "100%" }}
           value={id}
-          onChange={setSelected}
-          style={{ minWidth: 260 }}
+          onChange={(v) => {
+            setSelected(v);
+            setBefore(undefined);
+          }}
           options={options.map((c) => ({
+            label: new Date(c.createdAt).toLocaleString(),
             value: c.id,
-            label:
-              new Date(c.createdAt).toLocaleString() +
-              (c.runId ? " · " + c.runId.slice(0, 8) : ""),
           }))}
         />
-        {type === "ClientConversation" && (
-          <Button onClick={() => create.mutate()} loading={create.isPending}>
-            New conversation
-          </Button>
-        )}
+        <Space wrap>
+          {type === "ClientConversation" && (
+            <Button onClick={() => create.mutate()} loading={create.isPending}>
+              New conversation
+            </Button>
+          )}
+          {project.data && taskActions && (
+            <TaskLauncher
+              project={project.data}
+              showInstructions={false}
+              initialTask={{
+                description: messages.data?.items
+                  .find((e) => e.name === "Client")
+                  ?.content.slice(0, 12000),
+                criteria: list(
+                  parse(
+                    messages.data?.items.find((e) => e.name !== "Client")
+                      ?.content ?? "",
+                  ),
+                  "AcceptanceCriteria",
+                )
+                  .map(String)
+                  .join("\n"),
+              }}
+            />
+          )}
+        </Space>
       </div>
-      <div className="message-list">
+      <div className="message-list" role="region" aria-label="Saved messages">
         <QueryState
           loading={messages.isLoading && !!id}
           error={messages.error}
           empty={!messages.data?.items.length}
         >
-          {messages.data?.items.map((entry) => (
+          {[...(messages.data?.items ?? [])].reverse().map((e) => (
             <article
-              className={
-                "message " + (entry.name === "Client" ? "client-message" : "")
-              }
-              key={entry.id}
+              className={`message ${e.name === "Client" ? "client-message" : ""}`}
+              key={e.id}
             >
               <Avatar
                 icon={
-                  entry.name === "Client" ? <UserOutlined /> : <RobotOutlined />
+                  e.name === "Client" ? <UserOutlined /> : <RobotOutlined />
                 }
               />
               <div>
                 <div className="message-meta">
-                  <strong>
-                    {entry.name.replace(/([a-z])([A-Z])/g, "$1 $2")}
-                  </strong>
-                  <time>{new Date(entry.createdAt).toLocaleString()}</time>
+                  <strong>{human(e.name)}</strong>
+                  <time>{new Date(e.createdAt).toLocaleString()}</time>
                 </div>
-                <pre className="message-content">{jsonText(entry.content)}</pre>
-                {entry.runId && (
-                  <Typography.Text type="secondary">
-                    Execution {entry.runId.slice(0, 12)}
-                  </Typography.Text>
+                {e.name === "Client" ? (
+                  <LongMarkdown content={e.content} />
+                ) : (
+                  <ReadableEntry entry={e} />
+                )}
+                <Collapse
+                  size="small"
+                  ghost
+                  items={[
+                    {
+                      key: "raw",
+                      label: "Original message",
+                      children: <JsonDetails content={e.content} />,
+                    },
+                  ]}
+                />
+                {e.runId && (
+                  <Link to={`/executions/${e.runId}`}>Related execution ↗</Link>
                 )}
               </div>
             </article>
           ))}
         </QueryState>
       </div>
+      <Space className="history-controls">
+        <Button
+          disabled={!messages.data?.hasMore}
+          onClick={() => setBefore(messages.data?.nextBefore)}
+        >
+          Older messages
+        </Button>
+        <Button disabled={before == null} onClick={() => setBefore(undefined)}>
+          Latest messages
+        </Button>
+      </Space>
       {type === "ClientConversation" && (
         <div className="composer">
           <Input.TextArea
             aria-label="Message"
-            placeholder="Describe your requirements, request a change, or reference an artifact…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
+            placeholder="Describe work or provide feedback. Sending saves a message only."
             rows={3}
+            maxLength={100000}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
           />
           <Space wrap>
             <Button
               type="primary"
               icon={<SendOutlined />}
-              disabled={!id || !text.trim()}
+              disabled={!id || !content.trim()}
               loading={send.isPending}
               onClick={() => send.mutate()}
             >
@@ -194,16 +260,17 @@ export function ConversationPanel({
               Ask analyst
             </Button>
             <Button
-              disabled={!text.trim()}
-              loading={submit.isPending}
-              onClick={() => submit.mutate()}
+              disabled={!content.trim()}
+              loading={context.isPending}
+              onClick={() => context.mutate()}
             >
               Save as project context
             </Button>
-            <Typography.Text type="secondary">
-              Saved context is processed when an execution starts.
-            </Typography.Text>
           </Space>
+          <Typography.Paragraph type="secondary">
+            Messages and analyst replies stay here. Use Start focused task to
+            authorize implementation.
+          </Typography.Paragraph>
         </div>
       )}
     </Card>
