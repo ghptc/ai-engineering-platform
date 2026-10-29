@@ -100,7 +100,7 @@ export function ProjectForm({
       <div className="form-grid">
         {[
           ["Max iterations", "maxIterations", 20],
-          ["Max tool calls", "maxToolCalls", 200],
+          ["Max tool calls", "maxToolCalls", 1000],
           ["Duration (minutes)", "maxDurationMinutes", 240],
           ["Budget (USD)", "maxBudgetUsd", 1000],
           ["Stage retries", "maxRetries", 5],

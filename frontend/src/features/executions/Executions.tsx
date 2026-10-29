@@ -25,6 +25,7 @@ import { ApprovalCard } from "../reviews/Approvals";
 import { Collapse } from "antd";
 import { Markdown } from "../../components/Readable";
 import { EvidenceDrawer } from "../../components/EvidenceDrawer";
+import { ExecutionCapacity } from "./ExecutionCapacity";
 import { ActivityFeed } from "./ActivityFeed";
 import type { Entry, Page, Run } from "../../types";
 export function Executions() {
@@ -346,7 +347,7 @@ export function ExecutionDetail() {
                 className="section-gap"
                 type="error"
                 showIcon
-                title="Stage failed"
+                title={`Stage failed${r.failureCategory ? ` · ${human(r.failureCategory)}` : ""}`}
                 description={r.failureReason}
               />
             )}
@@ -386,6 +387,18 @@ export function ExecutionDetail() {
                 }
               />
             )}
+          {r.toolCalls / r.policy.maxToolCalls >= 0.8 && (
+            <Alert
+              className="section-gap"
+              type={
+                r.toolCalls / r.policy.maxToolCalls >= 0.95
+                  ? "error"
+                  : "warning"
+              }
+              title={`${r.toolCalls / r.policy.maxToolCalls >= 0.95 ? "95%" : "80%"} tool allowance reached`}
+              description="Checkpoint current work. Review the Capacity tab to explicitly approve an extension."
+            />
+          )}
           <Tabs
             activeKey={params.get("tab") ?? "team"}
             onChange={(tab) => setParams({ tab }, { replace: true })}
@@ -400,6 +413,11 @@ export function ExecutionDetail() {
                     events={events.data?.items ?? []}
                   />
                 ),
+              },
+              {
+                key: "capacity",
+                label: "Capacity",
+                children: <ExecutionCapacity run={r} />,
               },
               {
                 key: "timeline",

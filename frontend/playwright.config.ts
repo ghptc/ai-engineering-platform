@@ -17,7 +17,7 @@ export default defineConfig({
       url: `http://localhost:${apiPort}/health/live`,
       reuseExistingServer: false,
       timeout: 90000,
-      env: { E2E_API_PORT: apiPort },
+      env: { E2E_API_PORT: apiPort, E2E_SEED_UX_HISTORY: "1" },
     },
     {
       command: `npm run dev -- --strictPort --port ${frontendPort}`,

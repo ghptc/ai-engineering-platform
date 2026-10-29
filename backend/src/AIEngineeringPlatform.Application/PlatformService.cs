@@ -2,13 +2,15 @@ using AIEngineeringPlatform.Domain;
 using System.Text.Json;
 namespace AIEngineeringPlatform.Application;
 
-public sealed class PlatformService(IPlatformStore store, IExecutionPublisher publisher)
+public sealed class PlatformService(IPlatformStore store, IExecutionPublisher publisher, ExecutionCapacity? capacity = null)
 {
-    public async Task<ExecutionRun> StartTasksAsync(string projectId, string key, EngineeringTask[] tasks, CancellationToken ct)
+    public async Task<ExecutionRun> StartTasksAsync(string projectId, string key, EngineeringTask[] tasks, CancellationToken ct, ExecutionPolicy? policy = null)
     {
         if (string.IsNullOrWhiteSpace(key) || key.Length > 128) throw new ArgumentException("Idempotency-Key is required (maximum 128 characters).");
         var project = await ProjectAsync(projectId, ct);
+        (capacity ?? new()).Validate(project.ExecutionPolicy);
         if (project.Status != "Active") throw new InvalidOperationException("Project is archived.");
+        if (policy != null) { (capacity ?? new()).Validate(policy); project = project with { ExecutionPolicy = policy }; }
         if (tasks is not { Length: > 0 } || tasks.Length > project.ExecutionPolicy.MaxIterations || tasks.Any(x => x == null)) throw new ArgumentException("Queue 1 task up to the existing execution iteration limit.");
         foreach (var task in tasks)
         {
@@ -28,7 +30,7 @@ public sealed class PlatformService(IPlatformStore store, IExecutionPublisher pu
         if (string.IsNullOrWhiteSpace(content) || content.Length > 12000) throw new ArgumentException("Clarification requires 1–12000 characters.");
         var run = await RunAsync(id, ct);
         if (run.Version != expectedVersion) throw new ConcurrencyException();
-        if (run.CurrentStage != RunStage.Failed || run.FailureReason?.StartsWith("Human clarification required:", StringComparison.Ordinal) != true) throw new InvalidOperationException("This execution is not awaiting clarification.");
+        if (run.CurrentStage is not (RunStage.Failed or RunStage.Paused) || run.FailureReason?.StartsWith("Human clarification required:", StringComparison.Ordinal) != true) throw new InvalidOperationException("This execution is not awaiting clarification.");
         run.CheckLimits(DateTimeOffset.UtcNow);
         var next = run.Transition(run.ResumeStage);
         var conversationId = run.Id + "-clarifications";
@@ -57,6 +59,7 @@ public sealed class PlatformService(IPlatformStore store, IExecutionPublisher pu
     public async Task<Project> SaveProjectAsync(Project project, long? version, CancellationToken ct)
     {
         project.Validate();
+        (capacity ?? new()).Validate(project.ExecutionPolicy);
         if (!await store.SaveProjectAsync(project with { Version = (version ?? -1) + 1, UpdatedAt = DateTimeOffset.UtcNow }, version, ct)) throw new ConcurrencyException();
         return await ProjectAsync(project.Id, ct);
     }
@@ -64,10 +67,20 @@ public sealed class PlatformService(IPlatformStore store, IExecutionPublisher pu
     {
         if (string.IsNullOrWhiteSpace(key) || key.Length > 128) throw new ArgumentException("Idempotency-Key is required (maximum 128 characters).");
         var project = await ProjectAsync(projectId, ct);
+        (capacity ?? new()).Validate(project.ExecutionPolicy);
         if (project.Status != "Active") throw new InvalidOperationException("Project is archived.");
         var requirements = await store.RecordsAsync("requirement", projectId, null, null, 0, 0, 1000, ct);
         var superseded = requirements.Select(x => x.Metadata.GetValueOrDefault("supersedes")).Where(x => x != null).ToHashSet();
         return await store.CreateRunAsync(new() { ProjectId = projectId, IdempotencyKey = key, Policy = project.ExecutionPolicy, ProjectSnapshot = project, RequirementIds = requirements.Where(x => x.Status != "Verified" && !superseded.Contains(x.Id)).Select(x => x.Id).ToArray() }, ct);
+    }
+    public async Task<ExecutionRun> ExtendLimitsAsync(string id, ExecutionPolicy policy, string reason, long version, CancellationToken ct)
+    {
+        (capacity ?? new()).Validate(policy);
+        var run = await RunAsync(id, ct);
+        if (run.Version != version) throw new ConcurrencyException();
+        var updated = run.ExtendLimits(policy, reason, DateTimeOffset.UtcNow);
+        if (!await store.SaveRunAsync(updated, version, null, ct)) throw new ConcurrencyException();
+        return await RunAsync(id, ct);
     }
     public async Task<ExecutionRun> ControlAsync(string id, string action, CancellationToken ct)
     {
@@ -87,7 +100,7 @@ public sealed class PlatformService(IPlatformStore store, IExecutionPublisher pu
     }
     public async Task<RecordEntry> EventAsync(ExecutionRun run, string name, string content, CancellationToken ct)
     {
-        var entry = new RecordEntry { Kind = "event", ProjectId = run.ProjectId, RunId = run.Id, Name = name, Content = content };
+        var entry = new RecordEntry { Kind = "event", ProjectId = run.ProjectId, RunId = run.Id, Name = name, Content = content, Metadata = new() { ["taskIndex"] = run.TaskIndex.ToString(), ["iteration"] = run.Iteration.ToString(), ["stage"] = run.Status } };
         await store.AppendAsync(entry, ct);
         await publisher.PublishAsync(entry, ct);
         return entry;

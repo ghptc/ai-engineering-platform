@@ -190,7 +190,7 @@ describe("engineering workspace", () => {
       ),
       kind: "handoff",
       status: "Completed",
-      metadata: { taskIndex: "0", iteration: "1" },
+      metadata: { taskIndex: "0", iteration: "1", targetAgent: "TestEngineer" },
     };
     const msg = {
       ...entry(
@@ -214,7 +214,9 @@ describe("engineering workspace", () => {
     expect(screen.getByText("Repository inspected")).toBeInTheDocument();
     expect(screen.queryByText(/"ToolCalls"/)).not.toBeInTheDocument();
     expect(
-      screen.getByLabelText("Selected engineering team").children,
+      screen
+        .getByLabelText("Live directed engineering workflow")
+        .querySelectorAll("g[role=button]"),
     ).toHaveLength(4);
   });
   it("keeps activity to 50 rows, pauses updates and jumps to latest", async () => {
@@ -276,9 +278,7 @@ describe("engineering workspace", () => {
     );
     mount(<ActivityFeed runId="r" />);
     fireEvent.click(await screen.findByText("Original event"));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "TestReport" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "TestReport" }));
     expect(
       await screen.findByText("Original validation evidence"),
     ).toBeInTheDocument();

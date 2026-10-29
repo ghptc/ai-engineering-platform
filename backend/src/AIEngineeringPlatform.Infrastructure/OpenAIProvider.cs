@@ -35,6 +35,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         Array("architectureDecisions", """
         {"type":"object","additionalProperties":false,"required":["title","context","decision","consequences","mermaid"],"properties":{"title":{"type":"string"},"context":{"type":"string"},"decision":{"type":"string"},"consequences":{"type":"string"},"mermaid":{"type":"string"}}}
         """, role == AgentRole.Architect ? "Required nonempty final architectural decisions with constraints, API contracts, auth and persistence; use Mermaid only when useful." : "Use an empty array unless proposing an ADR.");
+        Array("reworkTargets", "{\"type\":\"string\",\"enum\":[\"BackendEngineer\",\"FrontendEngineer\"]}", "On rejection explicitly identify responsible selected developers from actual findings. Both means an ordered bounded correction plan. Empty if responsibility cannot be established; never guess.");
         if (allowedTools != null)
         {
             properties["toolCalls"]!["items"]!["properties"]!["name"]!["enum"] = new JsonArray((allowedTools.Length > 0 ? allowedTools : ["Unavailable"]).Select(x => (JsonNode?)JsonValue.Create(x)).ToArray());
@@ -72,7 +73,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         using var json = JsonDocument.Parse(response.GetOutputText()); var root = json.RootElement;
         string[] Strings(string name) => root.GetProperty(name).EnumerateArray().Select(x => x.GetString() ?? "").ToArray();
         var calls = root.GetProperty("toolCalls").EnumerateArray().Select(x => new ToolCall(x.GetProperty("name").GetString()!, JsonDocument.Parse(x.GetProperty("arguments").GetString()!).RootElement.Clone())).ToArray();
-        var output = new AgentResult(root.GetProperty("summary").GetString()!, root.GetProperty("decision").GetString()!, Strings("acceptanceCriteria"), Strings("evidence"), Strings("assumptions"), calls, root.GetProperty("nextContext").GetString()!, Read<RequirementProposal[]>("requirements"), Read<ReviewFinding[]>("findings"), Read<QualityCheck[]>("checks"), Strings("openQuestions"), Read<ArchitectureDecision[]>("architectureDecisions"));
+        var output = new AgentResult(root.GetProperty("summary").GetString()!, root.GetProperty("decision").GetString()!, Strings("acceptanceCriteria"), Strings("evidence"), Strings("assumptions"), calls, root.GetProperty("nextContext").GetString()!, Read<RequirementProposal[]>("requirements"), Read<ReviewFinding[]>("findings"), Read<QualityCheck[]>("checks"), Strings("openQuestions"), Read<ArchitectureDecision[]>("architectureDecisions"), Strings("reworkTargets"));
         T? Read<T>(string name) => root.GetProperty(name).Deserialize<T>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         var input = response.Usage?.InputTokenCount ?? throw new InvalidOperationException("Provider usage is missing.");
         var completion = response.Usage.OutputTokenCount;

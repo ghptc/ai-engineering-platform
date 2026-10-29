@@ -16,6 +16,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddSingleton(builder.Configuration.GetSection("ExecutionCapacity").Get<ExecutionCapacity>() ?? new());
 builder.Logging.ClearProviders(); builder.Logging.AddJsonConsole();
 builder.Services.AddOptions<OwnerOptions>().Configure(o => { o.Mode = builder.Configuration["APPLICATION_AUTH_MODE"] ?? "Owner"; o.CredentialHash = builder.Configuration["APPLICATION_OWNER_CREDENTIAL_SECRET"] ?? ""; })
     .Validate(o => o.Mode == "Owner" && OwnerCredentials.ValidFormat(o.CredentialHash), "Owner authentication requires a PBKDF2 credential hash; see README.").ValidateOnStart();
@@ -74,7 +75,7 @@ app.UseExceptionHandler(error => error.Run(async context =>
         ConfigurationException => (503, "Integration unavailable"),
         _ => (500, "Unexpected server error")
     };
-    await Results.Problem(statusCode: status, title: title, detail: status == 500 ? "Use the correlation identifier to locate operational diagnostics." : exception?.Message, extensions: new Dictionary<string, object?> { ["traceId"] = context.TraceIdentifier }).ExecuteAsync(context);
+    await Results.Problem(statusCode: status, title: title, detail: status == 500 ? "Use the correlation identifier to locate operational diagnostics." : SecretRedactor.Redact(exception?.Message ?? ""), extensions: new Dictionary<string, object?> { ["traceId"] = context.TraceIdentifier }).ExecuteAsync(context);
 }));
 app.UseStatusCodePages(async context =>
 {
@@ -136,7 +137,7 @@ api.MapPatch("/requirements/{id}", async (string id, RequirementInput input, IPl
 });
 api.MapPost("/projects/{id}/tasks", async (string id, TaskQueueInput input, HttpContext ctx, PlatformService service, CancellationToken ct) =>
 {
-    var run = await service.StartTasksAsync(id, ctx.Request.Headers["Idempotency-Key"].ToString(), input.Tasks, ct);
+    var run = await service.StartTasksAsync(id, ctx.Request.Headers["Idempotency-Key"].ToString(), input.Tasks, ct, input.Policy);
     return Results.Accepted($"/api/v1/runs/{run.Id}", run);
 });
 api.MapPatch("/projects/{id}/instructions", async (string id, ContentInput input, PlatformService service, IPlatformStore store, CancellationToken ct) =>
@@ -196,7 +197,7 @@ api.MapGet("/runs/{id}/stream", async (string id, string? kind, long? before, in
 {
     await service.RunAsync(id, ct);
     kind ??= "event";
-    if (kind is not ("event" or "message" or "handoff" or "artifact" or "approval")) throw new ArgumentException("Unsupported activity kind.");
+    if (kind is not ("event" or "message" or "handoff" or "artifact" or "approval" or "tool")) throw new ArgumentException("Unsupported activity kind.");
     return await queries.WindowAsync(kind, id, null, before, Math.Clamp(limit ?? 50, 1, 100), ct);
 });
 api.MapGet("/conversations/{id}/feed", async (string id, long? before, int? limit, IWorkspaceQueries queries, CancellationToken ct) => await queries.WindowAsync("message", null, id, before, Math.Clamp(limit ?? 30, 1, 100), ct));
@@ -205,6 +206,8 @@ api.MapGet("/runs/{id}/details/{kind}/{recordId}", async (string id, string kind
     if (kind is not ("event" or "tool" or "artifact" or "task" or "handoff" or "message")) throw new ArgumentException("Unsupported evidence kind.");
     return await queries.DetailsAsync(id, recordId, kind, ct);
 });
+api.MapGet("/execution-presets", () => new { QuickFix = ExecutionPresets.QuickFix, StandardDevelopment = ExecutionPresets.StandardDevelopment, ExtendedAutonomousDevelopment = ExecutionPresets.ExtendedAutonomousDevelopment });
+api.MapPost("/runs/{id}/limits", (string id, LimitExtensionInput input, PlatformService service, CancellationToken ct) => service.ExtendLimitsAsync(id, input.Policy, input.Reason, input.Version, ct));
 api.MapPost("/runs/{id}/clarification", (string id, ClarificationInput input, PlatformService service, CancellationToken ct) => service.ClarifyAsync(id, input.Content, input.Version, ct));
 api.MapGet("/reviews/feed", (long? before, int? limit, IWorkspaceQueries queries, CancellationToken ct) => queries.WindowAsync("review", null, null, before, Math.Clamp(limit ?? 30, 1, 100), ct));
 api.MapGet("/approvals/feed", (long? before, int? limit, IWorkspaceQueries queries, CancellationToken ct) => queries.WindowAsync("approval", null, null, before, Math.Clamp(limit ?? 30, 1, 100), ct));
@@ -239,7 +242,7 @@ public sealed record LoginRequest(string Password);
 public sealed record ContentInput(string Content);
 public sealed record ClarificationInput(string Content, long Version);
 public sealed record PricingInput(decimal InputCostPerMillion, decimal OutputCostPerMillion);
-public sealed record TaskQueueInput(EngineeringTask[] Tasks);
+public sealed record TaskQueueInput(EngineeringTask[] Tasks, ExecutionPolicy? Policy = null);
 public sealed record DecisionInput(bool Approve, string Reason);
 public sealed record RequirementInput(string Title, string Description, string[] AcceptanceCriteria, int Priority = 1, string[]? Dependencies = null, string AssignedRole = "BackendEngineer");
 public sealed record AgentInput(string Model, bool Enabled, int MaxOutputTokens, decimal InputCostPerMillion, decimal OutputCostPerMillion, string? SystemInstructions, int ModelContextTokens = 128000, int MaxInputTokens = 96000);
@@ -252,3 +255,5 @@ public sealed class ExecutionDefaults
     public ExecutionPolicy Policy() => new(MaxIterations, MaxToolCalls, MaxDurationMinutes, MaxBudgetUsd);
     public bool IsValid() { try { Policy().Validate(); return true; } catch (ArgumentException) { return false; } }
 }
+
+public sealed record LimitExtensionInput(ExecutionPolicy Policy, string Reason, long Version);

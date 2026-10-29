@@ -66,6 +66,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
             WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb);
             string Argument(string key) => request.Arguments.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()! : throw new ArgumentException("Missing string argument: " + key);
             var success = true; int? exitCode = 0; string output;
+            OperationExecution? operationExecution = null;
             switch (request.Operation)
             {
                 case "ReadRepository":
@@ -130,6 +131,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                     if (name == "node" && !profile.Command.SequenceEqual(new[] { "node", "--test" })) throw new ConfigurationException("The node profile must use the fixed node --test argument array.");
                     if (request.Operation == "RunTests" || profile.Command.FirstOrDefault() == "npm") ProfileSelection.Require(sourceFilesForProfile, profile);
                     var execution = await docker.ExecuteAsync(workspace, profile, request, ct);
+                    operationExecution = new(name, profile.Command, "/workspace", SecretRedactor.Redact(execution.Stdout), SecretRedactor.Redact(execution.Stderr));
                     output = execution.Output; exitCode = execution.ExitCode; success = exitCode == 0 && !execution.TimedOut && !execution.OutputExceeded;
                     if (request.Operation == "RunTests")
                     {
@@ -167,7 +169,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
             WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb);
             output = SecretRedactor.Redact(output);
             if (Encoding.UTF8.GetByteCount(output) > request.OutputLimitBytes) { output = "Operation output exceeded its configured bound."; success = false; exitCode = 125; }
-            var response = new SandboxResponse(success, output, "local-" + request.OperationId, exitCode, request.RunId, WorkspaceFiles.Revision(workspace, options.WorkspaceLimitMb));
+            var response = new SandboxResponse(success, output, "local-" + request.OperationId, exitCode, request.RunId, WorkspaceFiles.Revision(workspace, options.WorkspaceLimitMb), operationExecution);
             await SaveAsync(statePath, state, ct);
             await SaveAsync(resultPath, new OperationReceipt(fingerprint, response), ct);
             return response;

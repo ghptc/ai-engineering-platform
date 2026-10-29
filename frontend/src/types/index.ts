@@ -6,6 +6,7 @@ export interface Policy {
   maxRetries: number;
   requireHumanApprovalForMerge: boolean;
   reviewBeforeCommit: boolean;
+  agentToolBudgets?: Record<string, number>;
 }
 export interface Project {
   id: string;
@@ -34,7 +35,34 @@ export interface FocusedTask {
   requiresArchitecture?: boolean;
   developers?: string[];
 }
+export interface ReworkTransition {
+  sourceAgent: string | number;
+  targetAgent: string | number;
+  reason: string;
+  findingIds: string[];
+  taskId: string;
+  iteration: number;
+  workspaceRevision?: string;
+  timestamp: string;
+}
+export interface AgentUsage {
+  agent: string;
+  taskIndex: number;
+  modelRequests: number;
+  toolInvocations: number;
+  failedToolInvocations: number;
+  retriedToolInvocations: number;
+}
 export interface Run {
+  agentTransitions?: {
+    sourceAgent: string | number;
+    targetAgent: string | number;
+    taskIndex: number;
+    iteration: number;
+    timestamp: string;
+  }[];
+  reworkPlan?: ReworkTransition[];
+  usage?: AgentUsage[];
   tasks: FocusedTask[];
   taskIndex: number;
   selectedAgents: string[];
@@ -48,6 +76,7 @@ export interface Run {
   retryCount: number;
   startedAt: string;
   completedAt?: string;
+  failureCategory?: string;
   failureReason?: string;
   cost: number;
   tokenUsage: number;

@@ -16,7 +16,7 @@ public sealed partial class MongoPlatformStore
         if (before != null) f &= Builders<EntryDocument>.Filter.Lt(x => x.Sequence, before.Value);
         limit = Math.Clamp(limit, 1, 100);
         var found = (await entries.Find(f).SortByDescending(x => x.Sequence).Limit(limit + 1).ToListAsync(ct)).Select(x => Decode<RecordEntry>(x.Data)! with { Status = x.Status }).ToArray();
-        var page = found.Take(limit).Select(RecordPresentation.Preview).ToArray();
+        var page = found.Take(limit).Select(x => x with { Content = SecretRedactor.Redact(x.Content) }).Select(RecordPresentation.Preview).ToArray();
         if (kind == "review") page = page.Select(record =>
         {
             for (var iteration=1;iteration<=20;iteration++)
