@@ -247,6 +247,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             }
             var tasks = await Records("task");
             var invocations = await Records("tool");
+            var providerCharges = await ProviderAccounting.ChargesAsync(store, run.Id, ct);
             var usage = tasks.Select(x => JsonSerializer.Deserialize<ModelExecutionResult>(x.Content)!).ToArray();
             var counters = tasks.Select(x => (Role: x.Name, Task: x.Metadata.GetValueOrDefault("taskIndex") ?? "0"))
                 .Concat(invocations.Select(x => (Role: x.Metadata.GetValueOrDefault("agent") ?? "", Task: x.Metadata.GetValueOrDefault("taskIndex") ?? "0"))).Distinct()
@@ -255,7 +256,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                     var operations = invocations.Where(x => x.Metadata.GetValueOrDefault("agent") == key.Role && (x.Metadata.GetValueOrDefault("taskIndex") ?? "0") == key.Task).ToArray();
                     return new AgentUsage(Enum.Parse<AgentRole>(key.Role), int.Parse(key.Task), tasks.Count(x => x.Name == key.Role && (x.Metadata.GetValueOrDefault("taskIndex") ?? "0") == key.Task), operations.Length, operations.Count(x => x.Status == "Failed"), operations.Count(x => x.Metadata.GetValueOrDefault("retry") == "true"));
                 }).ToArray();
-            run = run with { Cost = usage.Sum(x => x.Cost), TokenUsage = usage.Sum(x => x.InputTokens + x.OutputTokens), ToolCalls = invocations.Length, Usage = counters };
+            run = run with { Cost = usage.Where(x => x.Diagnostics == null).Sum(x => x.Cost) + providerCharges.Sum(x => x.Cost), TokenUsage = usage.Where(x => x.Diagnostics == null).Sum(x => x.InputTokens + x.OutputTokens) + providerCharges.Sum(x => (x.Diagnostics.InputTokens ?? 0) + (x.Diagnostics.OutputTokens ?? 0)), ToolCalls = invocations.Length, Usage = counters };
         }
         async Task<ToolResult> RequiredTestsAsync()
         {
@@ -364,7 +365,14 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 {
                     await service.EventAsync(run, "AgentStarted", role.ToString(), ct);
                     var modelStarted = System.Diagnostics.Stopwatch.StartNew();
-                    response = await agents.Single(x => x.Role == role).ExecuteAsync(new(project, run, context, definition), ct);
+                    try { response = await agents.Single(x => x.Role == role).ExecuteAsync(new(project, run, context, definition), ct); }
+                    catch (ProviderException exception)
+                    {
+                        await service.EventAsync(run, "ProviderRequestFailed", JsonSerializer.Serialize(exception.Diagnostics), ct);
+                        await RefreshUsageAsync();
+                        if (!await store.SaveRunAsync(run, run.Version, owner, ct)) throw new ConcurrencyException();
+                        throw;
+                    }
                     await CheckOwnershipAsync();
                     await store.AppendAsync(new() { Id = taskId, Kind = "task", ProjectId = project.Id, RunId = run.Id, Name = role.ToString(), Content = JsonSerializer.Serialize(response), Status = "Completed", Metadata = new() { ["durationMs"] = modelStarted.ElapsedMilliseconds.ToString(), ["responseId"] = response.ResponseId, ["taskIndex"] = run.TaskIndex.ToString(), ["iteration"] = run.Iteration.ToString(), ["model"] = definition.Model } }, ct);
                 }

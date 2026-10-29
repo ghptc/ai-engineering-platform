@@ -22,6 +22,34 @@ public class WorkspaceUxTests : IClassFixture<PlatformFactory>
         (await client.PostAsJsonAsync("/api/v1/auth/login", new { password = PlatformFactory.Password })).EnsureSuccessStatusCode(); return client;
     }
     [Fact]
+    public async Task ProviderReservationsSettleWithoutDoubleChargingSuccessfulTasks()
+    {
+        using var client = await LoginAsync(); var store = factory.Services.GetRequiredService<IPlatformStore>();
+        var project = new Project { Name = "Provider accounting fixture" }; await store.SaveProjectAsync(project, null, default);
+        var run = await store.CreateRunAsync(new() { ProjectId = project.Id, CurrentStage = RunStage.Paused }, default);
+        var diagnostics = new ProviderDiagnostics("provider-accounting-model", "resp_" + run.Id, "req_fixture", "completed", null, null, 100, 50, 1);
+        async Task Receipt(string key, string status, decimal cost, ProviderDiagnostics details)
+        {
+            await store.AppendAsync(new() { Id = run.Id + key + status, Kind = "providerRequest", ProjectId = project.Id, RunId = run.Id, Name = "BackendEngineer", Status = status, Content = JsonSerializer.Serialize(new ProviderCharge(details, cost)), Metadata = new() { ["requestKey"] = key, ["model"] = details.Model } }, default);
+        }
+        await Receipt("success", "Reserved", .1m, diagnostics);
+        await Receipt("success", "Completed", .002m, diagnostics);
+        await Receipt("failed", "Reserved", .1m, diagnostics);
+        await Receipt("failed", "MalformedJson", .003m, diagnostics with { ResponseId = "resp_failed", ErrorCategory = ProviderErrorCategory.MalformedJson });
+        await Receipt("interrupted", "Reserved", .1m, diagnostics with { ResponseId = null, InputTokens = null, OutputTokens = null });
+        await store.AppendAsync(new() { Kind = "task", ProjectId = project.Id, RunId = run.Id, Name = "BackendEngineer", Content = JsonSerializer.Serialize(new ModelExecutionResult(new("ok", "CONTINUE", [], [], [], [], ""), diagnostics.ResponseId!, 100, 50, .002m, diagnostics)) }, default);
+        var ledger = await factory.Services.GetRequiredService<IWorkspaceQueries>().UsageAsync(0, 100, default);
+        var execution = Assert.Single(ledger.Executions, x => x.Key == run.Id);
+        Assert.Equal(.105m, execution.EstimatedCostUsd);
+        Assert.Equal(3, execution.Calls);
+        Assert.Equal(200, execution.InputTokens);
+        var charges = await ProviderAccounting.ChargesAsync(store, run.Id, default);
+        Assert.Equal(.105m, charges.Sum(x => x.Cost));
+        var stream = (await client.GetFromJsonAsync<RecordWindow>($"/api/v1/runs/{run.Id}/stream?kind=providerRequest&limit=10", Json))!;
+        Assert.Equal(5, stream.Items.Count);
+        Assert.Contains(stream.Items, x => x.Content.Contains("MalformedJson"));
+    }
+    [Fact]
     public async Task LargeEventHistoryIsLatestFirstPagedAndOriginalDetailsArePreserved()
     {
         using var client = await LoginAsync(); var store = factory.Services.GetRequiredService<IPlatformStore>();

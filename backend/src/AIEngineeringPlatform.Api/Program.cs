@@ -32,7 +32,7 @@ if (string.IsNullOrWhiteSpace(mongo)) throw new InvalidOperationException("MONGO
 builder.Services.AddSingleton<IPlatformStore>(new MongoPlatformStore(mongo, builder.Configuration["MONGODB_DATABASE"] ?? "ai_engineering_platform"));
 builder.Services.AddSingleton<IWorkspaceQueries>(sp => (MongoPlatformStore)sp.GetRequiredService<IPlatformStore>());
 builder.Services.Configure<LanguageModelOptions>(builder.Configuration.GetSection("LanguageModel"));
-builder.Services.AddSingleton<ILanguageModelProvider>(sp => new OpenAIProvider(builder.Configuration["OPENAI_API_KEY"], sp.GetRequiredService<IOptions<LanguageModelOptions>>().Value));
+builder.Services.AddSingleton<ILanguageModelProvider>(sp => new OpenAIProvider(builder.Configuration["OPENAI_API_KEY"], sp.GetRequiredService<IOptions<LanguageModelOptions>>().Value, store: sp.GetRequiredService<IPlatformStore>()));
 builder.Services.AddHttpClient("sandbox", h => h.Timeout = TimeSpan.FromSeconds(140)).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHttpClient("github", h => h.Timeout = TimeSpan.FromSeconds(60)).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddOptions<RemoteSandboxOptions>().Configure(o => { o.Provider = builder.Configuration["EXECUTION_SANDBOX_PROVIDER"] ?? "Remote"; o.Endpoint = builder.Configuration["EXECUTION_SANDBOX_ENDPOINT"]; o.Token = builder.Configuration["EXECUTION_SANDBOX_TOKEN"]; o.SocketPath = builder.Configuration["EXECUTION_SANDBOX_SOCKET_PATH"]; }).Validate(o => o.Provider is "Remote" or "LocalUnix", "Use Remote or LocalUnix sandbox provider.").ValidateOnStart();
@@ -71,6 +71,7 @@ app.UseExceptionHandler(error => error.Run(async context =>
         ArgumentException or JsonException or BadHttpRequestException => (400, "Validation failed"),
         ConcurrencyException => (409, "Concurrency conflict"),
         UnauthorizedAccessException => (403, "Forbidden"),
+        ProviderException => (502, "OpenAI provider failure"),
         InvalidOperationException => (409, "Operation cannot be performed"),
         ConfigurationException => (503, "Integration unavailable"),
         _ => (500, "Unexpected server error")
@@ -197,7 +198,7 @@ api.MapGet("/runs/{id}/stream", async (string id, string? kind, long? before, in
 {
     await service.RunAsync(id, ct);
     kind ??= "event";
-    if (kind is not ("event" or "message" or "handoff" or "artifact" or "approval" or "tool")) throw new ArgumentException("Unsupported activity kind.");
+    if (kind is not ("event" or "message" or "handoff" or "artifact" or "approval" or "tool" or "providerRequest")) throw new ArgumentException("Unsupported activity kind.");
     return await queries.WindowAsync(kind, id, null, before, Math.Clamp(limit ?? 50, 1, 100), ct);
 });
 api.MapGet("/conversations/{id}/feed", async (string id, long? before, int? limit, IWorkspaceQueries queries, CancellationToken ct) => await queries.WindowAsync("message", null, id, before, Math.Clamp(limit ?? 30, 1, 100), ct));

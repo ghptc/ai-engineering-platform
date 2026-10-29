@@ -5,6 +5,7 @@ public static class FailureDiagnosis
 {
     public static string Category(Exception error, RunStage stage)
     {
+        if (error is ProviderException provider) return "OpenAI" + provider.Diagnostics.ErrorCategory;
         if (error is ExecutionLimitException) return "ExecutionCapacity";
         if (error.Message.Contains("Protected context requires", StringComparison.Ordinal)) return "ContextBudget";
         if (error.Message.Contains("OpenAI", StringComparison.OrdinalIgnoreCase) || error.Message.StartsWith("Model returned", StringComparison.Ordinal)) return "OpenAIProvider";

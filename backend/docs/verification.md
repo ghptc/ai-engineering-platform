@@ -186,3 +186,22 @@ The current milestone's source manifest, complete test results, real local Docke
 ## README-only planning regression — 2026-10-29
 
 See [planning investigation](planning-handoff-investigation.md) for persisted run evidence, root cause, exact source/test manifest, isolated database setup, failed intermediate attempts and final results. Restore/build passed; backend suite passed 136 tests with 7 explicit opt-in skips; separate-tag application image build passed. No live agent cycle, production run resume or runtime deployment was performed. Frontend-specific checks were not rerun for this backend-only change.
+
+## OpenAI parsing and cancellation recovery — 2026-10-29
+
+See [the investigation, recovery policy and QA coverage](openai-provider-investigation.md) for read-only evidence from run `c4c85d98eec34bc199ca2b1551cacf37`, attribution limits and the reviewed implementation. Verified source manifest SHA-256: `3bfc1c80dd665acf06ba899ac0faeceac4e98644d2a97164a07edcb4c40d9957` (algorithm and source scope in that report).
+
+| Check | Final result |
+| --- | --- |
+| `dotnet restore backend/AIEngineeringPlatform.sln` | Passed |
+| `dotnet build backend/AIEngineeringPlatform.sln --no-restore -m:1` | Passed; zero warnings/errors |
+| Full backend suite, `TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27029 RUN_LOCAL_EXECUTOR_TESTS=1 EXECUTOR_TEST_IMAGE=sha256:7742feb1d0b1193a8a6af2efa05805032d1f30c50d0f3dbba4460909f81e48a9 dotnet test backend/AIEngineeringPlatform.sln --no-restore` | **169 passed**: Domain 18, Application 46, Architecture 2, Integration 79, LocalExecutor 24. **3 skipped**: two live-agent checks and one disposable GitHub repository check. Four real Docker workload tests passed. |
+| `npm ci --prefix frontend` | Passed; audit reported zero vulnerabilities |
+| `npm run typecheck --prefix frontend` | Passed |
+| `npm test --prefix frontend` | **32 passed** across 5 files |
+| `npm run build --prefix frontend` | Passed; existing bundle-size advisory remains |
+| `TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27029 npm run e2e --prefix frontend` | **2 passed**, 18.7 seconds, dedicated non-reused ports |
+| `docker build -t ai-engineering-platform:local .` | Passed; final image config `sha256:5ff131f598c40ba435e890e68210b0df5486b1b2c3c1add4b5d2534098f174f9` |
+| Source diff review, `git diff --check` and staged artifact/secret inspection | Passed; no runtime configuration, credentials, raw provider output or generated screenshots staged |
+
+The final backend run follows the last provider/content-validation changes. Frontend verification uses the exact delivered frontend sources. Integration infrastructure failures and corrected intermediate test failures are documented in the investigation rather than counted as successes. Existing production MongoDB data, owner servers, local daemon/configuration, original run state and artifacts were preserved. Only disposable test database containers were created. The application image was built without replacing or restarting the running owner application. Live OpenAI/GitHub App execution and a new live DevPulse compile are not verified. Human review and merge approval remain pending on the feature-branch PR; no automatic merge or deployment is authorized by this delivery.

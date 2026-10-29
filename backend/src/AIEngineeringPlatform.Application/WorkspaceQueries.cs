@@ -5,7 +5,7 @@ namespace AIEngineeringPlatform.Application;
 public sealed record RecordWindow(IReadOnlyList<RecordEntry> Items, long? NextBefore, bool HasMore);
 public sealed record UsageGroup(string Key, long InputTokens, long OutputTokens, decimal EstimatedCostUsd, long Calls);
 public sealed record UsageItem(string Id, DateTimeOffset CreatedAt, string ProjectId, string? RunId, string Agent, string Model, string ResponseId, long InputTokens, long OutputTokens, decimal EstimatedCostUsd);
-public sealed record UsageLedger(UsageGroup Total, UsageGroup[] Projects, UsageGroup[] Executions, UsageGroup[] Agents, UsageGroup[] Models, UsageGroup[] Days, UsageItem[] Items, int Offset, bool HasMore, string CostBasis = "Estimated from configured model prices. Provider token counts are recorded; confirmed billing is unavailable.");
+public sealed record UsageLedger(UsageGroup Total, UsageGroup[] Projects, UsageGroup[] Executions, UsageGroup[] Agents, UsageGroup[] Models, UsageGroup[] Days, UsageItem[] Items, int Offset, bool HasMore, string CostBasis = "Estimated from configured model prices. Provider token counts are recorded when available; uncertain requests reserve their configured maximum cost; confirmed billing is unavailable.");
 public sealed record EvidenceReference(string Id, string Name);
 public sealed record WorkspaceDetails(RecordEntry Entry, RecordEntry? Tool, JsonElement? ToolInput, string InputAvailability, EvidenceReference[] Artifacts);
 public interface IWorkspaceQueries
