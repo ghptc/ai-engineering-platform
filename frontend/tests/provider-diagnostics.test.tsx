@@ -64,3 +64,24 @@ it("offers reason-specific recovery for persisted historical incomplete response
     screen.getByText(/Increasing output tokens will not address this reason/),
   ).toBeInTheDocument();
 });
+
+it("shows safe output-stage metadata and historical malformed recovery", () => {
+  state.content = JSON.stringify({
+    Diagnostics: {
+      ErrorCategory: "MalformedJson",
+      OutputStage: "JsonSyntax",
+      MessageCount: 1,
+      TextPartCount: 1,
+      JsonLineNumber: 0,
+      JsonBytePosition: 73,
+      OutputFormat: "json_schema_strict",
+    },
+  });
+  render(<ProviderDiagnostics runId="run" />);
+  expect(screen.getByText("JsonSyntax")).toBeInTheDocument();
+  expect(screen.getByText("json_schema_strict")).toBeInTheDocument();
+  expect(screen.getByText("73")).toBeInTheDocument();
+  expect(
+    screen.getByText(/do not infer output-token exhaustion/),
+  ).toBeInTheDocument();
+});

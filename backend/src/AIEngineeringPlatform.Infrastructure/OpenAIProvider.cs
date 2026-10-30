@@ -10,6 +10,7 @@ public sealed class LanguageModelOptions
 {
     public int TimeoutSeconds { get; set; } = 90;
     public int MaxRetries { get; set; } = 2;
+    public int MaxMalformedResponseRetries { get; set; } = 1;
     public int MaxOutputRecoveryRetries { get; set; } = 1;
     public int MaxRecoveryOutputTokens { get; set; } = 16000;
     public Dictionary<AgentRole, int> AgentOutputTokens { get; set; } = new();
@@ -70,16 +71,18 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(settings?.TimeoutSeconds ?? 90, 5, 300)));
         var client = clientOverride ?? new ResponsesClient(new ApiKeyCredential(apiKey), new ResponsesClientOptions { RetryPolicy = new System.ClientModel.Primitives.ClientRetryPolicy(0) });
+        var schema = SchemaFor(context.Definition.Role, context.Definition.AllowedTools);
+        var schemaHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(schema))).ToLowerInvariant();
         var options = new CreateResponseOptions
         {
             Model = context.Definition.Model,
             Instructions = context.Definition.SystemInstructions + "\nReturn only concise schema-valid JSON. Intermediate tool requests should leave final planning arrays empty; produce the final plan after consuming evidence. Do not repeat requirements, tool results or the same plan across summary, nextContext and architecture decisions. Tool arguments are JSON-encoded objects. Allowed tools: " + string.Join(", ", context.Definition.AllowedTools) + "\nAuthoritative local tool protocol: ReadProjectMemory {kind,id,offset,limit}: offset is a nonnegative character offset, limit is 1-4000 characters (default 2000); ReadFile {path}; WriteFile {path,content}; ListFiles {}; SearchCode {query}; ApplyPatch {patch: JSON-encoded {path,search,replacement}} with exactly one matching search region; RunCommand {profile: build|lint|format|typecheck}; RunTests {profile: all|backend|frontend|e2e}; InspectDiff {}. Tool failures are feedback: correct the arguments or implementation and try a new tool call. Never claim success from a failed tool result. RunCommand file changes are temporary; use WriteFile/ApplyPatch for persistent source edits. No arbitrary shell, package-network access, image or mount selection is allowed.",
             MaxOutputTokenCount = context.Definition.MaxOutputTokens,
             StoredOutputEnabled = false,
-            TextOptions = new() { TextFormat = ResponseTextFormat.CreateJsonSchemaFormat("engineering_result", BinaryData.FromString(SchemaFor(context.Definition.Role, context.Definition.AllowedTools)), jsonSchemaIsStrict: true) }
+            TextOptions = new() { TextFormat = ResponseTextFormat.CreateJsonSchemaFormat("engineering_result", BinaryData.FromString(schema), jsonSchemaIsStrict: true) }
         };
-        ContextBudget.Validate(context.Definition, context.Context, options.Instructions, SchemaFor(context.Definition.Role, context.Definition.AllowedTools));
-        var inputReserve = (long)ContextBudget.Tokens(context.Context) + ContextBudget.Tokens(options.Instructions) + ContextBudget.Tokens(SchemaFor(context.Definition.Role, context.Definition.AllowedTools)) + 1024;
+        ContextBudget.Validate(context.Definition, context.Context, options.Instructions, schema);
+        var inputReserve = (long)ContextBudget.Tokens(context.Context) + ContextBudget.Tokens(options.Instructions) + ContextBudget.Tokens(schema) + 1024;
         var reserve = inputReserve * context.Definition.InputCostPerMillion / 1_000_000m + context.Definition.MaxOutputTokens * context.Definition.OutputCostPerMillion / 1_000_000m;
         if (context.Run.Cost + reserve > context.Run.Policy.MaxBudgetUsd) throw new InvalidOperationException("Insufficient remaining budget for this model request.");
         options.InputItems.Add(ResponseItem.CreateUserMessageItem(context.Context));
@@ -100,10 +103,11 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
             spent = Math.Max(spent, legacy + charges.Sum(x => x.Cost));
         }
         var outputRecoveries = 0;
+        var syntaxRecoveries = 0;
         for (var attempt = 0; ; attempt++)
         {
             ct.ThrowIfCancellationRequested();
-            var diagnostics = new ProviderDiagnostics(context.Definition.Model, null, null, null, null, null, null, null, attempt + 1, MaxOutputTokens: options.MaxOutputTokenCount);
+            var diagnostics = new ProviderDiagnostics(context.Definition.Model, null, null, null, null, null, null, null, attempt + 1, MaxOutputTokens: options.MaxOutputTokenCount, OutputStage: "ResponseEnvelope", SchemaSha256: schemaHash, OutputFormat: "json_schema_strict");
             var reservationId = Guid.NewGuid().ToString("N");
             if (spent + charged + reserve > context.Run.Policy.MaxBudgetUsd)
                 throw new InvalidOperationException("Insufficient remaining budget for this model request, including uncertain provider requests.");
@@ -118,28 +122,17 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
                 if (response.IncompleteStatusDetails != null || diagnostics.ResponseStatus == "incomplete") throw Failure(ProviderErrorCategory.IncompleteResponse);
                 if (response.Error != null || diagnostics.ResponseStatus == "failed") throw Failure(ProviderErrorCategory.ResponseFailed);
                 if (diagnostics.ResponseStatus != "completed") throw Failure(ProviderErrorCategory.UnexpectedContent);
-                using (var envelope = JsonDocument.Parse(received.GetRawResponse().Content.ToString()))
-                {
-                    if (!envelope.RootElement.TryGetProperty("output", out var items) || items.ValueKind != JsonValueKind.Array) throw Failure(ProviderErrorCategory.UnexpectedContent);
-                    foreach (var item in items.EnumerateArray())
-                    {
-                        if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("type", out var itemType)) throw Failure(ProviderErrorCategory.UnexpectedContent);
-                        if (itemType.ValueKind == JsonValueKind.String && itemType.GetString() == "reasoning") continue;
-                        if (itemType.ValueKind != JsonValueKind.String || itemType.GetString() != "message"
-                            || !item.TryGetProperty("status", out var status) || status.ValueKind != JsonValueKind.String || status.GetString() != "completed"
-                            || !item.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array
-                            || content.EnumerateArray().Any(x => x.ValueKind != JsonValueKind.Object || !x.TryGetProperty("type", out var type) || type.ValueKind != JsonValueKind.String || type.GetString() != "output_text"))
-                            throw Failure(ProviderErrorCategory.UnexpectedContent);
-                    }
-                }
-                var text = response.GetOutputText();
+                diagnostics = diagnostics with { OutputStage = "OutputExtraction" };
+                var text = ExtractOutput(received.GetRawResponse().Content, ref diagnostics);
                 if (string.IsNullOrWhiteSpace(text)) throw Failure(ProviderErrorCategory.EmptyOutput);
                 AgentResult output;
-                try { output = ParseOutput(text, context.Definition); }
+                try { output = ParseOutput(text, context.Definition, schema, ref diagnostics); }
                 catch (OutputValidationException e) { throw Failure(e.Category); }
+                diagnostics = diagnostics with { OutputStage = "UsageValidation" };
                 if (response.Usage == null || response.Usage.InputTokenCount < 0 || response.Usage.OutputTokenCount < 0) throw Failure(ProviderErrorCategory.MissingUsage);
                 var input = response.Usage.InputTokenCount;
                 var completion = response.Usage.OutputTokenCount;
+                diagnostics = diagnostics with { OutputStage = "Validated" };
                 await RecordAsync(reservationId, diagnostics, (input * context.Definition.InputCostPerMillion + completion * context.Definition.OutputCostPerMillion) / 1_000_000m, ct);
                 return new(output, response.Id, input, completion, (input * context.Definition.InputCostPerMillion + completion * context.Definition.OutputCostPerMillion) / 1_000_000m, diagnostics);
             }
@@ -167,17 +160,30 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
                 if (e is ClientResultException clientError && clientError.GetRawResponse() is { } raw)
                 {
                     raw.Headers.TryGetValue("x-request-id", out var failedRequestId);
-                    diagnostics = diagnostics with { RequestId = SafeId(failedRequestId), HttpStatus = clientError.Status };
+                    if (IsStructuredOutputIncompatible(clientError.Status, raw.Content)) category = ProviderErrorCategory.StructuredOutputIncompatible;
+                    diagnostics = diagnostics with { RequestId = SafeId(failedRequestId), HttpStatus = clientError.Status, ErrorCategory = category };
                 }
                 var cost = response?.Usage is { InputTokenCount: >= 0, OutputTokenCount: >= 0 } usage ? (usage.InputTokenCount * context.Definition.InputCostPerMillion + usage.OutputTokenCount * context.Definition.OutputCostPerMillion) / 1_000_000m : reserve;
                 // Bounded independent persistence token: caller cancellation must not erase request accounting.
                 using var recording = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 await RecordAsync(reservationId, diagnostics, cost, recording.Token);
                 charged += cost;
+                // Repeat the same strict request, without feeding rejected text back into context.
+                // Fully settled charges and uncertain reservations count against the next allowance.
+                if (category == ProviderErrorCategory.MalformedJson && diagnostics.OutputStage == "JsonSyntax"
+                    && syntaxRecoveries < Math.Clamp(settings?.MaxMalformedResponseRetries ?? 1, 0, 2)
+                    && attempt < Math.Min(context.Run.Policy.MaxRetries, Math.Clamp(settings?.MaxRetries ?? 2, 0, 5))
+                    && spent + charged + reserve <= context.Run.Policy.MaxBudgetUsd
+                    && store != null && !timeout.IsCancellationRequested)
+                {
+                    syntaxRecoveries++;
+                    continue;
+                }
                 // A rejected response has produced no executable application instructions. Retry only
                 // this model request, never a stage or tool batch, with a fresh accounted reservation.
                 if (category == ProviderErrorCategory.IncompleteResponse && diagnostics.IncompleteReason == "max_output_tokens"
                     && diagnostics.OutputTokens >= options.MaxOutputTokenCount
+                    && attempt < context.Run.Policy.MaxRetries
                     && outputRecoveries < Math.Min(Math.Clamp(settings?.MaxOutputRecoveryRetries ?? 1, 0, 2), context.Run.Policy.MaxRetries)
                     && store != null && !timeout.IsCancellationRequested)
                 {
@@ -194,7 +200,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
                     }
                 }
                 var transient = e is HttpRequestException || e is ClientResultException http && http.Status is 0 or 429 or 500 or 502 or 503 or 504;
-                // Parsing, ambiguous timeouts and other incomplete reasons require inspection; no stage replay.
+                // Schema/tool/extraction failures, ambiguous timeouts and other incomplete reasons require inspection.
                 if (!transient || attempt >= Math.Clamp(settings?.MaxRetries ?? 2, 0, 5) || timeout.IsCancellationRequested || store == null)
                     throw new ProviderException(diagnostics);
                 try { await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt + 1)), timeout.Token); }
@@ -213,26 +219,99 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
     private static string? SafeStatus(string? value) => value?.ToLowerInvariant() is "completed" or "incomplete" or "failed" or "cancelled" or "queued" or "in_progress" ? value.ToLowerInvariant() : "unknown";
     private static string? SafeReason(string? value) => value?.ToLowerInvariant() is "max_output_tokens" or "content_filter" or "steered" ? value.ToLowerInvariant() : value == null ? null : "unknown";
 
+    private static string ExtractOutput(BinaryData content, ref ProviderDiagnostics diagnostics)
+    {
+        using var envelope = JsonDocument.Parse(content.ToString());
+        if (envelope.RootElement.ValueKind != JsonValueKind.Object || !envelope.RootElement.TryGetProperty("output", out var items) || items.ValueKind != JsonValueKind.Array)
+            throw new ProviderException(diagnostics with { ErrorCategory = ProviderErrorCategory.UnexpectedContent });
+        var messages = 0;
+        var parts = 0;
+        var decisions = 0;
+        var text = new System.Text.StringBuilder();
+        diagnostics = diagnostics with { OutputItemCount = items.GetArrayLength(), MessageCount = 0, TextPartCount = 0 };
+        foreach (var item in items.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("type", out var type) || type.ValueKind != JsonValueKind.String)
+                throw new ProviderException(diagnostics with { ErrorCategory = ProviderErrorCategory.UnexpectedContent });
+            if (type.GetString() == "reasoning") continue;
+            if (type.GetString() != "message"
+                || !item.TryGetProperty("role", out var role) || role.ValueKind != JsonValueKind.String || role.GetString() != "assistant"
+                || !item.TryGetProperty("status", out var status) || status.ValueKind != JsonValueKind.String || status.GetString() != "completed"
+                || !item.TryGetProperty("content", out var contents) || contents.ValueKind != JsonValueKind.Array)
+                throw new ProviderException(diagnostics with { ErrorCategory = ProviderErrorCategory.UnexpectedContent });
+            messages++;
+            diagnostics = diagnostics with { MessageCount = messages };
+            string? phase = null;
+            if (item.TryGetProperty("phase", out var phaseValue) && phaseValue.ValueKind != JsonValueKind.Null)
+            {
+                if (phaseValue.ValueKind != JsonValueKind.String || phaseValue.GetString() is not ("commentary" or "final_answer"))
+                    throw new ProviderException(diagnostics with { ErrorCategory = ProviderErrorCategory.UnexpectedContent });
+                phase = phaseValue.GetString();
+            }
+            var isDecision = phase != "commentary";
+            if (isDecision)
+            {
+                if (++decisions > 1) throw new ProviderException(diagnostics with { ErrorCategory = ProviderErrorCategory.AmbiguousOutput });
+                diagnostics = diagnostics with { OutputPhase = phase ?? "unphased" };
+            }
+            foreach (var part in contents.EnumerateArray())
+            {
+                if (part.ValueKind != JsonValueKind.Object || !part.TryGetProperty("type", out var partType) || partType.ValueKind != JsonValueKind.String || partType.GetString() != "output_text"
+                    || !part.TryGetProperty("text", out var value) || value.ValueKind != JsonValueKind.String)
+                    throw new ProviderException(diagnostics with { ErrorCategory = ProviderErrorCategory.UnexpectedContent });
+                if (!isDecision) continue;
+                parts++;
+                text.Append(value.GetString());
+                diagnostics = diagnostics with { TextPartCount = parts, OutputTextCharacters = text.Length };
+            }
+        }
+        return text.ToString();
+    }
+    private static bool IsStructuredOutputIncompatible(int status, BinaryData? content)
+    {
+        if (status is not (400 or 422) || content == null) return false;
+        try
+        {
+            using var json = JsonDocument.Parse(content.ToString());
+            if (json.RootElement.ValueKind != JsonValueKind.Object || !json.RootElement.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object) return false;
+            var code = error.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null;
+            var param = error.TryGetProperty("param", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
+            return code == "invalid_json_schema" || param is "text.format" or "text.format.type" or "text.format.schema" or "text.format.strict" or "response_format";
+        }
+        catch (JsonException) { return false; }
+    }
     private sealed class OutputValidationException(ProviderErrorCategory category) : Exception { public ProviderErrorCategory Category { get; } = category; }
-    private static AgentResult ParseOutput(string text, AgentDefinition definition)
+    private static AgentResult ParseOutput(string text, AgentDefinition definition, string outputSchema, ref ProviderDiagnostics diagnostics)
     {
         JsonDocument json;
+        diagnostics = diagnostics with { OutputStage = "JsonSyntax" };
         try { json = JsonDocument.Parse(text); }
-        catch (JsonException) { throw new OutputValidationException(ProviderErrorCategory.MalformedJson); }
+        catch (JsonException e)
+        {
+            diagnostics = diagnostics with { JsonLineNumber = e.LineNumber, JsonBytePosition = e.BytePositionInLine };
+            throw new OutputValidationException(ProviderErrorCategory.MalformedJson);
+        }
         using (json)
         {
             var root = json.RootElement;
             try
             {
-                using var schema = JsonDocument.Parse(SchemaFor(definition.Role, definition.AllowedTools));
+                diagnostics = diagnostics with { OutputStage = "SchemaValidation" };
+                using var schema = JsonDocument.Parse(outputSchema);
                 Validate(root, schema.RootElement);
                 string[] Strings(string name) => root.GetProperty(name).EnumerateArray().Select(x => x.GetString()!).ToArray();
+                diagnostics = diagnostics with { OutputStage = "ToolValidation" };
                 var calls = new List<ToolCall>();
                 foreach (var call in root.GetProperty("toolCalls").EnumerateArray())
                 {
                     try
                     {
-                        using var args = JsonDocument.Parse(call.GetProperty("arguments").GetString()!);
+                        var name = call.GetProperty("name").GetString()!;
+                        if (!definition.AllowedTools.Contains(name, StringComparer.Ordinal) || !EngineeringTool.Names.Contains(name, StringComparer.Ordinal))
+                            throw new OutputValidationException(ProviderErrorCategory.InvalidToolArguments);
+                        var arguments = call.GetProperty("arguments").GetString()!;
+                        if (arguments.Length > 100000) throw new OutputValidationException(ProviderErrorCategory.InvalidToolArguments);
+                        using var args = JsonDocument.Parse(arguments);
                         if (args.RootElement.ValueKind != JsonValueKind.Object) throw new JsonException();
                         calls.Add(new(call.GetProperty("name").GetString()!, args.RootElement.Clone()));
                     }

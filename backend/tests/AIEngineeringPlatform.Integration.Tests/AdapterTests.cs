@@ -74,6 +74,9 @@ public class AdapterTests
         Assert.Equal("resp_contract", result.ResponseId); Assert.Equal(100, result.InputTokens); Assert.Equal(50, result.OutputTokens); Assert.Equal(0.0002m, result.Cost);
         Assert.Equal("Verify offline cache", result.Output.Planning!.DependencyStrategy);
         using var body = JsonDocument.Parse(handler.Body); Assert.Equal("test-model", body.RootElement.GetProperty("model").GetString()); Assert.False(body.RootElement.GetProperty("store").GetBoolean()); Assert.Equal("json_schema", body.RootElement.GetProperty("text").GetProperty("format").GetProperty("type").GetString());
+        Assert.True(body.RootElement.GetProperty("text").GetProperty("format").GetProperty("strict").GetBoolean());
+        Assert.Equal("json_schema_strict", result.Diagnostics!.OutputFormat);
+        Assert.Equal("Validated", result.Diagnostics.OutputStage);
     }
     private static (OpenAIProvider Provider, AgentContext Context, IPlatformStore Store, List<RecordEntry> Records) Fixture(ModelHandler handler, AgentRole role = AgentRole.BackendEngineer, LanguageModelOptions? options = null)
     {
@@ -83,7 +86,7 @@ public class AdapterTests
             .Returns(c => (IReadOnlyList<RecordEntry>)records.Where(x => x.Kind == c.ArgAt<string>(0)).Skip(c.ArgAt<int>(5)).Take(c.ArgAt<int>(6)).ToArray());
         store.AppendAsync(Arg.Any<RecordEntry>(), Arg.Any<CancellationToken>()).Returns(c => { records.Add(c.ArgAt<RecordEntry>(0)); return Task.CompletedTask; });
         var client = new OpenAI.Responses.ResponsesClient(new System.ClientModel.ApiKeyCredential("test-key"), new OpenAI.Responses.ResponsesClientOptions { Endpoint = new Uri("https://example.invalid/v1/"), Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(new HttpClient(handler)), RetryPolicy = new System.ClientModel.Primitives.ClientRetryPolicy(0) });
-        var definition = new AgentDefinition("a", role, "Agent", "", "test-model", "test instructions", [], ["WriteFile", "Commit", "CreatePullRequest"], InputCostPerMillion: 1, OutputCostPerMillion: 2);
+        var definition = new AgentDefinition("a", role, "Agent", "", "test-model", "test instructions", [], ["WriteFile", "CreateCommit", "CreatePullRequest"], InputCostPerMillion: 1, OutputCostPerMillion: 2);
         return (new("test-key", options, client, store), new(new Project(), new ExecutionRun(), "context", definition), store, records);
     }
     private static void Output(System.Text.Json.Nodes.JsonObject payload, Func<System.Text.Json.Nodes.JsonObject, string> transform)
@@ -121,11 +124,11 @@ public class AdapterTests
                 if (scenario == "truncated") return "{\"summary\":\"unfinished";
                 if (scenario == "empty") return "";
                 if (scenario == "schema") output.Remove("summary");
-                else output["toolCalls"] = System.Text.Json.Nodes.JsonNode.Parse("[{\"name\":\"WriteFile\",\"arguments\":\"{}\"},{\"name\":\"Commit\",\"arguments\":\"" + (scenario == "arrayArguments" ? "[]" : "sensitive-invalid-arguments") + "\"}]");
+                else output["toolCalls"] = System.Text.Json.Nodes.JsonNode.Parse("[{\"name\":\"WriteFile\",\"arguments\":\"{}\"},{\"name\":\"CreateCommit\",\"arguments\":\"" + (scenario == "arrayArguments" ? "[]" : "sensitive-invalid-arguments") + "\"}]");
                 return output.ToJsonString();
             });
         } };
-        var f = Fixture(handler);
+        var f = Fixture(handler, options: new() { MaxMalformedResponseRetries = 0 });
         var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context, default));
         Assert.Equal(category, error.Diagnostics.ErrorCategory);
         Assert.Equal("req_contract", error.Diagnostics.RequestId);
@@ -188,7 +191,7 @@ public class AdapterTests
     {
         var handler = new ModelHandler { Before = (n, _) => n == 1 ? throw new HttpRequestException("sensitive transport details") : Task.CompletedTask };
         var f = Fixture(handler);
-        var checkpoints = new[] { "WriteFile", "Commit", "CreatePullRequest" }.Select(name => new RecordEntry { Id = name + "-operation", Kind = "tool", Name = name, Content = "workspace-revision-and-artifact", Status = "Succeeded" }).ToArray();
+        var checkpoints = new[] { "WriteFile", "CreateCommit", "CreatePullRequest" }.Select(name => new RecordEntry { Id = name + "-operation", Kind = "tool", Name = name, Content = "workspace-revision-and-artifact", Status = "Succeeded" }).ToArray();
         f.Records.AddRange(checkpoints);
         await f.Provider.ExecuteAsync(f.Context, default);
         Assert.Equal(2, handler.Requests);
@@ -245,7 +248,7 @@ public class AdapterTests
         payload["incomplete_details"] = new System.Text.Json.Nodes.JsonObject { ["reason"] = "max_output_tokens" };
         payload["usage"]!["output_tokens"] = 4000;
         // Even a valid-looking side effect in an incomplete response must never escape.
-        Output(payload, output => { output["toolCalls"] = System.Text.Json.Nodes.JsonNode.Parse("[{\"name\":\"Commit\",\"arguments\":\"{}\"}]"); return output.ToJsonString(); });
+        Output(payload, output => { output["toolCalls"] = System.Text.Json.Nodes.JsonNode.Parse("[{\"name\":\"CreateCommit\",\"arguments\":\"{}\"}]"); return output.ToJsonString(); });
     }
     [Fact]
     public async Task ExhaustedOutputRecoversWithAccountedLargerRequestAndPreservesEvidence()
@@ -254,7 +257,7 @@ public class AdapterTests
         handler.Transform = payload => { if (handler.Requests == 1) Exhaust(payload); };
         var f = Fixture(handler, AgentRole.Architect);
         var artifact = new RecordEntry { Kind = "artifact", Name = "BusinessAnalysis", Content = "Completed plan" };
-        var tool = new RecordEntry { Kind = "tool", Name = "Commit", Content = "valid evidence", Status = "Succeeded" };
+        var tool = new RecordEntry { Kind = "tool", Name = "CreateCommit", Content = "valid evidence", Status = "Succeeded" };
         f.Records.AddRange([artifact, tool]);
         var result = await f.Provider.ExecuteAsync(f.Context, default);
         Assert.Empty(result.Output.ToolCalls);
@@ -303,6 +306,200 @@ public class AdapterTests
         Assert.Equal(2, handler.Requests);
         Assert.Equal(12000, error.Diagnostics.MaxOutputTokens);
         Assert.Equal(2, (await ProviderAccounting.ChargesAsync(f.Store, f.Context.Run.Id, default)).Length);
+    }
+    [Theory]
+    [InlineData("prose", ProviderErrorCategory.MalformedJson, "JsonSyntax")]
+    [InlineData("twoObjects", ProviderErrorCategory.MalformedJson, "JsonSyntax")]
+    [InlineData("multipleMessages", ProviderErrorCategory.AmbiguousOutput, "OutputExtraction")]
+    [InlineData("unrelated", ProviderErrorCategory.UnexpectedContent, "OutputExtraction")]
+    [InlineData("unknownTool", ProviderErrorCategory.InvalidSchema, "SchemaValidation")]
+    [InlineData("unregisteredTool", ProviderErrorCategory.InvalidToolArguments, "ToolValidation")]
+    [InlineData("duplicateProperty", ProviderErrorCategory.InvalidSchema, "SchemaValidation")]
+    public async Task StructuredPipelineRejectsAmbiguousOrInvalidInstructions(string scenario, ProviderErrorCategory category, string stage)
+    {
+        var handler = new ModelHandler { Transform = payload =>
+        {
+            var items = payload["output"]!.AsArray();
+            if (scenario == "multipleMessages") items.Add(items[0]!.DeepClone());
+            else if (scenario == "unrelated") items.Add(System.Text.Json.Nodes.JsonNode.Parse("{\"type\":\"function_call\",\"id\":\"fc_test\",\"call_id\":\"call_test\",\"name\":\"WriteFile\",\"arguments\":\"{}\",\"status\":\"completed\"}"));
+            else Output(payload, output => scenario switch
+            {
+                "prose" => "Here is the JSON: " + output.ToJsonString(),
+                "twoObjects" => output.ToJsonString() + output.ToJsonString(),
+                "duplicateProperty" => output.ToJsonString().Replace("{\"summary\":", "{\"summary\":\"sensitive-data\",\"summary\":"),
+                _ => SetTool(output, scenario == "unknownTool" ? "ExecuteShell" : "UnregisteredTool")
+            });
+        } };
+        var f = Fixture(handler, options: new() { MaxMalformedResponseRetries = 0 });
+        var context = f.Context;
+        if (scenario == "unregisteredTool") context = context with { Definition = context.Definition with { AllowedTools = ["UnregisteredTool"] } };
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(context, default));
+        Assert.Equal(category, error.Diagnostics.ErrorCategory);
+        Assert.Equal(stage, error.Diagnostics.OutputStage);
+        Assert.DoesNotContain("sensitive-data", JsonSerializer.Serialize(error.Diagnostics));
+        Assert.Equal(1, handler.Requests);
+        Assert.DoesNotContain(f.Records, x => x.Kind == "tool");
+        static string SetTool(System.Text.Json.Nodes.JsonObject output, string name)
+        {
+            output["toolCalls"] = System.Text.Json.Nodes.JsonNode.Parse("[{\"name\":\"" + name + "\",\"arguments\":\"{}\"}]");
+            return output.ToJsonString();
+        }
+    }
+    [Fact]
+    public async Task ReasoningAndSegmentedTextUseOneCompleteAssistantMessage()
+    {
+        var handler = new ModelHandler { Transform = payload =>
+        {
+            var items = payload["output"]!.AsArray();
+            var parts = items[0]!["content"]!.AsArray();
+            var text = parts[0]!["text"]!.GetValue<string>();
+            var second = parts[0]!.DeepClone();
+            parts[0]!["text"] = text[..(text.Length / 2)];
+            second["text"] = text[(text.Length / 2)..];
+            parts.Add(second);
+            items.Insert(0, System.Text.Json.Nodes.JsonNode.Parse("{\"type\":\"reasoning\",\"id\":\"rs_test\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"unrelated sensitive reasoning\"}]}"));
+        } };
+        var f = Fixture(handler);
+        var result = await f.Provider.ExecuteAsync(f.Context, default);
+        Assert.Equal("Contract fixture", result.Output.Summary);
+        Assert.Equal(2, result.Diagnostics!.OutputItemCount);
+        Assert.Equal(1, result.Diagnostics.MessageCount);
+        Assert.Equal(2, result.Diagnostics.TextPartCount);
+        Assert.DoesNotContain("sensitive", JsonSerializer.Serialize(result.Diagnostics));
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExplicitCommentaryNeverBecomesTheStructuredDecision(bool commentaryLast)
+    {
+        var handler = new ModelHandler { Transform = payload =>
+        {
+            var items = payload["output"]!.AsArray();
+            items[0]!["phase"] = "final_answer";
+            var commentary = items[0]!.DeepClone();
+            commentary["phase"] = "commentary";
+            commentary["content"]![0]!["text"] = "sensitive progress note, not JSON or tool evidence";
+            items.Insert(commentaryLast ? 1 : 0, commentary);
+        } };
+        var f = Fixture(handler);
+        var result = await f.Provider.ExecuteAsync(f.Context, default);
+        Assert.Equal("Contract fixture", result.Output.Summary);
+        Assert.Empty(result.Output.ToolCalls);
+        Assert.Equal(2, result.Diagnostics!.MessageCount);
+        Assert.Equal(1, result.Diagnostics.TextPartCount);
+        Assert.Equal("final_answer", result.Diagnostics.OutputPhase);
+        Assert.DoesNotContain("sensitive", JsonSerializer.Serialize(result));
+    }
+    [Theory]
+    [InlineData("commentary", ProviderErrorCategory.EmptyOutput)]
+    [InlineData("unknown", ProviderErrorCategory.UnexpectedContent)]
+    [InlineData("ambiguous", ProviderErrorCategory.AmbiguousOutput)]
+    public async Task PhaseSelectionRequiresOneUnambiguousDecision(string phase, ProviderErrorCategory category)
+    {
+        var handler = new ModelHandler { Transform = payload =>
+        {
+            var items = payload["output"]!.AsArray();
+            if (phase == "ambiguous")
+            {
+                var other = items[0]!.DeepClone();
+                other["phase"] = "final_answer";
+                items.Add(other);
+            }
+            else items[0]!["phase"] = phase;
+        } };
+        var f = Fixture(handler);
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context, default));
+        Assert.Equal(category, error.Diagnostics.ErrorCategory);
+        Assert.Equal(1, handler.Requests);
+    }
+    [Fact]
+    public async Task SdkAggregationOfMultipleMessagesIsAmbiguousForAnAgentDecision()
+    {
+        var handler = new ModelHandler { Transform = payload => payload["output"]!.AsArray().Add(payload["output"]![0]!.DeepClone()) };
+        var client = new OpenAI.Responses.ResponsesClient(new System.ClientModel.ApiKeyCredential("test-key"), new OpenAI.Responses.ResponsesClientOptions { Endpoint = new Uri("https://example.invalid/v1/"), Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(new HttpClient(handler)) });
+        var response = await client.CreateResponseAsync(new OpenAI.Responses.CreateResponseOptions { Model = "test-model" });
+        var aggregate = response.Value.GetOutputText();
+        Assert.ThrowsAny<JsonException>(() => JsonDocument.Parse(aggregate));
+        Assert.Equal(2, response.Value.OutputItems.Count);
+    }
+    [Fact]
+    public async Task MalformedRecoveryKeepsStrictSchemaAndCheckpointsAndChargesBothRequests()
+    {
+        var handler = new ModelHandler();
+        handler.Transform = payload => { if (handler.Requests == 1) Output(payload, output =>
+        {
+            output["toolCalls"] = System.Text.Json.Nodes.JsonNode.Parse("[{\"name\":\"WriteFile\",\"arguments\":\"{\\\"path\\\":\\\"backend/rejected.cs\\\",\\\"content\\\":\\\"rejected\\\"}\"}]");
+            return output.ToJsonString() + "sensitive rejected suffix";
+        }); };
+        var f = Fixture(handler);
+        var checkpoint = new RecordEntry { Kind = "tool", Name = "WriteFile", Content = "valid checkpoint" };
+        var artifact = new RecordEntry { Kind = "artifact", Content = "completed plan" };
+        f.Records.AddRange([checkpoint, artifact]);
+        var result = await f.Provider.ExecuteAsync(f.Context, default);
+        Assert.Equal(2, handler.Requests);
+        Assert.Empty(result.Output.ToolCalls);
+        Assert.Equal(new[] { checkpoint, artifact }, f.Records.Where(x => x.Kind is "tool" or "artifact"));
+        var charges = await ProviderAccounting.ChargesAsync(f.Store, f.Context.Run.Id, default);
+        Assert.Equal(2, charges.Length);
+        Assert.Equal("JsonSyntax", charges[0].Diagnostics.OutputStage);
+        Assert.NotNull(charges[0].Diagnostics.JsonBytePosition);
+        Assert.Equal("Validated", charges[1].Diagnostics.OutputStage);
+        Assert.Equal(charges[0].Diagnostics.SchemaSha256, charges[1].Diagnostics.SchemaSha256);
+        Assert.All(charges, x => Assert.Equal(4000, x.Diagnostics.MaxOutputTokens));
+        Assert.DoesNotContain("sensitive", JsonSerializer.Serialize(charges));
+        Assert.DoesNotContain("sensitive", handler.Body);
+        using var body = JsonDocument.Parse(handler.Body);
+        Assert.True(body.RootElement.GetProperty("text").GetProperty("format").GetProperty("strict").GetBoolean());
+    }
+    [Theory]
+    [InlineData("budget")]
+    [InlineData("retries")]
+    public async Task MalformedRecoveryStopsAtRemainingLimits(string limit)
+    {
+        var handler = new ModelHandler { Transform = payload => Output(payload, _ => "sensitive malformed output") };
+        var f = Fixture(handler);
+        var context = f.Context;
+        if (limit == "budget")
+        {
+            var probe = Fixture(new ModelHandler());
+            await probe.Provider.ExecuteAsync(probe.Context, default);
+            var reserved = JsonSerializer.Deserialize<ProviderCharge>(probe.Records[0].Content)!.Cost;
+            context = context with { Run = context.Run with { Policy = context.Run.Policy with { MaxBudgetUsd = reserved } } };
+        }
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(context, default));
+        Assert.Equal(ProviderErrorCategory.MalformedJson, error.Diagnostics.ErrorCategory);
+        Assert.Equal(limit == "budget" ? 1 : 2, handler.Requests);
+        Assert.DoesNotContain(f.Records, x => x.Kind == "tool");
+    }
+    [Theory]
+    [InlineData("invalid_json_schema", "text.format.schema")]
+    [InlineData("unsupported_parameter", "text.format")]
+    public async Task IncompatibleModelOrSchemaNeverDowngradesStrictOutput(string code, string param)
+    {
+        var handler = new ModelHandler { Status = _ => HttpStatusCode.BadRequest, Transform = payload =>
+        {
+            payload.Clear();
+            payload["error"] = new System.Text.Json.Nodes.JsonObject { ["code"] = code, ["param"] = param, ["type"] = "invalid_request_error", ["message"] = "sensitive provider explanation" };
+        } };
+        var f = Fixture(handler);
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context, default));
+        Assert.Equal(ProviderErrorCategory.StructuredOutputIncompatible, error.Diagnostics.ErrorCategory);
+        Assert.Equal(1, handler.Requests);
+        Assert.DoesNotContain("sensitive", error.ToString());
+        Assert.Contains("compatible", error.Diagnostics.RecoveryGuidance);
+    }
+    [Theory]
+    [InlineData(AgentRole.BusinessAnalyst)] [InlineData(AgentRole.Architect)]
+    [InlineData(AgentRole.BackendEngineer)] [InlineData(AgentRole.FrontendEngineer)]
+    [InlineData(AgentRole.TestEngineer)] [InlineData(AgentRole.QAEngineer)] [InlineData(AgentRole.CodeReviewer)]
+    public void StrictSchemaMatchesEntireAgentDtoContract(AgentRole role)
+    {
+        using var schema = JsonDocument.Parse(OpenAIProvider.SchemaFor(role, ["ReadFile"]));
+        var properties = schema.RootElement.GetProperty("properties").EnumerateObject().Select(x => x.Name).Order().ToArray();
+        var dto = typeof(AgentResult).GetProperties().Select(x => JsonNamingPolicy.CamelCase.ConvertName(x.Name)).Order().ToArray();
+        Assert.Equal(dto, properties);
+        Assert.Equal(properties, schema.RootElement.GetProperty("required").EnumerateArray().Select(x => x.GetString()).Order());
+        Assert.False(schema.RootElement.GetProperty("additionalProperties").GetBoolean());
     }
     private sealed class ModelHandler : HttpMessageHandler
     {

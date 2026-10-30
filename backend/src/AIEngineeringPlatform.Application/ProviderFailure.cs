@@ -4,13 +4,16 @@ namespace AIEngineeringPlatform.Application;
 public enum ProviderErrorCategory
 {
     CallerCancellation, MalformedJson, InvalidToolArguments, InvalidSchema, EmptyOutput, UnexpectedContent,
-    IncompleteResponse, ResponseFailed, RequestTimeout, SdkTimeout, TransportFailure, HttpFailure, MissingUsage, RunDeadline
+    IncompleteResponse, ResponseFailed, RequestTimeout, SdkTimeout, TransportFailure, HttpFailure, MissingUsage, RunDeadline, AmbiguousOutput, StructuredOutputIncompatible
 }
 
 // Deliberately contains no model output, request body, credential or exception message.
 public sealed record ProviderDiagnostics(string Model, string? ResponseId, string? RequestId,
     string? ResponseStatus, string? IncompleteReason, ProviderErrorCategory? ErrorCategory,
-    long? InputTokens, long? OutputTokens, int Attempt, int? HttpStatus = null, int? MaxOutputTokens = null)
+    long? InputTokens, long? OutputTokens, int Attempt, int? HttpStatus = null, int? MaxOutputTokens = null,
+    string? OutputStage = null, int? OutputItemCount = null, int? MessageCount = null,
+    int? TextPartCount = null, int? OutputTextCharacters = null, long? JsonLineNumber = null,
+    long? JsonBytePosition = null, string? SchemaSha256 = null, string? OutputFormat = null, string? OutputPhase = null)
 {
     public string? IncompleteClassification => ResponseStatus != "incomplete" ? null : IncompleteReason switch
     {
@@ -25,7 +28,13 @@ public sealed record ProviderDiagnostics(string Model, string? ResponseId, strin
         "ContentFilter" => "Review the request for policy issues before retrying. Increasing output tokens will not address this reason.",
         "Steered" => "Inspect the interrupted request before retrying the checkpoint.",
         "Unknown" => "The provider did not supply a recognized incomplete reason. Inspect diagnostics before retrying; do not assume truncation.",
-        _ => null
+        _ => ErrorCategory switch
+        {
+            ProviderErrorCategory.MalformedJson => "JSON syntax validation failed. Retry the failed checkpoint within remaining limits; inspect output-stage diagnostics if bounded recovery fails. Increasing output tokens is not indicated by this error alone.",
+            ProviderErrorCategory.AmbiguousOutput => "Multiple assistant decision messages cannot be treated as one agent decision. Inspect provider compatibility before retrying the checkpoint.",
+            ProviderErrorCategory.StructuredOutputIncompatible => "The provider rejected the model or strict schema configuration. Select a compatible model/schema; strict validation will not be downgraded.",
+            _ => null
+        }
     };
 }
 

@@ -241,3 +241,39 @@ Source revision fingerprint (SHA-256; documentation-only updates after verificat
 | `backend/tests/AIEngineeringPlatform.Integration.Tests/PlanningFlowTests.cs` | `a9edef0de7a81a34e64f1264762ee1660d43c21d2ed2972a6aaf645ac6bac0d5` |
 | `frontend/src/features/executions/ProviderDiagnostics.tsx` | `47b046ea4f09cdb1351c0ce8a405bd488db4a2b8ef3f96224d13b6cc11efc050` |
 | `frontend/tests/provider-diagnostics.test.tsx` | `c6df56af7c6e00732b78d2cac66d2e092748a3187af5a1cfe071cad5c61b1a26` |
+
+## Structured agent output reliability — 2026-10-30
+
+Investigation uniquely resolved run `f3eddefcbce24d5e8cf5494ca77a8224`. BackendEngineer result `0d47865b7039411689f72725aa360588-result` and ProviderRequestFailed event correlate request `req_9d9fcff64cfc4a7ab58974494c29de7e` with response `resp_08db747b2677b673016ae4193ef32087d1bf3091c1d1b8ec12`: model gpt-6.1-sol, HTTP 200, completed, 12,488 input tokens, 529 output tokens, requested maximum 4,000, MalformedJson, attempt 1, settled cost $0.030266. The paired reservation shares the requestKey. No evidence indicates output exhaustion. No original malformed bytes or item shape were retained; exact syntax and historical extraction cause remain unknown. [ADR 010](architecture/010-structured-agent-output.md) answers the seven investigation questions and cites official model/structured-output/phase guidance.
+
+Verified source is based on protected master `f23bcec`, feature branch `fix/structured-agent-output-reliability`. Source SHA-256 fingerprints below tie evidence to this workspace revision; subsequent report/source-control metadata changes do not alter these code/test files.
+
+| Check | Final result |
+| --- | --- |
+| `dotnet restore backend/AIEngineeringPlatform.sln` | Passed |
+| `dotnet build backend/AIEngineeringPlatform.sln --no-restore -m:1` | Passed; zero warnings/errors |
+| `dotnet test backend/AIEngineeringPlatform.sln --no-restore --blame-hang-timeout 2m` | Passed: Domain 18, Application 46, Architecture 2, Integration 116, LocalExecutor 20; 202 passed, 7 opt-in skipped |
+| Provider adapter regressions through installed official SDK, deterministic HTTP transport | Passed: 71 tests, including legacy provider protections |
+| `npm ci --prefix frontend` | Passed |
+| `npm run typecheck --prefix frontend` | Passed |
+| `npm test --prefix frontend` | Passed: 35 tests across 5 files |
+| `npm run e2e --prefix frontend` | Passed: 2 browser workflows; dedicated non-reused ports 15088/15173 and test-only host |
+| `npm run build --prefix frontend` | Passed; existing large-chunk warning |
+| `docker build -t ai-engineering-platform:local .` | Passed; image config `sha256:1d4b0a4d5f20bebe065c07f3e49d176e58519f7194722c3f913e21b07479a561` |
+| Source/test diff review and `git diff --check` | Passed; strict schema validation retained, no rejected-output replay or execution path added |
+
+Coverage includes valid strict wire output; malformed/truncated JSON; prose and extra JSON objects; empty content; reasoning plus segmented assistant text; explicit commentary/final phases in either order; commentary-only, unknown phase and ambiguous candidates; unrelated response items; schema/duplicate-property violations; unauthorized/unregistered tools and invalid arguments; incomplete responses; same-schema/allowance syntax recovery with independent reservations and settled charges; unchanged completed artifacts/tool checkpoints; budget and retry bounds; model/schema incompatibility without fallback; and DTO field parity for all seven roles. Existing MongoDB explicit failed-stage retry, revision-bound QA/review, delivery approval, outbox, lease/fencing and operation-idempotency regressions pass in the full suite.
+
+The deterministic SDK test demonstrates that GetOutputText concatenates separate assistant messages into text which can fail JSON parsing. This proves an extraction hazard, not the historical response's exact contents. New extraction respects explicit commentary/final_answer phase and accepts one unambiguous decision; all selected text is syntax/schema/tool validated before returning any instructions. Diagnostics retain only safe stage/shape/phase labels, schema hash and numeric coordinates/counts. No prompt, reasoning, parser message/path, rejected text or credential is persisted.
+
+The existing isolated MongoDB server on 127.0.0.1:27028 uses nofile=65536 and unique test databases. No owner development server, production MongoDB, application container or executor daemon was stopped or reconfigured. Browser tests regenerate documentation screenshots; those generated changes are excluded and restored to the original tracked bytes.
+
+Seven skipped checks comprise five opt-in real Docker/Git/local-executor tests and two live OpenAI/GitHub tests. The production Docker build is verified separately. Production key/model configuration was detected without printing secrets; RUN_LIVE_AGENT_TESTS and explicit LIVE_MODEL_INPUT_PRICE, LIVE_MODEL_OUTPUT_PRICE, LIVE_MAX_BUDGET_USD were absent. A live request was not made; live parsing/recovery and agent external delivery remain unverified. This investigation reads the original run only; no production retry, data migration or deployment is included. Human delivery review remains required.
+
+| Source/test file | SHA-256 |
+| --- | --- |
+| `backend/src/AIEngineeringPlatform.Application/ProviderFailure.cs` | `cfeffc2d8ec71f8125cffbb852f73242b4b2671c4bd185aa5318d19f41fde697` |
+| `backend/src/AIEngineeringPlatform.Infrastructure/OpenAIProvider.cs` | `b1cc8006c76d48b47f9a67c4d066924143d7b9f7ca195b04a374b0a517337e10` |
+| `backend/tests/AIEngineeringPlatform.Integration.Tests/AdapterTests.cs` | `43f66d5d75745d4f1524708af699b22f71127f1ac35eb7632948f06933e693f6` |
+| `frontend/src/features/executions/ProviderDiagnostics.tsx` | `31456a08f2afbb2e7242cde7edb9cd1deb67b4d8795890c69b80637fd2c90dc6` |
+| `frontend/tests/provider-diagnostics.test.tsx` | `27ac6532e50304d8df65d72b8b8c0b29ea86ded9d3a4a7c5535ef5735302ef54` |

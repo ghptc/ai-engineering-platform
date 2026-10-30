@@ -26,9 +26,21 @@ export function ProviderDiagnostics({ runId }: { runId: string }) {
         : diagnostics.IncompleteReason === "content_filter"
           ? "Review the request for policy issues before retrying. Increasing output tokens will not address this reason."
           : "Inspect the provider reason before retrying the failed checkpoint. Do not assume truncation."
-      : null);
+      : diagnostics.ErrorCategory === "MalformedJson"
+        ? "The provider reported malformed JSON. Retry the failed checkpoint within remaining limits. Historical records do not retain the original bytes or parsing stage; do not infer output-token exhaustion."
+        : null);
   const fields = [
     "Model",
+    "OutputFormat",
+    "OutputStage",
+    "OutputPhase",
+    "SchemaSha256",
+    "OutputItemCount",
+    "MessageCount",
+    "TextPartCount",
+    "OutputTextCharacters",
+    "JsonLineNumber",
+    "JsonBytePosition",
     "ResponseStatus",
     "IncompleteReason",
     "IncompleteClassification",
