@@ -14,7 +14,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
     public async Task<SandboxResponse> ExecuteAsync(SandboxRequest request, CancellationToken ct)
     {
         ValidateRequest(request);
-        var repository = options.Repositories.SingleOrDefault(x => x.Owner == request.Repository.Owner && x.Name == request.Repository.Repository && x.InstallationId == request.Repository.InstallationId && x.DefaultBranch == request.Repository.DefaultBranch) ?? throw new UnauthorizedAccessException("Repository and installation are not on the executor allowlist.");
+        var repository = options.Repositories.SingleOrDefault(x => x.Owner == request.Repository.Owner && x.Name == request.Repository.Repository && x.InstallationId == request.Repository.InstallationId && x.DefaultBranch == request.Repository.DefaultBranch) ?? throw new ExecutorFailureException(ExecutorFailureCategory.RepositoryAccess, request.OperationId, request.Operation, 403, false);
         await gate.WaitAsync(ct);
         try
         {
@@ -44,7 +44,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                 var environment = await CredentialsAsync(repository, ct);
                 var remote = repository.TestRemotePath ?? $"https://github.com/{repository.Owner}/{repository.Name}.git";
                 var clone = await GitAsync(null, ["clone", "--depth", "1", "--no-local", "--no-hardlinks", "--single-branch", "--branch", repository.DefaultBranch, "--", remote, workspace], environment, ct, allowTestFile: repository.TestRemotePath != null);
-                if (clone.ExitCode != 0) throw new InvalidOperationException("Authorized repository checkout failed: " + SecretRedactor.Redact(clone.Output));
+                if (clone.ExitCode != 0) throw new ExecutorFailureException(ExecutorFailureCategory.RepositoryAccess, request.OperationId, request.Operation, 404, false);
                 WorkspaceFiles.Enumerate(workspace, options.WorkspaceLimitMb);
                 state.BaseCommit = (await GitAsync(workspace, ["rev-parse", "HEAD"], null, ct)).Output.Trim();
                 await RequireGitAsync(workspace, ["switch", "-c", "engineering/" + request.RunId], ct);
@@ -125,12 +125,14 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                     if (name == "all")
                     {
                         var available = ProfileSelection.Available(sourceFilesForProfile, repository.Profiles);
-                        name = available.Contains("all") ? "all" : available.Length == 1 ? available[0] : throw new ConfigurationException("Select an applicable configured test profile explicitly.");
+                        name = available.Contains("all") ? "all" : available.Length == 1 ? available[0] : throw new ExecutorFailureException(ExecutorFailureCategory.ProfileRestriction, request.OperationId, request.Operation, 422, false);
                     }
-                    if (!repository.Profiles.TryGetValue(name, out var profile)) throw new ConfigurationException("No administrator-defined compatible profile exists: " + name);
-                    if (name == "node" && !profile.Command.SequenceEqual(new[] { "node", "--test" })) throw new ConfigurationException("The node profile must use the fixed node --test argument array.");
-                    if (request.Operation == "RunTests" || profile.Command.FirstOrDefault() == "npm") ProfileSelection.Require(sourceFilesForProfile, profile);
-                    var execution = await docker.ExecuteAsync(workspace, profile, request, ct);
+                    if (!repository.Profiles.TryGetValue(name, out var profile)) throw new ExecutorFailureException(ExecutorFailureCategory.ProfileRestriction, request.OperationId, request.Operation, 422, false);
+                    if (name == "node" && !profile.Command.SequenceEqual(new[] { "node", "--test" })) throw new ExecutorFailureException(ExecutorFailureCategory.ProfileRestriction, request.OperationId, request.Operation, 422, false);
+                    if ((request.Operation == "RunTests" || profile.Command.FirstOrDefault() == "npm") && !ProfileSelection.Applicable(sourceFilesForProfile, profile)) throw new ExecutorFailureException(ExecutorFailureCategory.ProfileRestriction, request.OperationId, request.Operation, 422, false);
+                    ProcessResult execution;
+                    try { execution = await docker.ExecuteAsync(workspace, profile, request, ct); }
+                    catch (InvalidOperationException) { throw new ExecutorFailureException(ExecutorFailureCategory.Infrastructure, request.OperationId, request.Operation, 503, true); }
                     operationExecution = new(name, profile.Command, "/workspace", SecretRedactor.Redact(execution.Stdout), SecretRedactor.Redact(execution.Stderr));
                     output = execution.Output; exitCode = execution.ExitCode; success = exitCode == 0 && !execution.TimedOut && !execution.OutputExceeded;
                     if (request.Operation == "RunTests")

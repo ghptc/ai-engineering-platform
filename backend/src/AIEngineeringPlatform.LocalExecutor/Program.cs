@@ -32,10 +32,12 @@ app.Use(async (context, next) =>
     var header = context.Request.Headers.Authorization.ToString();
     if (!header.StartsWith("Bearer ", StringComparison.Ordinal) || header.Length > 1024 || !CryptographicOperations.FixedTimeEquals(tokenHash, SHA256.HashData(Encoding.UTF8.GetBytes(header[7..])))) { context.Response.StatusCode = 401; return; }
     try { await next(); }
-    catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException or InvalidOperationException or UnauthorizedAccessException or ConfigurationException or FileNotFoundException)
+    catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException or InvalidOperationException or UnauthorizedAccessException or ConfigurationException or FileNotFoundException or ExecutorFailureException)
     {
-        var status = exception is UnauthorizedAccessException ? 403 : exception is ConfigurationException ? 503 : exception is ArgumentException or System.Text.Json.JsonException or FileNotFoundException ? 400 : 409;
-        await Results.Problem(statusCode: status, title: "Executor rejected operation", detail: exception.Message).ExecuteAsync(context);
+        var status = exception is ExecutorFailureException failure ? failure.StatusCode ?? 503 : exception is UnauthorizedAccessException ? 403 : exception is ConfigurationException ? 503 : exception is ArgumentException or System.Text.Json.JsonException or FileNotFoundException ? 400 : 409;
+        if (exception is ExecutorFailureException diagnostic)
+            app.Logger.LogWarning("Executor operation {OperationId} rejected with HTTP {Status} category {Category}", diagnostic.OperationId, status, diagnostic.Category);
+        await Results.Problem(statusCode: status, title: "Executor rejected operation", detail: "Inspect the operation category and administrator configuration.", extensions: new Dictionary<string, object?> { ["code"] = exception is ExecutorFailureException typed ? typed.Category switch { ExecutorFailureCategory.ProfileRestriction => "profile_restriction", ExecutorFailureCategory.RepositoryAccess => "repository_access", _ => "executor_rejected" } : "executor_rejected" }).ExecuteAsync(context);
     }
 });
 app.MapGet("/health/ready", async (DockerWorkload docker, CancellationToken ct) => { await docker.VerifyHostAsync(ct); return Results.Ok(new { status = "Ready", isolation = "Docker/cgroup-v2/seccomp", network = "none" }); });

@@ -118,7 +118,7 @@ public sealed class ExecutorTests
         var isolation = await fixture.Executor.ExecuteAsync(Request("isolation", "isolation-check", "RunCommand", new { profile = "build" }), default); Assert.True(isolation.Success, isolation.Output); Assert.Contains("isolation verified", isolation.Output);
         var timeout = await fixture.Executor.ExecuteAsync(Request("isolation", "timeout", "RunCommand", new { profile = "lint" }) with { TimeoutSeconds = 1 }, default); Assert.False(timeout.Success); Assert.Equal(124, timeout.ExitCode);
         var flood = await fixture.Executor.ExecuteAsync(Request("isolation", "flood", "RunCommand", new { profile = "format" }) with { OutputLimitBytes = 1024 }, default); Assert.False(flood.Success); Assert.Equal(125, flood.ExitCode);
-        await Assert.ThrowsAsync<ConfigurationException>(() => fixture.Executor.ExecuteAsync(Request("isolation", "zero-tests", "RunTests", new { profile = "frontend" }), default));
+        await Assert.ThrowsAsync<ExecutorFailureException>(() => fixture.Executor.ExecuteAsync(Request("isolation", "zero-tests", "RunTests", new { profile = "frontend" }), default));
         var containers = await fixture.Process.RunAsync("/usr/bin/docker", ["ps", "-aq", "--filter", "label=aep.executor"], null, 10, 10000, default); Assert.Equal("", containers.Output.Trim());
     }
     [DockerFact]
@@ -130,6 +130,7 @@ public sealed class ExecutorTests
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         await File.WriteAllTextAsync(tokenFile, token); File.SetUnixFileMode(tokenFile, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         fixture.Options.SocketPath = socket; fixture.Options.TokenFile = tokenFile;
+        fixture.Options.Repositories[0].Profiles["format"].Image = "sha256:" + new string('0', 64);
         var config = Path.Combine(fixture.Root, "executor.json");
         await File.WriteAllTextAsync(config, JsonSerializer.Serialize(new { Executor = fixture.Options }));
         var entry = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../src/AIEngineeringPlatform.LocalExecutor/bin/Debug/net10.0/AIEngineeringPlatform.LocalExecutor.dll"));
@@ -156,7 +157,21 @@ public sealed class ExecutorTests
             using var unauthorized = new UnixExecutionSandbox(socket, new string('x', 64));
             Assert.False(await unauthorized.IsReadyAsync(default));
             first = await client.ExecuteAsync(Request("socket-run", "read", "ReadRepository", new { }), default); Assert.True(first.Success);
-            var rejected = await client.ExecuteAsync(Request("socket-run", "bad-read", "ReadFile", new { path = "missing.cs" }), default); Assert.False(rejected.Success); Assert.Contains("Executor rejected", rejected.Output);
+            var rejected = await Assert.ThrowsAsync<ExecutorFailureException>(() => client.ExecuteAsync(Request("socket-run", "bad-read", "ReadFile", new { path = "missing.cs" }), default));
+            Assert.Equal(400, rejected.StatusCode);
+            SandboxResponse? written = null;
+            for (var i = 0; i < 4; i++) written = await client.ExecuteAsync(Request("socket-run", "write-" + i, "WriteFile", new { path = "source-" + i + ".cs", content = "// preserved source" }), default);
+            var restricted = await Assert.ThrowsAsync<ExecutorFailureException>(() => client.ExecuteAsync(Request("socket-run", "restricted", "RunCommand", new { profile = "typecheck" }), default));
+            Assert.Equal(422, restricted.StatusCode); Assert.Equal(ExecutorFailureCategory.ProfileRestriction, restricted.Category);
+            var unavailable = await Assert.ThrowsAsync<ExecutorFailureException>(() => client.ExecuteAsync(Request("socket-run", "missing-image", "RunCommand", new { profile = "format" }), default));
+            Assert.Equal(503, unavailable.StatusCode); Assert.Equal(ExecutorFailureCategory.Infrastructure, unavailable.Category);
+            Assert.True(unavailable.OutcomeUnknown);
+            var afterFailure = await client.ExecuteAsync(Request("socket-run", "after-failure", "ReadRepository", new { }), default);
+            Assert.Equal(written!.DiffHash, afterFailure.DiffHash);
+            var replayWrite = await client.ExecuteAsync(Request("socket-run", "write-3", "WriteFile", new { path = "source-3.cs", content = "// preserved source" }), default);
+            Assert.Equal(written, replayWrite);
+            var unauthorizedError = await Assert.ThrowsAsync<ExecutorFailureException>(() => unauthorized.ExecuteAsync(Request("socket-run", "unauthorized", "ReadRepository", new { }), default));
+            Assert.Equal(401, unauthorizedError.StatusCode);
             var corrected = await client.ExecuteAsync(Request("socket-run", "corrected-read", "ReadFile", new { path = "Feature.cs" }), default); Assert.True(corrected.Success);
         }
         finally { daemon.Kill(entireProcessTree: true); await daemon.WaitForExitAsync(); }

@@ -348,7 +348,7 @@ export function ExecutionDetail() {
                 className="section-gap"
                 type="error"
                 showIcon
-                title={`Stage failed${r.failureCategory ? ` · ${human(r.failureCategory)}` : ""}`}
+                title={`${r.failureCategory?.startsWith("Executor") ? "Executor needs attention" : "Stage failed"}${r.failureCategory ? ` · ${human(r.failureCategory)}` : ""}`}
                 description={r.failureReason}
               />
             )}
