@@ -220,6 +220,90 @@ public class AdapterTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => f.Provider.ExecuteAsync(context, default));
         Assert.Equal(1, handler.Requests);
     }
+    [Theory]
+    [InlineData("max_output_tokens", "OutputLimit")]
+    [InlineData("content_filter", "ContentFilter")]
+    [InlineData("steered", "Steered")]
+    [InlineData("unknown", "Unknown")]
+    public async Task IncompleteReasonIsClassifiedWithoutGuessing(string reason, string classification)
+    {
+        var handler = new ModelHandler { Transform = payload =>
+        {
+            payload["status"] = "incomplete";
+            payload["incomplete_details"] = new System.Text.Json.Nodes.JsonObject { ["reason"] = reason };
+        } };
+        var f = Fixture(handler);
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context, default));
+        Assert.Equal(classification, error.Diagnostics.IncompleteClassification);
+        Assert.NotNull(error.Diagnostics.RecoveryGuidance);
+        Assert.Equal(4000, error.Diagnostics.MaxOutputTokens);
+        Assert.Equal(1, handler.Requests);
+    }
+    private static void Exhaust(System.Text.Json.Nodes.JsonObject payload)
+    {
+        payload["status"] = "incomplete";
+        payload["incomplete_details"] = new System.Text.Json.Nodes.JsonObject { ["reason"] = "max_output_tokens" };
+        payload["usage"]!["output_tokens"] = 4000;
+        // Even a valid-looking side effect in an incomplete response must never escape.
+        Output(payload, output => { output["toolCalls"] = System.Text.Json.Nodes.JsonNode.Parse("[{\"name\":\"Commit\",\"arguments\":\"{}\"}]"); return output.ToJsonString(); });
+    }
+    [Fact]
+    public async Task ExhaustedOutputRecoversWithAccountedLargerRequestAndPreservesEvidence()
+    {
+        var handler = new ModelHandler();
+        handler.Transform = payload => { if (handler.Requests == 1) Exhaust(payload); };
+        var f = Fixture(handler, AgentRole.Architect);
+        var artifact = new RecordEntry { Kind = "artifact", Name = "BusinessAnalysis", Content = "Completed plan" };
+        var tool = new RecordEntry { Kind = "tool", Name = "Commit", Content = "valid evidence", Status = "Succeeded" };
+        f.Records.AddRange([artifact, tool]);
+        var result = await f.Provider.ExecuteAsync(f.Context, default);
+        Assert.Empty(result.Output.ToolCalls);
+        Assert.Equal(2, handler.Requests);
+        using var request = JsonDocument.Parse(handler.Body);
+        Assert.Equal(8000, request.RootElement.GetProperty("max_output_tokens").GetInt32());
+        Assert.Equal(new[] { artifact, tool }, f.Records.Where(x => x.Kind is "artifact" or "tool"));
+        var charges = await ProviderAccounting.ChargesAsync(f.Store, f.Context.Run.Id, default);
+        Assert.Equal(2, charges.Length);
+        Assert.Equal(4000, charges[0].Diagnostics.OutputTokens);
+        Assert.Equal(8000, charges[1].Diagnostics.MaxOutputTokens);
+        Assert.Equal(charges[1].Cost, result.Cost);
+    }
+    [Theory]
+    [InlineData("budget")]
+    [InlineData("context")]
+    [InlineData("disabled")]
+    [InlineData("ceiling")]
+    public async Task OutputRecoveryCannotExceedExistingLimits(string limit)
+    {
+        var handler = new ModelHandler { Transform = Exhaust };
+        var f = Fixture(handler, options: new() { MaxOutputRecoveryRetries = limit == "disabled" ? 0 : 1, MaxRecoveryOutputTokens = limit == "ceiling" ? 4000 : 16000 });
+        var context = f.Context;
+        if (limit is "context" or "budget")
+        {
+            // Resolve the actual protocol/schema input reserve from a successful reservation below.
+            var probe = Fixture(new ModelHandler());
+            await probe.Provider.ExecuteAsync(probe.Context, default);
+            var reserved = JsonSerializer.Deserialize<ProviderCharge>(probe.Records.First().Content)!.Cost;
+            var inputReserve = (int)((reserved - 4000 * 2m / 1_000_000m) * 1_000_000m);
+            if (limit == "context") context = context with { Definition = context.Definition with { ModelContextTokens = inputReserve + 4000 } };
+            else context = context with { Run = context.Run with { Policy = context.Run.Policy with { MaxBudgetUsd = reserved } } };
+        }
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(context, default));
+        Assert.Equal("max_output_tokens", error.Diagnostics.IncompleteReason);
+        Assert.Equal(1, handler.Requests);
+        Assert.DoesNotContain(f.Records, x => x.Kind == "tool");
+    }
+    [Fact]
+    public async Task OutputRecoveryIsBoundedAndAgentAllowanceIsConfigurable()
+    {
+        var handler = new ModelHandler();
+        handler.Transform = payload => { Exhaust(payload); payload["usage"]!["output_tokens"] = handler.Requests == 1 ? 6000 : 12000; };
+        var f = Fixture(handler, AgentRole.Architect, new() { AgentOutputTokens = new() { [AgentRole.Architect] = 6000 } });
+        var error = await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context, default));
+        Assert.Equal(2, handler.Requests);
+        Assert.Equal(12000, error.Diagnostics.MaxOutputTokens);
+        Assert.Equal(2, (await ProviderAccounting.ChargesAsync(f.Store, f.Context.Run.Id, default)).Length);
+    }
     private sealed class ModelHandler : HttpMessageHandler
     {
         public string Body = "";

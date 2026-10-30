@@ -3,6 +3,7 @@ using AIEngineeringPlatform.Domain;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Text.Json;
+using System.Net.Http.Json;
 using Xunit;
 namespace AIEngineeringPlatform.Integration.Tests;
 
@@ -39,6 +40,57 @@ public sealed partial class RuntimeFlowTests
             Assert.Equal(ExecutionOutcome.Blocked, run.Outcome);
         }
         Assert.DoesNotContain("PushBranch", sandbox.Operations);
+    }
+
+    [Fact]
+    public async Task ArchitectCheckpointRetryPreservesCompletedAnalysisAndValidToolEvidence()
+    {
+        await using var root = new PlatformFactory();
+        var model = new IncompleteArchitect();
+        await using var factory = root.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<ILanguageModelProvider>(); services.AddSingleton<ILanguageModelProvider>(model);
+        }));
+        using var client = factory.CreateClient(); await Login(client);
+        var store = factory.Services.GetRequiredService<IPlatformStore>();
+        var run = await Start(client, store, ExecutionPresets.StandardDevelopment, planning: true);
+        run = await Wait(store, run.Id, r => !r.IsRunnable);
+        Assert.Equal(RunStage.Failed, run.CurrentStage);
+        Assert.Equal(RunStage.Planning, run.ResumeStage);
+        var analysisCalls = model.AnalysisCalls;
+        var before = await store.RecordsAsync("artifact", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.NotEmpty(before);
+        var tools = await store.RecordsAsync("tool", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.NotEmpty(tools);
+        (await client.PostAsJsonAsync($"/api/v1/runs/{run.Id}/retry", new { })).EnsureSuccessStatusCode();
+        run = await Wait(store, run.Id, r => !r.IsRunnable);
+        Assert.Equal(RunStage.AwaitingHumanApproval, run.CurrentStage);
+        Assert.Equal(analysisCalls, model.AnalysisCalls);
+        var artifacts = await store.RecordsAsync("artifact", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        var after = await store.RecordsAsync("tool", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.All(before, item => Assert.Single(artifacts, x => x.Id == item.Id && x.Content == item.Content));
+        Assert.All(tools, item => Assert.Single(after, x => x.Id == item.Id && x.Content == item.Content));
+        Assert.DoesNotContain(after, x => x.Name is "CreateCommit" or "PushBranch" or "CreatePullRequest");
+    }
+    private sealed class IncompleteArchitect : ILanguageModelProvider
+    {
+        private int architectCalls;
+        public int AnalysisCalls;
+        private readonly DeterministicModel inner = new();
+        public async Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct)
+        {
+            if (context.Definition.Role == AgentRole.BusinessAnalyst) AnalysisCalls++;
+            if (context.Definition.Role == AgentRole.Architect && ++architectCalls == 1)
+            {
+                var result = await inner.ExecuteAsync(context, ct);
+                return result with { Output = result.Output with { ToolCalls = [new("ReadRepository", JsonSerializer.SerializeToElement(new { }))] } };
+            }
+            if (context.Definition.Role == AgentRole.Architect && architectCalls == 2)
+            {
+                throw new ProviderException(new(context.Definition.Model, "resp_incomplete", "req_incomplete", "incomplete", "max_output_tokens", ProviderErrorCategory.IncompleteResponse, 100, 4000, 1, MaxOutputTokens: 4000));
+            }
+            return await inner.ExecuteAsync(context, ct);
+        }
     }
 
     private sealed class PlanningModel(string scenario) : ILanguageModelProvider

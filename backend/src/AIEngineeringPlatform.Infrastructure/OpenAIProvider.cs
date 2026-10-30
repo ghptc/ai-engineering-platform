@@ -6,7 +6,14 @@ using System.Text.Json;
 using System.ClientModel;
 namespace AIEngineeringPlatform.Infrastructure;
 
-public sealed class LanguageModelOptions { public int TimeoutSeconds { get; set; } = 90; public int MaxRetries { get; set; } = 2; }
+public sealed class LanguageModelOptions
+{
+    public int TimeoutSeconds { get; set; } = 90;
+    public int MaxRetries { get; set; } = 2;
+    public int MaxOutputRecoveryRetries { get; set; } = 1;
+    public int MaxRecoveryOutputTokens { get; set; } = 16000;
+    public Dictionary<AgentRole, int> AgentOutputTokens { get; set; } = new();
+}
 public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? settings = null, ResponsesClient? clientOverride = null, IPlatformStore? store = null) : ILanguageModelProvider
 {
     public static readonly string OutputSchema = """
@@ -54,6 +61,8 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(context.Definition.Model)) throw new ConfigurationException("OpenAI API key and agent model must be configured.");
         if (context.Definition.InputCostPerMillion <= 0 || context.Definition.OutputCostPerMillion <= 0) throw new ConfigurationException("Configure positive model token prices before executing budget-controlled requests.");
         ct.ThrowIfCancellationRequested();
+        if (settings?.AgentOutputTokens.TryGetValue(context.Definition.Role, out var agentOutput) == true)
+            context = context with { Definition = context.Definition with { MaxOutputTokens = agentOutput } };
         using var deadline = new CancellationTokenSource();
         var remaining = context.Run.StartedAt.AddMinutes(context.Run.Policy.MaxDurationMinutes) - DateTimeOffset.UtcNow;
         if (remaining <= TimeSpan.Zero) throw new ProviderException(new(context.Definition.Model, null, null, null, null, ProviderErrorCategory.RunDeadline, null, null, 0));
@@ -64,7 +73,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         var options = new CreateResponseOptions
         {
             Model = context.Definition.Model,
-            Instructions = context.Definition.SystemInstructions + "\nReturn only schema-valid JSON. Tool arguments are JSON-encoded objects. Allowed tools: " + string.Join(", ", context.Definition.AllowedTools) + "\nAuthoritative local tool protocol: ReadProjectMemory {kind,id,offset,limit}: offset is a nonnegative character offset, limit is 1-4000 characters (default 2000); ReadFile {path}; WriteFile {path,content}; ListFiles {}; SearchCode {query}; ApplyPatch {patch: JSON-encoded {path,search,replacement}} with exactly one matching search region; RunCommand {profile: build|lint|format|typecheck}; RunTests {profile: all|backend|frontend|e2e}; InspectDiff {}. Tool failures are feedback: correct the arguments or implementation and try a new tool call. Never claim success from a failed tool result. RunCommand file changes are temporary; use WriteFile/ApplyPatch for persistent source edits. No arbitrary shell, package-network access, image or mount selection is allowed.",
+            Instructions = context.Definition.SystemInstructions + "\nReturn only concise schema-valid JSON. Intermediate tool requests should leave final planning arrays empty; produce the final plan after consuming evidence. Do not repeat requirements, tool results or the same plan across summary, nextContext and architecture decisions. Tool arguments are JSON-encoded objects. Allowed tools: " + string.Join(", ", context.Definition.AllowedTools) + "\nAuthoritative local tool protocol: ReadProjectMemory {kind,id,offset,limit}: offset is a nonnegative character offset, limit is 1-4000 characters (default 2000); ReadFile {path}; WriteFile {path,content}; ListFiles {}; SearchCode {query}; ApplyPatch {patch: JSON-encoded {path,search,replacement}} with exactly one matching search region; RunCommand {profile: build|lint|format|typecheck}; RunTests {profile: all|backend|frontend|e2e}; InspectDiff {}. Tool failures are feedback: correct the arguments or implementation and try a new tool call. Never claim success from a failed tool result. RunCommand file changes are temporary; use WriteFile/ApplyPatch for persistent source edits. No arbitrary shell, package-network access, image or mount selection is allowed.",
             MaxOutputTokenCount = context.Definition.MaxOutputTokens,
             StoredOutputEnabled = false,
             TextOptions = new() { TextFormat = ResponseTextFormat.CreateJsonSchemaFormat("engineering_result", BinaryData.FromString(SchemaFor(context.Definition.Role, context.Definition.AllowedTools)), jsonSchemaIsStrict: true) }
@@ -90,10 +99,11 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
             var legacy = priorTasks.Select(x => JsonSerializer.Deserialize<ModelExecutionResult>(x.Content)!).Where(x => x.Diagnostics == null).Sum(x => x.Cost);
             spent = Math.Max(spent, legacy + charges.Sum(x => x.Cost));
         }
+        var outputRecoveries = 0;
         for (var attempt = 0; ; attempt++)
         {
             ct.ThrowIfCancellationRequested();
-            var diagnostics = new ProviderDiagnostics(context.Definition.Model, null, null, null, null, null, null, null, attempt + 1);
+            var diagnostics = new ProviderDiagnostics(context.Definition.Model, null, null, null, null, null, null, null, attempt + 1, MaxOutputTokens: options.MaxOutputTokenCount);
             var reservationId = Guid.NewGuid().ToString("N");
             if (spent + charged + reserve > context.Run.Policy.MaxBudgetUsd)
                 throw new InvalidOperationException("Insufficient remaining budget for this model request, including uncertain provider requests.");
@@ -164,8 +174,27 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
                 using var recording = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 await RecordAsync(reservationId, diagnostics, cost, recording.Token);
                 charged += cost;
+                // A rejected response has produced no executable application instructions. Retry only
+                // this model request, never a stage or tool batch, with a fresh accounted reservation.
+                if (category == ProviderErrorCategory.IncompleteResponse && diagnostics.IncompleteReason == "max_output_tokens"
+                    && diagnostics.OutputTokens >= options.MaxOutputTokenCount
+                    && outputRecoveries < Math.Min(Math.Clamp(settings?.MaxOutputRecoveryRetries ?? 1, 0, 2), context.Run.Policy.MaxRetries)
+                    && store != null && !timeout.IsCancellationRequested)
+                {
+                    var current = options.MaxOutputTokenCount!.Value;
+                    var ceiling = Math.Min((long)(settings?.MaxRecoveryOutputTokens ?? 16000), context.Definition.ModelContextTokens - inputReserve);
+                    var affordable = decimal.Floor((context.Run.Policy.MaxBudgetUsd - spent - charged - inputReserve * context.Definition.InputCostPerMillion / 1_000_000m) * 1_000_000m / context.Definition.OutputCostPerMillion);
+                    var next = (int)Math.Max(0, Math.Min(Math.Min((long)current * 2, ceiling), Math.Min(affordable, int.MaxValue)));
+                    if (next > current)
+                    {
+                        options.MaxOutputTokenCount = next;
+                        reserve = inputReserve * context.Definition.InputCostPerMillion / 1_000_000m + next * context.Definition.OutputCostPerMillion / 1_000_000m;
+                        outputRecoveries++;
+                        continue;
+                    }
+                }
                 var transient = e is HttpRequestException || e is ClientResultException http && http.Status is 0 or 429 or 500 or 502 or 503 or 504;
-                // Parsing, ambiguous timeouts and incomplete results require an explicit resume; no stage replay.
+                // Parsing, ambiguous timeouts and other incomplete reasons require inspection; no stage replay.
                 if (!transient || attempt >= Math.Clamp(settings?.MaxRetries ?? 2, 0, 5) || timeout.IsCancellationRequested || store == null)
                     throw new ProviderException(diagnostics);
                 try { await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt + 1)), timeout.Token); }
@@ -182,7 +211,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
     }
     private static string? SafeId(string? value) => value is { Length: <= 200 } && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-') ? value : null;
     private static string? SafeStatus(string? value) => value?.ToLowerInvariant() is "completed" or "incomplete" or "failed" or "cancelled" or "queued" or "in_progress" ? value.ToLowerInvariant() : "unknown";
-    private static string? SafeReason(string? value) => value?.ToLowerInvariant() is "max_output_tokens" or "content_filter" ? value.ToLowerInvariant() : value == null ? null : "unknown";
+    private static string? SafeReason(string? value) => value?.ToLowerInvariant() is "max_output_tokens" or "content_filter" or "steered" ? value.ToLowerInvariant() : value == null ? null : "unknown";
 
     private sealed class OutputValidationException(ProviderErrorCategory category) : Exception { public ProviderErrorCategory Category { get; } = category; }
     private static AgentResult ParseOutput(string text, AgentDefinition definition)
