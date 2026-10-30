@@ -36,11 +36,11 @@ app.Use(async (context, next) =>
     {
         var status = exception is ExecutorFailureException failure ? failure.StatusCode ?? 503 : exception is UnauthorizedAccessException ? 403 : exception is ConfigurationException ? 503 : exception is ArgumentException or System.Text.Json.JsonException or FileNotFoundException ? 400 : 409;
         if (exception is ExecutorFailureException diagnostic)
-            app.Logger.LogWarning("Executor operation {OperationId} rejected with HTTP {Status} category {Category}", diagnostic.OperationId, status, diagnostic.Category);
-        await Results.Problem(statusCode: status, title: "Executor rejected operation", detail: "Inspect the operation category and administrator configuration.", extensions: new Dictionary<string, object?> { ["code"] = exception is ExecutorFailureException typed ? typed.Category switch { ExecutorFailureCategory.ProfileRestriction => "profile_restriction", ExecutorFailureCategory.RepositoryAccess => "repository_access", _ => "executor_rejected" } : "executor_rejected" }).ExecuteAsync(context);
+            app.Logger.LogWarning("Executor operation {OperationId} {Operation} rejected with HTTP {Status} category {Category} reason {Reason} outcomeUnknown {OutcomeUnknown}", diagnostic.OperationId, diagnostic.Operation, status, diagnostic.Category, diagnostic.Reason, diagnostic.OutcomeUnknown);
+        await Results.Problem(statusCode: status, title: "Executor rejected operation", detail: "Inspect the operation category and administrator configuration.", extensions: new Dictionary<string, object?> { ["code"] = exception is ExecutorFailureException typed ? typed.Reason switch { ExecutorFailureReason.ImageUnavailable => "image_unavailable", ExecutorFailureReason.ProfileTargetMissing => "profile_target_missing", _ => typed.Category switch { ExecutorFailureCategory.ProfileRestriction => "profile_restriction", ExecutorFailureCategory.RepositoryAccess => "repository_access", _ => "executor_rejected" } } : "executor_rejected" }).ExecuteAsync(context);
     }
 });
-app.MapGet("/health/ready", async (DockerWorkload docker, CancellationToken ct) => { await docker.VerifyHostAsync(ct); return Results.Ok(new { status = "Ready", isolation = "Docker/cgroup-v2/seccomp", network = "none" }); });
+app.MapGet("/health/ready", async (DockerWorkload docker, CancellationToken ct) => { await docker.VerifyHostAsync(ct); return Results.Ok(new { status = "Ready", isolation = "Docker/cgroup-v2/seccomp", network = "none", contractVersion = 2 }); });
 app.MapPost("/v1/operations", async (SandboxRequest request, HttpContext context, LocalExecutionService executor, CancellationToken ct) =>
 {
     if (context.Request.Headers["Idempotency-Key"] != request.OperationId) return Results.Problem(statusCode: 400, title: "Idempotency key mismatch");

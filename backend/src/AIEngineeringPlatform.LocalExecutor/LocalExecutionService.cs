@@ -129,7 +129,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                     }
                     if (!repository.Profiles.TryGetValue(name, out var profile)) throw new ExecutorFailureException(ExecutorFailureCategory.ProfileRestriction, request.OperationId, request.Operation, 422, false);
                     if (name == "node" && !profile.Command.SequenceEqual(new[] { "node", "--test" })) throw new ExecutorFailureException(ExecutorFailureCategory.ProfileRestriction, request.OperationId, request.Operation, 422, false);
-                    if ((request.Operation == "RunTests" || profile.Command.FirstOrDefault() == "npm") && !ProfileSelection.Applicable(sourceFilesForProfile, profile)) throw new ExecutorFailureException(ExecutorFailureCategory.ProfileRestriction, request.OperationId, request.Operation, 422, false);
+                    if (!(request.Operation == "RunTests" ? ProfileSelection.Applicable(sourceFilesForProfile, profile) : ProfileSelection.ApplicableCommand(sourceFilesForProfile, profile))) throw new ExecutorFailureException(ExecutorFailureCategory.ProfileRestriction, request.OperationId, request.Operation, 422, false, ExecutorFailureReason.ProfileTargetMissing);
                     ProcessResult execution;
                     try { execution = await docker.ExecuteAsync(workspace, profile, request, ct); }
                     catch (InvalidOperationException) { throw new ExecutorFailureException(ExecutorFailureCategory.Infrastructure, request.OperationId, request.Operation, 503, true); }

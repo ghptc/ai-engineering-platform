@@ -67,7 +67,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                     .Where(x => x.ToolCalls.Length == 0).SelectMany(x => x.Planning?.Blockers ?? [])
                     .Where(x => x.Stage is "Implementation" or "Delivery").ToArray();
                 if (blockers.Length > 0) throw new ConfigurationException("Planning identified execution prerequisites requiring owner reconciliation: " + string.Join("; ", blockers.Select(x => x.Reason)));
-                if (!sandbox.Configured) throw new ConfigurationException("Configure and start the secure execution sandbox before implementing source changes.");
+                if (!sandbox.Configured || !await sandbox.IsReadyAsync(ct)) throw new ConfigurationException("Secure executor is not ready. Verify authentication and Docker isolation, and rebuild/restart the host daemon with executor contract version 2 before resuming; no implementation operation was sent.");
                 var correctionTargets = run.ReworkPlan.Where(x => x.Iteration == run.Iteration).Select(x => x.TargetAgent).ToArray();
                 var inspectionRole = correctionTargets.FirstOrDefault(run.SelectedAgents.First(x => x is AgentRole.BackendEngineer or AgentRole.FrontendEngineer));
                 var repositoryFacts = await ToolAsync("ReadRepository", "repository-facts", JsonSerializer.SerializeToElement(new { }), inspectionRole);
@@ -296,8 +296,20 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 context += ContextBudget.ToolEvidence(operationId, name, previous);
                 return previous;
             }
-            var inspectionKey = name + "/" + Key(args.GetRawText());
             var readOnlyInspection = name is "ReadRepository" or "ListFiles" or "ReadFile" or "SearchCode" or "InspectDiff";
+            if (!readOnlyInspection)
+            {
+                for (var offset = 0; ; offset += 1000)
+                {
+                    var priorFailures = await store.RecordsAsync("event", project.Id, run.Id, null, 0, offset, 1000, ct, "Blocked");
+                    var unresolved = priorFailures.FirstOrDefault(x => x.Name == "ExecutorOperationBlocked" && x.Metadata.GetValueOrDefault("operationId") == operationId && !string.Equals(x.Metadata.GetValueOrDefault("outcomeUnknown"), "False", StringComparison.OrdinalIgnoreCase));
+                    if (unresolved != null)
+                        throw new ExecutorFailureException(ExecutorFailureCategory.WorkspaceConflict, operationId, name, int.TryParse(unresolved.Metadata.GetValueOrDefault("httpStatus"), out var recordedStatus) ? recordedStatus : null, true, ExecutorFailureReason.ReconciliationRequired);
+                    if (priorFailures.Count < 1000) break;
+                    await CheckOwnershipAsync();
+                }
+            }
+            var inspectionKey = name + "/" + Key(args.GetRawText());
             if (readOnlyInspection && inspections.TryGetValue(inspectionKey, out var cached))
             {
                 context += ContextBudget.ToolEvidence(cached.Id, name, cached.Result);
@@ -318,7 +330,12 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             catch (ExecutorFailureException failure)
             {
                 await CheckOwnershipAsync();
-                await store.AppendAsync(new() { Id = "executor-failure-" + operationId, Kind = "event", ProjectId = project.Id, RunId = run.Id, Name = "ExecutorOperationBlocked", Content = failure.Message, Status = "Blocked", Metadata = new() { ["operationId"] = operationId, ["category"] = failure.Category.ToString(), ["httpStatus"] = failure.StatusCode?.ToString() ?? "", ["outcomeUnknown"] = failure.OutcomeUnknown.ToString(), ["argumentsHash"] = argumentsHash } }, ct);
+                try
+                {
+                    await store.AppendAsync(new() { Id = $"executor-failure-{operationId}-{run.Version}", Kind = "event", ProjectId = project.Id, RunId = run.Id, Name = "ExecutorOperationBlocked", Content = failure.Message, Status = "Blocked", Metadata = new() { ["operationId"] = operationId, ["category"] = failure.Category.ToString(), ["httpStatus"] = failure.StatusCode?.ToString() ?? "", ["outcomeUnknown"] = failure.OutcomeUnknown.ToString(), ["reason"] = failure.Reason.ToString(), ["argumentsHash"] = argumentsHash, ["attemptVersion"] = run.Version.ToString() } }, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception persistence) { throw new ExecutorEvidenceException(failure, persistence); }
                 throw;
             }
             catch (Exception exception) when (exception is ArgumentException or JsonException) { result = new(false, exception.Message); }

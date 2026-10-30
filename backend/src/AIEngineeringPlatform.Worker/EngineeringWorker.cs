@@ -52,12 +52,19 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                 catch (OperationCanceledException) when (execution.IsCancellationRequested) { }
                 catch (Exception exception)
                 {
+                    var executorFailure = exception as ExecutorFailureException ?? (exception as ExecutorEvidenceException)?.Failure;
+                    var persistenceFailure = exception as PersistenceFailureException ?? (exception as ExecutorEvidenceException)?.PersistenceFailure;
+                    if (executorFailure != null)
+                        logger.LogWarning("Executor failure for run {RunId}: operation {OperationId}, HTTP {HttpStatus}, category {Category}, reason {Reason}, outcomeUnknown {OutcomeUnknown}; evidencePersistenceFailed {EvidencePersistenceFailed}", run.Id, executorFailure.OperationId, executorFailure.StatusCode, executorFailure.Category, executorFailure.Reason, executorFailure.OutcomeUnknown, exception is ExecutorEvidenceException);
+                    if (persistenceFailure != null)
+                        logger.LogWarning("Persistence failure for run {RunId}: code {Code}, index {Index}, record {RecordId}, kind {Kind}, identityConflict {IdentityConflict}", run.Id, persistenceFailure.Code, persistenceFailure.Index, persistenceFailure.RecordId, persistenceFailure.RecordKind, persistenceFailure.IdentityConflict);
+                    logger.LogWarning("Execution {RunId} stage {Stage} failed with {ErrorType} at {Source}", run.Id, run.Status, exception.GetType().Name, exception.StackTrace);
                     var current = await store.GetRunAsync(run.Id, stoppingToken);
                     if (current is { IsRunnable: true } && current.LeaseOwner == owner)
                     {
-                        var safeReason = exception is ExecutorFailureException or ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : "Stage failed; inspect operational diagnostics using the run identifier.";
+                        var safeReason = exception is ExecutorFailureException or ExecutorEvidenceException or PersistenceFailureException or ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : "Stage failed; inspect operational diagnostics using the run identifier.";
                         if (exception is TaskReconciliationException { Outcome: ExecutionOutcome.AwaitingHumanInput } && !safeReason.StartsWith("Human clarification required:", StringComparison.Ordinal)) safeReason = "Human clarification required: " + safeReason;
-                        var failed = exception is TaskReconciliationException reconciliation ? current.Transition(RunStage.Paused, safeReason) with { Outcome = reconciliation.Outcome } : exception is ExecutorFailureException or ConfigurationException or ExecutionLimitException ? current.Transition(RunStage.Paused, safeReason) with { Outcome = ExecutionOutcome.Blocked } : current.Transition(RunStage.Failed, safeReason);
+                        var failed = exception is TaskReconciliationException reconciliation ? current.Transition(RunStage.Paused, safeReason) with { Outcome = reconciliation.Outcome } : exception is ExecutorFailureException or ExecutorEvidenceException or PersistenceFailureException or ConfigurationException or ExecutionLimitException ? current.Transition(RunStage.Paused, safeReason) with { Outcome = ExecutionOutcome.Blocked } : current.Transition(RunStage.Failed, safeReason);
                         failed = failed with { FailureCategory = FailureDiagnosis.Category(exception, current.CurrentStage) };
                         if (await store.SaveRunAsync(failed, current.Version, owner, stoppingToken) && (exception is HttpRequestException or TimeoutException or TaskCanceledException) && current.RetriesFor(current.CurrentStage) < current.Policy.MaxRetries)
                         {
@@ -66,7 +73,6 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                             if (retryable?.CurrentStage == RunStage.Failed && retryable.LeaseOwner == owner && retryable.Version == current.Version + 1) await store.SaveRunAsync(retryable.Transition(retryable.ResumeStage), retryable.Version, owner, stoppingToken);
                         }
                     }
-                    logger.LogWarning("Execution {RunId} stage {Stage} failed with {ErrorType} at {Source}", run.Id, run.Status, exception.GetType().Name, exception.StackTrace);
                 }
                 finally { execution.Cancel(); await heartbeat; await store.ReleaseLeaseAsync(run.Id, owner, stoppingToken); }
             }

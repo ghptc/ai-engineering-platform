@@ -23,9 +23,9 @@ public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, st
         using var response = await SendAsync(request, timeout.Token, ct);
         if (!response.IsSuccessStatusCode)
         {
-            var category = await ClassifyAsync(response, timeout.Token);
+            var (category, reason) = await ClassifyAsync(response, timeout.Token);
             throw new ExecutorFailureException(category, request.OperationId, request.Operation, (int)response.StatusCode,
-                (int)response.StatusCode >= 500 || (int)response.StatusCode is 408 or 409 or 429);
+                reason is ExecutorFailureReason.ImageUnavailable or ExecutorFailureReason.ProfileTargetMissing ? false : (int)response.StatusCode >= 500 || (int)response.StatusCode is 408 or 409 or 429, reason);
         }
         await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
         using var buffer = new MemoryStream();
@@ -63,7 +63,7 @@ public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, st
         }
     }
 
-    private static async Task<ExecutorFailureCategory> ClassifyAsync(HttpResponseMessage response, CancellationToken ct)
+    private static async Task<(ExecutorFailureCategory, ExecutorFailureReason)> ClassifyAsync(HttpResponseMessage response, CancellationToken ct)
     {
         var category = (int)response.StatusCode switch
         {
@@ -85,16 +85,20 @@ public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, st
             if (read == 0) break;
             count += read;
         }
-        if (count > 4096) return category;
+        if (count > 4096) return (category, ExecutorFailureReason.Unspecified);
         try
         {
             using var json = System.Text.Json.JsonDocument.Parse(bytes.AsMemory(0, count));
-            if (json.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return category;
+            if (json.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return (category, ExecutorFailureReason.Unspecified);
             if (json.RootElement.TryGetProperty("code", out var code) && code.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                if (code.GetString() == "image_unavailable" && (int)response.StatusCode == 503) return (ExecutorFailureCategory.Infrastructure, ExecutorFailureReason.ImageUnavailable);
+                if (code.GetString() == "profile_target_missing" && (int)response.StatusCode == 422) return (ExecutorFailureCategory.ProfileRestriction, ExecutorFailureReason.ProfileTargetMissing);
                 category = code.GetString() switch { "repository_access" => ExecutorFailureCategory.RepositoryAccess, "profile_restriction" => ExecutorFailureCategory.ProfileRestriction, _ => category };
+            }
         }
         catch (System.Text.Json.JsonException) { }
-        return category;
+        return (category, ExecutorFailureReason.Unspecified);
     }
 
 }

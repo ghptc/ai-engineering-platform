@@ -96,13 +96,38 @@ public sealed partial class MongoPlatformStore : IPlatformStore, IWorkspaceQueri
     }
     public async Task<bool> RenewLeaseAsync(string id, string owner, CancellationToken ct) => (await runs.UpdateOneAsync(x => x.Id == id && x.Owner == owner && x.LeaseExpiry > DateTime.UtcNow, Builders<RunDocument>.Update.Set(x => x.LeaseExpiry, DateTime.UtcNow.AddMinutes(2)), cancellationToken: ct)).MatchedCount == 1;
     public Task ReleaseLeaseAsync(string id, string owner, CancellationToken ct) => runs.UpdateOneAsync(x => x.Id == id && x.Owner == owner, Builders<RunDocument>.Update.Set(x => x.Owner, null).Set(x => x.LeaseExpiry, DateTime.UnixEpoch), cancellationToken: ct);
-    public async Task AppendAsync(RecordEntry entry, CancellationToken ct)
+    public async Task AppendAsync(RecordEntry entry, CancellationToken ct) => await AppendCoreAsync(entry, ct);
+    private async Task<bool> AppendCoreAsync(RecordEntry entry, CancellationToken ct)
     {
         var counters = database.GetCollection<BsonDocument>("counters");
         var counter = await counters.FindOneAndUpdateAsync(new BsonDocument("_id", "events"), new BsonDocument("$inc", new BsonDocument("value", 1L)), new() { IsUpsert = true, ReturnDocument = ReturnDocument.After }, ct);
         entry = entry with { Sequence = counter["value"].ToInt64() };
-        try { await entries.InsertOneAsync(new() { Id = entry.Id, Kind = entry.Kind, Name = entry.Name, ProjectId = entry.ProjectId, RunId = entry.RunId, ConversationId = entry.ConversationId, ExternalId = entry.ExternalId, Status = entry.Status, Cost = entry.Kind == "usage" ? Decode<ModelExecutionResult>(entry.Content)!.Cost : 0, TokenUsage = entry.Kind == "usage" ? Decode<ModelExecutionResult>(entry.Content)!.InputTokens + Decode<ModelExecutionResult>(entry.Content)!.OutputTokens : 0, Sequence = entry.Sequence, CreatedAt = entry.CreatedAt.UtcDateTime, Data = Encode(entry) }, cancellationToken: ct); }
-        catch (MongoWriteException e) when (e.WriteError.Category == ServerErrorCategory.DuplicateKey) { var existing = await entries.Find(x => x.Id == entry.Id).FirstOrDefaultAsync(ct); if (existing == null || existing.Kind != entry.Kind || existing.Data != Encode(entry with { Sequence = existing.Sequence })) throw; }
+        try { await entries.InsertOneAsync(new() { Id = entry.Id, Kind = entry.Kind, Name = entry.Name, ProjectId = entry.ProjectId, RunId = entry.RunId, ConversationId = entry.ConversationId, ExternalId = entry.ExternalId, Status = entry.Status, Cost = entry.Kind == "usage" ? Decode<ModelExecutionResult>(entry.Content)!.Cost : 0, TokenUsage = entry.Kind == "usage" ? Decode<ModelExecutionResult>(entry.Content)!.InputTokens + Decode<ModelExecutionResult>(entry.Content)!.OutputTokens : 0, Sequence = entry.Sequence, CreatedAt = entry.CreatedAt.UtcDateTime, Data = Encode(entry) }, cancellationToken: ct); return true; }
+        catch (MongoWriteException e)
+        {
+            if (e.WriteError.Category == ServerErrorCategory.DuplicateKey)
+            {
+                var existing = await entries.Find(x => x.Id == entry.Id).FirstOrDefaultAsync(ct);
+                if (existing != null && SameAppend(existing.Data, entry)) return false;
+                throw new PersistenceFailureException(e.WriteError.Code, AppendIndex(e), entry.Id, entry.Kind, true);
+            }
+            throw new PersistenceFailureException(e.WriteError.Code, "not-applicable", entry.Id, entry.Kind, false);
+        }
+    }
+    private static string AppendIndex(MongoWriteException error)
+    {
+        // Only known index labels are copied; the driver message can include the rejected value/document.
+        if (error.WriteError.Message.Contains("index: _id_ ", StringComparison.Ordinal)) return "_id_";
+        if (error.WriteError.Message.Contains("index: ExternalId_1 ", StringComparison.Ordinal)) return "ExternalId_1";
+        return "unknown";
+    }
+    private static bool SameAppend(string existing, RecordEntry entry)
+    {
+        var saved = System.Text.Json.Nodes.JsonNode.Parse(existing)!.AsObject();
+        var proposed = System.Text.Json.Nodes.JsonNode.Parse(Encode(entry))!.AsObject();
+        // An append retry has a new local clock and allocated sequence, but the immutable event is unchanged.
+        foreach (var field in new[] { "CreatedAt", "Sequence" }) { saved.Remove(field); proposed.Remove(field); }
+        return System.Text.Json.Nodes.JsonNode.DeepEquals(saved, proposed);
     }
     public async Task<IReadOnlyList<RecordEntry>> RecordsAsync(string kind, string? projectId, string? runId, string? conversationId, long after, int offset, int limit, CancellationToken ct, string? status = null)
     {
@@ -136,8 +161,8 @@ public sealed partial class MongoPlatformStore : IPlatformStore, IWorkspaceQueri
     }
     public async Task<bool> IngestWebhookAsync(RecordEntry entry, CancellationToken ct)
     {
-        try { await AppendAsync(entry, ct); return true; }
-        catch (MongoWriteException exception) when (exception.WriteError.Category == ServerErrorCategory.DuplicateKey) { return false; }
+        try { return await AppendCoreAsync(entry, ct); }
+        catch (PersistenceFailureException exception) when (exception.Code == 11000) { return false; }
     }
     public Task CompleteWebhookAsync(string id, string status, CancellationToken ct) => entries.UpdateOneAsync(x => x.Id == id && x.Kind == "webhook", Builders<EntryDocument>.Update.Set(x => x.Status, status), cancellationToken: ct);
     public async Task SaveAgentAsync(AgentDefinition agent, CancellationToken ct) => await agents.ReplaceOneAsync(x => x.Id == agent.Id, new() { Id = agent.Id, Data = Encode(agent) }, new ReplaceOptions { IsUpsert = true }, ct);

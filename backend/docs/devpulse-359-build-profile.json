@@ -1,0 +1,8 @@
+{
+  "Image": "sha256:7742feb1d0b1193a8a6af2efa05805032d1f30c50d0f3dbba4460909f81e48a9",
+  "Command": ["dotnet", "build", "src/DevPulse.Api/DevPulse.Api.csproj", "--ignore-failed-sources", "-p:NuGetAudit=false"],
+  "RequiredFiles": ["src/DevPulse.Core/DevPulse.Core.csproj", "src/DevPulse.Api/DevPulse.Api.csproj"],
+  "MemoryMb": 1024,
+  "Cpus": 1,
+  "TimeoutSeconds": 120
+}
