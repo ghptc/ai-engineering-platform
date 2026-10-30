@@ -184,7 +184,7 @@ public sealed partial class RuntimeFlowTests
         var response = new SandboxResponse(true, text[..Math.Min(text.Length, 99000)], "actual-evidence", 0, "run", "revision", new("node", ["node", "--test"], "/workspace", text, ""));
         var sandbox = new RemoteExecutionSandbox(new HttpClient(new StaticResponse(response)), "https://sandbox.example.invalid/", "test-only-token");
         var request = new SandboxRequest("op", "run", new("owner", "repo", 1), "RunTests", JsonSerializer.SerializeToElement(new { profile = "node" }));
-        if (overflow) await Assert.ThrowsAsync<InvalidOperationException>(() => sandbox.ExecuteAsync(request, default));
+        if (overflow) await Assert.ThrowsAsync<ExecutorFailureException>(() => sandbox.ExecuteAsync(request, default));
         else Assert.Equal(text, (await sandbox.ExecuteAsync(request, default)).Execution!.Stdout);
     }
     private sealed class StaticResponse(SandboxResponse response) : HttpMessageHandler

@@ -315,6 +315,12 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             var toolStarted = System.Diagnostics.Stopwatch.StartNew();
             ToolResult result;
             try { result = await tools.Single(x => x.Name == name).ExecuteAsync(new(project, run, context, definition), args, operationId, ct); }
+            catch (ExecutorFailureException failure)
+            {
+                await CheckOwnershipAsync();
+                await store.AppendAsync(new() { Id = "executor-failure-" + operationId, Kind = "event", ProjectId = project.Id, RunId = run.Id, Name = "ExecutorOperationBlocked", Content = failure.Message, Status = "Blocked", Metadata = new() { ["operationId"] = operationId, ["category"] = failure.Category.ToString(), ["httpStatus"] = failure.StatusCode?.ToString() ?? "", ["outcomeUnknown"] = failure.OutcomeUnknown.ToString(), ["argumentsHash"] = argumentsHash } }, ct);
+                throw;
+            }
             catch (Exception exception) when (exception is ArgumentException or JsonException) { result = new(false, exception.Message); }
             await CheckOwnershipAsync();
             if (readOnlyInspection && result.Success && result.WorkspaceRevision != null) inspections[inspectionKey] = (operationId, result);

@@ -277,3 +277,19 @@ Seven skipped checks comprise five opt-in real Docker/Git/local-executor tests a
 | `backend/tests/AIEngineeringPlatform.Integration.Tests/AdapterTests.cs` | `43f66d5d75745d4f1524708af699b22f71127f1ac35eb7632948f06933e693f6` |
 | `frontend/src/features/executions/ProviderDiagnostics.tsx` | `31456a08f2afbb2e7242cde7edb9cd1deb67b4d8795890c69b80637fd2c90dc6` |
 | `frontend/tests/provider-diagnostics.test.tsx` | `27ac6532e50304d8df65d72b8b8c0b29ea86ded9d3a4a7c5535ef5735302ef54` |
+
+## Executor HTTP classification and recovery — 2026-10-30
+
+Feature branch: `fix/executor-http-recovery`, based on `efaf77b059fb0b09f77fac51f02e3d724b5541ef`. Source/test fingerprint SHA-256: `5e275d7f516080e7a21aeeac65e2339dcf69b5c66ce715447a883dc2486a2cf4` (sorted tracked and non-ignored source/test paths under backend/src, backend/tests, frontend/src and frontend/tests; each path, NUL, file bytes, NUL). Documentation-only finalization follows these checks.
+
+- Restore passed; solution build passed with zero warnings/errors.
+- Final sequential solution tests: 225 passed, seven opt-in cases skipped (18 Domain, 46 Application, two Architecture, 139 Integration, 20 LocalExecutor). MongoDB used a newly created disposable server on localhost:27028, with independent randomized test databases.
+- Explicit real Docker run: 24 passed, one remote disposable-repository test skipped. Image: `sha256:7742feb1d0b1193a8a6af2efa05805032d1f30c50d0f3dbba4460909f81e48a9`. Includes Unix authentication, actual 400/401/422/503 errors, four successful writes surviving rejection and missing-image failures, receipt replay/restart, real Git cycles, timeout/output bounds and Docker isolation/cleanup checks. The final Docker-only run also covers the added missing-image case.
+- HTTP regressions cover 400/401/403/404/409/422/429/500/502/503/504, malformed and oversized bodies, credential/path suppression, caller cancellation, ambiguous transport failure, unchanged idempotency keys, disabled/exhausted retries and Retry-After bounds. Worker regression verifies persisted actionable evidence, paused state, preserved writes and no stage retry.
+- Clean `npm ci`, TypeScript, all 35 frontend tests and production build passed. Existing bundle-size warning remains. Both browser tests passed on dedicated non-reused test ports using the test-only host; regenerated screenshots were excluded.
+- Production Docker build passed under a separate `ai-engineering-platform:executor-http-fix` tag; no deployment or owner service replacement.
+- `git diff --check` passed. Manual diff review covered integration boundaries, raw-body suppression, status/category mapping, retry eligibility/limits, receipt identity, cancellation, persistence before notification and unchanged isolation/authentication controls. Review corrected a possible failure-event/successful-tool record-ID collision by giving failure events a separate prefix.
+
+Initial broad runs encountered a disposable MongoDB file-descriptor limit; that server alone was recreated with nofile=65536 and the final suite passed. Earlier runs also identified old tests expecting generic exceptions; they now assert typed failures. One existing latest-event-history assertion failed during an intermediate run and passed in the final complete suite. Logs are retained locally under `/tmp/aep-executor-fix-*`; they are not committed.
+
+Historical diagnosis remains limited: `RunCommand {profile:build}` is established from persisted evidence, but the incident HTTP status/body were discarded by the previous implementation. A missing configured image is observed now; HTTP 409 is a hypothesis under the old mapping, not a historically verified status. See [executor-http-recovery.md](executor-http-recovery.md). Four DevPulse write receipts and their final revision were preserved read-only. No live OpenAI/GitHub agent run, DevPulse recovery execution, human delivery approval, deployment or merge is claimed.
