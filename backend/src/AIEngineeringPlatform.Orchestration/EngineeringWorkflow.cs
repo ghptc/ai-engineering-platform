@@ -65,7 +65,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 var blockers = planningTasks.Where(x => x.Metadata.GetValueOrDefault("taskIndex", "0") == run.TaskIndex.ToString() && x.Name is "BusinessAnalyst" or "Architect")
                     .Select(x => JsonSerializer.Deserialize<ModelExecutionResult>(x.Content)!.Output)
                     .Where(x => x.ToolCalls.Length == 0).SelectMany(x => x.Planning?.Blockers ?? [])
-                    .Where(x => x.Stage is "Implementation" or "Delivery").ToArray();
+                    .Where(x => x.Stage == "Implementation").ToArray();
                 if (blockers.Length > 0) throw new ConfigurationException("Planning identified execution prerequisites requiring owner reconciliation: " + string.Join("; ", blockers.Select(x => x.Reason)));
                 if (!sandbox.Configured || !await sandbox.IsReadyAsync(ct)) throw new ConfigurationException("Secure executor is not ready. Verify authentication and Docker isolation, and rebuild/restart the host daemon with executor contract version 2 before resuming; no implementation operation was sent.");
                 var correctionTargets = run.ReworkPlan.Where(x => x.Iteration == run.Iteration).Select(x => x.TargetAgent).ToArray();
@@ -73,9 +73,8 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 var repositoryFacts = await ToolAsync("ReadRepository", "repository-facts", JsonSerializer.SerializeToElement(new { }), inspectionRole);
                 if (!repositoryFacts.Success) throw new InvalidOperationException("Repository inspection failed.");
                 using (var capabilityFacts = JsonDocument.Parse(repositoryFacts.Output))
-                    if (capabilityFacts.RootElement.TryGetProperty("Capabilities", out var capabilities) && capabilities.TryGetProperty("Profiles", out var configuredProfiles) &&
-                        !configuredProfiles.EnumerateArray().Any(x => x.GetProperty("Purpose").GetString() == "Test"))
-                        throw new ConfigurationException("No administrator-approved test profiles are configured; reconcile executor capabilities before implementation.");
+                    if (!capabilityFacts.RootElement.TryGetProperty("TestProfiles", out var applicableTests) || applicableTests.GetArrayLength() == 0)
+                        await service.EventAsync(run, "VerificationPrerequisite", "No applicable tests yet. Engineers may implement with authorized tools/build profiles; Test Engineer must create real tests. Owner approval of fixed test profiles is required before verification. No test or QA acceptance is granted.", ct);
                 await ToolAsync("ReconcileRepository", "git-reconciliation", JsonSerializer.SerializeToElement(new { }), inspectionRole);
                 var before = await ToolAsync("InspectDiff", "pre-implementation", JsonSerializer.SerializeToElement(new { }), inspectionRole);
                 foreach (var developer in correctionTargets.Length > 0 ? correctionTargets : run.SelectedAgents.Where(x => x is AgentRole.BackendEngineer or AgentRole.FrontendEngineer))
@@ -97,7 +96,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 var testFacts = await ToolAsync("ReadRepository", "test-profile-facts", JsonSerializer.SerializeToElement(new { }), AgentRole.TestEngineer);
                 using var testFactsJson = JsonDocument.Parse(testFacts.Output);
                 var profiles = testFactsJson.RootElement.GetProperty("TestProfiles").EnumerateArray().Select(x => x.GetString()!).ToArray();
-                var selectedProfile = profiles.Contains("all") ? "all" : profiles.Length == 1 ? profiles[0] : throw new ConfigurationException("Configure one applicable test profile or an aggregate profile for this repository.");
+                var selectedProfile = profiles.Contains("all") ? "all" : profiles.Length == 1 ? profiles[0] : throw new ConfigurationException("Test verification blocked: owner must approve one applicable fixed test profile or an aggregate profile targeting the real test projects. Test Engineer must create missing test infrastructure first. Preserve the workspace and resume RunningTests after profile approval; no QA or delivery acceptance is granted.");
                 var tests = await ToolAsync("RunTests", "required-tests", JsonSerializer.SerializeToElement(new { profile = selectedProfile }), AgentRole.TestEngineer);
                 await ArtifactAsync("test-report", ArtifactType.TestReport, JsonSerializer.Serialize(tests));
                 await service.EventAsync(run, "TestExecutionCompleted", JsonSerializer.Serialize(tests), ct);

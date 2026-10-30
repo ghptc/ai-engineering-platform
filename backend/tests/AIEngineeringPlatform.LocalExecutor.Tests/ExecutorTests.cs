@@ -196,12 +196,21 @@ public sealed class ExecutorTests
         profile.Command = ["dotnet", "build", "backend", "--no-restore"];
         var rejected = await Assert.ThrowsAsync<ExecutorFailureException>(() => fixture.Executor.ExecuteAsync(Request("devpulse", "wrong-target", "RunCommand", new { profile = "build" }), default));
         Assert.Equal(ExecutorFailureReason.ProfileTargetMissing, rejected.Reason); Assert.False(rejected.OutcomeUnknown);
-        profile.Command = ["dotnet", "build", "src/DevPulse.Core/DevPulse.Core.csproj", "--ignore-failed-sources", "-p:NuGetAudit=false"];
+        profile.Command = ["dotnet", "build", "src/DevPulse.Core/DevPulse.Core.csproj", "-p:RestoreIgnoreFailedSources=true", "-p:NuGetAudit=false"];
         var compiled = await fixture.Executor.ExecuteAsync(Request("devpulse", "core-build", "RunCommand", new { profile = "build" }), default);
         Assert.True(compiled.Success, compiled.Output); Assert.Equal(written.DiffHash, compiled.DiffHash);
-        profile.Command = ["dotnet", "build", "src/DevPulse.Api/DevPulse.Api.csproj", "--ignore-failed-sources", "-p:NuGetAudit=false"];
+        profile.Command = ["dotnet", "build", "src/DevPulse.Api/DevPulse.Api.csproj", "-p:RestoreIgnoreFailedSources=true", "-p:NuGetAudit=false"];
         var unfinished = await fixture.Executor.ExecuteAsync(Request("devpulse", "api-build", "RunCommand", new { profile = "build" }), default);
         Assert.False(unfinished.Success); Assert.Contains("CS5001", unfinished.Output); Assert.Equal(written.DiffHash, unfinished.DiffHash);
+        fixture.Options.Repositories[0].Profiles["backend"] = new()
+        {
+            Image = profile.Image, RequiredFiles = ["src/DevPulse.Core/DevPulse.Core.csproj"],
+            Command = ["dotnet", "build", "src/DevPulse.Core/DevPulse.Core.csproj", "-p:RestoreIgnoreFailedSources=true", "-p:NuGetAudit=false"]
+        };
+        // Even an exit-zero build deliberately misconfigured as a test cannot certify a revision.
+        var zeroTests = await fixture.Executor.ExecuteAsync(Request("devpulse", "zero-test-build", "RunTests", new { profile = "backend" }), default);
+        Assert.Equal(0, zeroTests.ExitCode); Assert.False(zeroTests.Success); Assert.Contains("tests=0", zeroTests.Output);
+        Assert.Null(JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(fixture.Root, "runs", "devpulse", "state.json"))).RootElement.GetProperty("testedRevision").GetString());
         var replay = await fixture.Executor.ExecuteAsync(Request("devpulse", "api-write", "WriteFile", new { path = "src/DevPulse.Api/DevPulse.Api.csproj", content = api }), default);
         Assert.Equal(written, replay);
     }
