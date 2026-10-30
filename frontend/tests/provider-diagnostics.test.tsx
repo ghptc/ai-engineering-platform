@@ -31,3 +31,36 @@ it("tolerates missing historical diagnostics", () => {
   const { container } = render(<ProviderDiagnostics runId="run" />);
   expect(container).toBeEmptyDOMElement();
 });
+
+it("shows the incomplete reason, allowance and recovery action", () => {
+  state.content = JSON.stringify({
+    Diagnostics: {
+      Model: "configured-model",
+      ResponseStatus: "incomplete",
+      IncompleteReason: "max_output_tokens",
+      IncompleteClassification: "OutputLimit",
+      MaxOutputTokens: 4000,
+      OutputTokens: 4000,
+      RecoveryGuidance:
+        "Retry the failed checkpoint with a larger configured output allowance.",
+    },
+  });
+  render(<ProviderDiagnostics runId="run" />);
+  expect(screen.getByText("max_output_tokens")).toBeInTheDocument();
+  expect(screen.getByText("OutputLimit")).toBeInTheDocument();
+  expect(screen.getAllByText("4000")).toHaveLength(2);
+  expect(screen.getByText(/Retry the failed checkpoint/)).toBeInTheDocument();
+});
+
+it("offers reason-specific recovery for persisted historical incomplete responses", () => {
+  state.content = JSON.stringify({
+    Diagnostics: {
+      ResponseStatus: "incomplete",
+      IncompleteReason: "content_filter",
+    },
+  });
+  render(<ProviderDiagnostics runId="run" />);
+  expect(
+    screen.getByText(/Increasing output tokens will not address this reason/),
+  ).toBeInTheDocument();
+});

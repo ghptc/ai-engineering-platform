@@ -17,10 +17,22 @@ export function ProviderDiagnostics({ runId }: { runId: string }) {
   } catch {
     return null;
   }
+  // Historical records predate server-derived guidance; preserve their original data.
+  const recovery =
+    diagnostics.RecoveryGuidance ??
+    (diagnostics.ResponseStatus === "incomplete"
+      ? diagnostics.IncompleteReason === "max_output_tokens"
+        ? "Retry the failed checkpoint with a larger configured output allowance or a smaller focused plan. Remaining budget, context capacity and run time are required; extend exhausted limits explicitly."
+        : diagnostics.IncompleteReason === "content_filter"
+          ? "Review the request for policy issues before retrying. Increasing output tokens will not address this reason."
+          : "Inspect the provider reason before retrying the failed checkpoint. Do not assume truncation."
+      : null);
   const fields = [
     "Model",
     "ResponseStatus",
     "IncompleteReason",
+    "IncompleteClassification",
+    "MaxOutputTokens",
     "ErrorCategory",
     "RequestId",
     "ResponseId",
@@ -44,6 +56,9 @@ export function ProviderDiagnostics({ runId }: { runId: string }) {
               : "Unavailable",
         }))}
       />
+      {typeof recovery === "string" && (
+        <Typography.Paragraph>{recovery}</Typography.Paragraph>
+      )}
       <Typography.Paragraph type="secondary">
         Unknown request usage reserves the configured maximum cost. Parsing
         failures require inspection before resuming. Successful tool checkpoints
