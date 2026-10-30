@@ -334,3 +334,24 @@ Source scope: EngineeringWorkflow, agent lifecycle instructions, PlanningFlowTes
 - `docker build -t ai-engineering-platform:local .`: passed; did not replace the running owner application.
 
 Lifecycle regressions cover README bootstrap, Delivery blockers with and without subsequent passing tests, missing profiles, genuine Implementation blockers, Test Engineer execution, absence of QA/delivery for missing tests, and resume preserving checkpoints without repeated writes. Original DevPulse workspace and existing receipts matched an isolated pre-verification snapshot. No live OpenAI/GitHub agent cycle, automatic resume, production deployment, human delivery approval or merge is claimed. See [incident evidence and recovery](implementation-verification-boundary.md).
+
+## Greenfield frontend handoff correction — 2026-10-30
+
+Scope and persisted evidence: [DevPulse frontend investigation](devpulse-frontend-blocker.md). Changes limited to agent instructions, versioned startup migration, context construction, deterministic regressions and documentation. Real diff reviewed: no tool authorization, orchestration routing, sandbox profile, credentials, executor code or production execution changes.
+
+- `dotnet restore backend/AIEngineeringPlatform.sln`: passed, up to date.
+- `dotnet build backend/AIEngineeringPlatform.sln --no-restore -m:1`: passed, zero warnings/errors.
+- `TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27028 dotnet test backend/AIEngineeringPlatform.sln --no-restore`: 251 passed, eight skipped (six explicit real-Docker opt-in tests, two live OpenAI/GitHub tests). Fresh isolated test MongoDB; production MongoDB untouched. An earlier attempt against port 27029 was interrupted by a server crash (exit 139), so its failures are not counted as a passing run.
+- New deterministic integration regressions: legacy and focused frontend bootstrap/handoff, plus archive-before-migration and unchanged tools. Both context-route tests fail with the original ContextBuilder and pass with the fix. Regression fixtures simulate model/sandbox operations; they do not prove live model behavior or a runnable DevPulse frontend.
+- Frontend `typecheck`, `test` (35 passed), `build`: passed. Existing jsdom CSS/pseudo-element messages and bundle-size warning remain.
+- `git diff --check`: passed. No frontend source or executor changes; browser E2E, application Docker rebuild and explicit real Docker/live-agent tests were not rerun for this correction.
+- DevPulse's actual persisted run, source writes, checkpoints and owner services preserved; no deployment, resume, PR fabrication, default-branch change or merge performed. The platform fix is delivered through a separate feature-branch PR for human review.
+
+Source/test SHA-256 fingerprints for this verification (documentation updates do not change tested code):
+
+```text
+5375ea7eea4560c492f3fca8a1c4161b083d30666e42e7a2fb9ec0112d89ad3a  backend/src/AIEngineeringPlatform.Agents/EngineeringAgents.cs
+adea79972cf131800664cf4eda0872418519618060a26b1554580024022d8e83  backend/src/AIEngineeringPlatform.Application/ContextBuilder.cs
+8c5a3a5811b1e48bc91474ded81917ae3b752c631a1f59c1f5dfe9a4936c79bd  backend/src/AIEngineeringPlatform.Worker/EngineeringWorker.cs
+69d71f5f9e9139413328010b22f7813306b3a97db001a4314ac64a9844dcec75  backend/tests/AIEngineeringPlatform.Integration.Tests/GreenfieldFrontendTests.cs
+```
