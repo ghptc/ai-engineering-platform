@@ -3,9 +3,20 @@ namespace AIEngineeringPlatform.Application;
 public enum ExecutorFailureCategory { InvalidArguments, Authorization, RepositoryAccess, ProfileRestriction, WorkspaceConflict, Timeout, RateLimited, Infrastructure }
 
 // Contains only locally authored messages and bounded protocol metadata, never remote response text.
-public sealed class ExecutorFailureException(ExecutorFailureCategory category, string operationId, string operation, int? statusCode, bool outcomeUnknown)
-    : Exception($"Executor {operation} failed ({category}, HTTP {statusCode?.ToString() ?? "unavailable"}, operation {operationId}). {Recovery(category, outcomeUnknown)}")
+public enum ExecutorFailureReason { Unspecified, ImageUnavailable, ProfileTargetMissing, ReconciliationRequired }
+
+public sealed class ExecutorFailureException(ExecutorFailureCategory category, string operationId, string operation, int? statusCode, bool outcomeUnknown, ExecutorFailureReason reason = ExecutorFailureReason.Unspecified)
+    : Exception($"Executor {operation} failed ({category}, HTTP {statusCode?.ToString() ?? "unavailable"}, operation {operationId}). {Guidance(category, outcomeUnknown, reason)}")
 {
+    public string Operation { get; } = operation;
+    public ExecutorFailureReason Reason { get; } = reason;
+    private static string Guidance(ExecutorFailureCategory category, bool unknown, ExecutorFailureReason reason) => reason switch
+    {
+        ExecutorFailureReason.ImageUnavailable => "The administrator-pinned workload image is unavailable. Provision and verify that exact image or review a replacement pin; no workload was started.",
+        ExecutorFailureReason.ProfileTargetMissing => "The fixed profile target does not match repository files. Ask the administrator to correct the target; no workload was started.",
+        ExecutorFailureReason.ReconciliationRequired => "A previous attempt has an uncertain recorded outcome. Explicit resume cannot automatically replay this operation. Reconcile its durable receipt, workspace revision and remote outcome first; no new attempt was sent.",
+        _ => Recovery(category, unknown)
+    };
     public ExecutorFailureCategory Category { get; } = category;
     public string OperationId { get; } = operationId;
     public int? StatusCode { get; } = statusCode;

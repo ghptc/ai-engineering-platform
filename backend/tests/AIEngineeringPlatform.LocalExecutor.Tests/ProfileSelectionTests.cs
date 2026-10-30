@@ -48,4 +48,17 @@ public class ProfileSelectionTests
     [Fact]
     public void NodeTestProfileCannotSubstituteShellOrArbitraryNodeArguments()
         => Assert.False(ProfileSelection.Applicable(["feature.test.mjs"], new() { Command = ["node", "-e", "arbitrary code"] }));
+    [Theory]
+    [InlineData("backend", false)]
+    [InlineData("src", false)]
+    [InlineData("src/DevPulse.Core", true)]
+    [InlineData("src/DevPulse.Core/DevPulse.Core.csproj", true)]
+    [InlineData("src/DevPulse.Api/DevPulse.Api.csproj", true)]
+    [InlineData(".", false)]
+    public void DevPulseBuildProfileMustTargetTheActualGeneratedStructure(string target, bool applicable)
+    {
+        string[] files = ["README.md", "src/DevPulse.Core/DevPulse.Core.csproj", "src/DevPulse.Api/DevPulse.Api.csproj"];
+        Assert.Equal(applicable, ProfileSelection.ApplicableCommand(files, new() { Command = ["dotnet", "build", target, "--no-restore"] }));
+    }
+
 }

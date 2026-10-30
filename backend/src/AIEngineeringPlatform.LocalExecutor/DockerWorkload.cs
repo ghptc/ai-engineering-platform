@@ -31,6 +31,9 @@ public sealed class DockerWorkload(ExecutorOptions options, ControlledProcess pr
     public async Task<ProcessResult> ExecuteAsync(string workspace, ExecutionProfile profile, SandboxRequest request, CancellationToken ct)
     {
         await VerifyHostAsync(ct);
+        var image = await process.RunAsync("/usr/bin/docker", ["image", "inspect", "--format", "{{.Id}}", profile.Image], null, 15, 10000, ct);
+        if (image.ExitCode != 0 || image.Output.Trim() != profile.Image)
+            throw new ExecutorFailureException(ExecutorFailureCategory.Infrastructure, request.OperationId, request.Operation, 503, false, ExecutorFailureReason.ImageUnavailable);
         var name = "aep-job-" + Guid.NewGuid().ToString("N");
         var archive = WorkspaceFiles.Archive(workspace, options.WorkspaceLimitMb);
         var memory = Math.Min(profile.MemoryMb, request.MemoryMb);

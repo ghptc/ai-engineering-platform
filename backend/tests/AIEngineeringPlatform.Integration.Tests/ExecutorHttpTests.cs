@@ -91,6 +91,17 @@ public sealed class ExecutorHttpTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Sandbox(new Handler(_ => throw new OperationCanceledException())).ExecuteAsync(Request("WriteFile"), cancellation.Token));
     }
 
+    [Theory]
+    [InlineData(503, "image_unavailable", ExecutorFailureReason.ImageUnavailable)]
+    [InlineData(422, "profile_target_missing", ExecutorFailureReason.ProfileTargetMissing)]
+    public async Task VerifiedPreflightRejectionIsKnownNotStarted(int status, string code, ExecutorFailureReason reason)
+    {
+        var handler = new Handler(_ => new((HttpStatusCode)status) { Content = JsonContent.Create(new { code, detail = "secret daemon text" }) });
+        var error = await Assert.ThrowsAsync<ExecutorFailureException>(() => Sandbox(handler).ExecuteAsync(Request("RunCommand"), default));
+        Assert.Equal(reason, error.Reason); Assert.False(error.OutcomeUnknown);
+        Assert.DoesNotContain("secret", error.Message); Assert.Contains("no workload was started", error.Message);
+    }
+
     private static SandboxRequest Request(string operation) => new("operation", "run", new("owner", "repo", 1), operation, JsonSerializer.SerializeToElement(new { path = "file" }), MaxTransientRetries: 2);
     private static RemoteExecutionSandbox Sandbox(Handler handler) => new(new HttpClient(handler), "https://executor.invalid/", "control-token");
     private sealed class Handler(Func<int, HttpResponseMessage> response) : HttpMessageHandler

@@ -293,3 +293,31 @@ Feature branch: `fix/executor-http-recovery`, based on `efaf77b059fb0b09f77fac51
 Initial broad runs encountered a disposable MongoDB file-descriptor limit; that server alone was recreated with nofile=65536 and the final suite passed. Earlier runs also identified old tests expecting generic exceptions; they now assert typed failures. One existing latest-event-history assertion failed during an intermediate run and passed in the final complete suite. Logs are retained locally under `/tmp/aep-executor-fix-*`; they are not committed.
 
 Historical diagnosis remains limited: `RunCommand {profile:build}` is established from persisted evidence, but the incident HTTP status/body were discarded by the previous implementation. A missing configured image is observed now; HTTP 409 is a hypothesis under the old mapping, not a historically verified status. See [executor-http-recovery.md](executor-http-recovery.md). Four DevPulse write receipts and their final revision were preserved read-only. No live OpenAI/GitHub agent run, DevPulse recovery execution, human delivery approval, deployment or merge is claimed.
+
+## DevPulse 359ac513 root-cause correction — 2026-10-30
+
+Base: master `39ed6e7` (merged PR #15). Feature branch: `fix/devpulse-rejection-idempotency`. Final source/test fingerprint SHA-256: `e9d8e456b78ebab89efe9cd16777d88a1324a8576153c8ec7689071c7adcb4fb` using the sorted path/NUL/file/NUL procedure documented above. Only documentation and removal of test-regenerated screenshots follow this source verification.
+
+Investigation first established the persisted HTTP 409, exact `build` operation ID, same-ID failure event, real collection indexes and two successful write receipts. An unchanged-code regression then reproduced MongoWriteException at AppendAsync line 104; an isolated replay of the exported event returned code 11000 on `_id_`. No production insert/update/delete was used for diagnosis. The actual old daemon binary/config and copies of the real DevPulse workspace reproduced missing-image HTTP 409, invalid-target MSB1009, successful Core compilation and API CS5001. See [the root-cause report](devpulse-359-root-cause.md) for exact evidence, distinctions and recovery instructions.
+
+Final verification:
+
+| Check | Result |
+| --- | --- |
+| `dotnet restore backend/AIEngineeringPlatform.sln` | Passed |
+| `dotnet build backend/AIEngineeringPlatform.sln --no-restore -m:1` | Passed; zero warnings/errors |
+| `dotnet test backend/AIEngineeringPlatform.sln --no-restore -m:1` | 246 passed, eight opt-in skips: Domain 18, Application 46, Architecture 2, Integration 154, LocalExecutor 26 |
+| Explicit `RUN_LOCAL_EXECUTOR_TESTS=1 EXECUTOR_TEST_IMAGE=sha256:7742feb1d0b1193a8a6af2efa05805032d1f30c50d0f3dbba4460909f81e48a9 dotnet test backend/tests/AIEngineeringPlatform.LocalExecutor.Tests --no-restore` | 31 passed, one remote-only skip; real Docker/Unix/Git tests, original DevPulse layout, correct/wrong targets, known missing-image preflight, preserved receipts/revisions, authentication, readiness, resource limits and cleanup |
+| `npm ci --prefix frontend` | Passed |
+| `npm run typecheck --prefix frontend` | Passed |
+| `npm test --prefix frontend` | 35 passed |
+| `npm run build --prefix frontend` | Passed; existing bundle-size warning |
+| `npm run e2e --prefix frontend` | Both browser workflows passed on dedicated non-reused test ports |
+| `docker build -t ai-engineering-platform:devpulse-359-fix .` | Passed; separate image, manifest `sha256:20a189b8d3d32f9f6c16316482fd1c46327efbcff6a7b8e8c11f49b6148360e0` |
+| `git diff --check` | Passed |
+
+Mongo integration used the disposable `aep-devpulse-359-tests` server on localhost:27028 with nofile=65536 and randomized test databases. Raw local evidence is under `/tmp/devpulse-359-*`, with four actual-workspace experiments under `/tmp/devpulse-359-isolated-sasd67k5/`. Original worker diagnostics are filtered in `/tmp/devpulse-359-worker.log`; the exported event used for isolated reproduction is `/tmp/devpulse-359-failure-record.json`. Logs, temporary copies, credentials and generated screenshots are excluded from the commit.
+
+QA/regression coverage includes timestamp-only and concurrent append replay, unordered metadata, immutable-payload/kind conflicts preserving successful receipts, the external-ID index, concurrent webhook deduplication, the actual two-write/RunCommand build sequence, legacy failure IDs, explicit safe versus uncertain resume, real secondary Mongo 11000 without masking primary HTTP 409, structured worker log fields, and old/invalid daemon readiness versions. Manual diff review checked Clean Architecture dependencies, immutable record semantics, existing webhook insertion semantics, independent failure-event IDs, cancellation/lease/version behavior, paginated uncertainty guards, unchanged operation/idempotency keys and budgets, exact profile prerequisites, and all sandbox boundaries. An intermediate broad run exposed a webhook duplicate-return regression from append replay; the private insertion result and a concurrent webhook test corrected it. Initial test-host compilation checks also caught and corrected analyzer violations in the new tests; final checks passed.
+
+No live OpenAI/GitHub agent cycle, owner daemon restart, runtime profile change, production deployment, historical-event rewrite, DevPulse source modification, or automatic merge was performed. The original run remains Failed at version 61 with both successful writes and their final revision intact. A reviewable profile candidate is provided, but the legacy uncertain operation remains blocked pending a separately reviewed reconciliation action. Human approval and confirmed deployment/delivery are not claimed by this PR.

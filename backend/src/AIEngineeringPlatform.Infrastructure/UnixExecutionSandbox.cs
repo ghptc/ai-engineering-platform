@@ -32,8 +32,24 @@ public sealed class UnixExecutionSandbox : IExecutionSandbox, IDisposable
     public async Task<bool> IsReadyAsync(CancellationToken ct)
     {
         if (!Configured) return false;
-        try { using var response = await client.GetAsync("http://local-executor.invalid/health/ready", ct); return response.IsSuccessStatusCode; }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException) { return false; }
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "http://local-executor.invalid/health/ready");
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!response.IsSuccessStatusCode) return false;
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            var bytes = new byte[4097]; var count = 0;
+            while (count < bytes.Length)
+            {
+                var read = await stream.ReadAsync(bytes.AsMemory(count), ct);
+                if (read == 0) break;
+                count += read;
+            }
+            if (count > 4096) return false;
+            using var document = System.Text.Json.JsonDocument.Parse(bytes.AsMemory(0, count));
+            return document.RootElement.TryGetProperty("contractVersion", out var version) && version.ValueKind == System.Text.Json.JsonValueKind.Number && version.TryGetInt32(out var value) && value == 2;
+        }
+        catch (Exception exception) when (!ct.IsCancellationRequested && (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or IOException)) { return false; }
     }
     public void Dispose() => client.Dispose();
 }

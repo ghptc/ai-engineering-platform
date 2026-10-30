@@ -165,7 +165,7 @@ public sealed class ExecutorTests
             Assert.Equal(422, restricted.StatusCode); Assert.Equal(ExecutorFailureCategory.ProfileRestriction, restricted.Category);
             var unavailable = await Assert.ThrowsAsync<ExecutorFailureException>(() => client.ExecuteAsync(Request("socket-run", "missing-image", "RunCommand", new { profile = "format" }), default));
             Assert.Equal(503, unavailable.StatusCode); Assert.Equal(ExecutorFailureCategory.Infrastructure, unavailable.Category);
-            Assert.True(unavailable.OutcomeUnknown);
+            Assert.False(unavailable.OutcomeUnknown); Assert.Equal(ExecutorFailureReason.ImageUnavailable, unavailable.Reason);
             var afterFailure = await client.ExecuteAsync(Request("socket-run", "after-failure", "ReadRepository", new { }), default);
             Assert.Equal(written!.DiffHash, afterFailure.DiffHash);
             var replayWrite = await client.ExecuteAsync(Request("socket-run", "write-3", "WriteFile", new { path = "source-3.cs", content = "// preserved source" }), default);
@@ -183,6 +183,27 @@ public sealed class ExecutorTests
             Assert.Equal(first, replay);
         }
         finally { restarted.Kill(entireProcessTree: true); await restarted.WaitForExitAsync(); }
+    }
+    [DockerFact]
+    public async Task DevPulseBootstrapRejectsWrongTargetAndBuildsActualProjectsInIsolation()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        const string core = "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup></Project>";
+        const string api = "<Project Sdk=\"Microsoft.NET.Sdk.Web\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup><ItemGroup><ProjectReference Include=\"../DevPulse.Core/DevPulse.Core.csproj\" /></ItemGroup></Project>";
+        await fixture.Executor.ExecuteAsync(Request("devpulse", "core-write", "WriteFile", new { path = "src/DevPulse.Core/DevPulse.Core.csproj", content = core }), default);
+        var written = await fixture.Executor.ExecuteAsync(Request("devpulse", "api-write", "WriteFile", new { path = "src/DevPulse.Api/DevPulse.Api.csproj", content = api }), default);
+        var profile = fixture.Options.Repositories[0].Profiles["build"];
+        profile.Command = ["dotnet", "build", "backend", "--no-restore"];
+        var rejected = await Assert.ThrowsAsync<ExecutorFailureException>(() => fixture.Executor.ExecuteAsync(Request("devpulse", "wrong-target", "RunCommand", new { profile = "build" }), default));
+        Assert.Equal(ExecutorFailureReason.ProfileTargetMissing, rejected.Reason); Assert.False(rejected.OutcomeUnknown);
+        profile.Command = ["dotnet", "build", "src/DevPulse.Core/DevPulse.Core.csproj", "--ignore-failed-sources", "-p:NuGetAudit=false"];
+        var compiled = await fixture.Executor.ExecuteAsync(Request("devpulse", "core-build", "RunCommand", new { profile = "build" }), default);
+        Assert.True(compiled.Success, compiled.Output); Assert.Equal(written.DiffHash, compiled.DiffHash);
+        profile.Command = ["dotnet", "build", "src/DevPulse.Api/DevPulse.Api.csproj", "--ignore-failed-sources", "-p:NuGetAudit=false"];
+        var unfinished = await fixture.Executor.ExecuteAsync(Request("devpulse", "api-build", "RunCommand", new { profile = "build" }), default);
+        Assert.False(unfinished.Success); Assert.Contains("CS5001", unfinished.Output); Assert.Equal(written.DiffHash, unfinished.DiffHash);
+        var replay = await fixture.Executor.ExecuteAsync(Request("devpulse", "api-write", "WriteFile", new { path = "src/DevPulse.Api/DevPulse.Api.csproj", content = api }), default);
+        Assert.Equal(written, replay);
     }
     private static SandboxRequest Request(string run, string operation, string tool, object args) => new(operation, run, new("test-owner", "aep-fixture", 1), tool, JsonSerializer.SerializeToElement(args), TimeoutSeconds: 120, Fence: 1, LeaseOwner: "test-worker");
     private sealed class Fixture : IAsyncDisposable
