@@ -355,3 +355,14 @@ adea79972cf131800664cf4eda0872418519618060a26b1554580024022d8e83  backend/src/AI
 8c5a3a5811b1e48bc91474ded81917ae3b752c631a1f59c1f5dfe9a4936c79bd  backend/src/AIEngineeringPlatform.Worker/EngineeringWorker.cs
 69d71f5f9e9139413328010b22f7813306b3a97db001a4314ac64a9844dcec75  backend/tests/AIEngineeringPlatform.Integration.Tests/GreenfieldFrontendTests.cs
 ```
+
+## ReadFile corrective feedback (2026-10-30)
+
+Confirmed DevPulse missing-file request and preserved its paused state. Added narrowly bounded ReadFile HTTP 400 feedback; other executor failures remain blocking. See [investigation and safe recovery](devpulse-readfile-investigation.md). Focused regression: 8 passed, including durable failed-tool accounting, corrective next turn, no repeated writes, and blocking failure cases. Solution restore and build passed (zero warnings/errors); the initial full backend suite was interrupted after its isolated MongoDB hit its file-descriptor limit and crashed. Final suite passed on a fresh isolated server on port 27029 with nofile=65536: 258 passed (Application 46, Architecture 2, Domain 18, Integration 166, LocalExecutor 26), 8 opt-in skipped. Command: `TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27029 dotnet test backend/AIEngineeringPlatform.sln --no-restore -m:1 --blame-hang-timeout 2m`. Real Docker workloads and live OpenAI/GitHub execution were not run. Code diff reviewed; `git diff --check` passed. Frontend/browser and application-image builds were not rerun for this backend adapter-only change. Initial focused execution needed the isolated test MongoDB on localhost:27028; a sandbox IPC denial required rerunning dotnet outside the sandbox. No live OpenAI/GitHub workflow, production deployment or run resume was performed.
+
+Tested source SHA-256 (unchanged after successful tests):
+
+```text
+32ade5b470fb9ea1c194faabceecc60416468404be8d0f32478f20866d9f9aa5  backend/src/AIEngineeringPlatform.Infrastructure/EngineeringTool.cs
+fbf18d6fefdc44d33188dc50f7eb30a2d3ed963dc9dece0ec3901b834f6f10d8  backend/tests/AIEngineeringPlatform.Integration.Tests/ExecutorRecoveryTests.cs
+```

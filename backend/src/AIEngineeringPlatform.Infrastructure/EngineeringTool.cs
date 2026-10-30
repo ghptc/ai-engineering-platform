@@ -58,7 +58,17 @@ public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISou
         }
         if (Name is "ReconcileRepository" or "CreateBranch" or "CreatePullRequest" or "ReadPullRequest" or "SubmitCodeReview") return new(true, await source.ExecuteAsync(repository, Name, args, operationId, ct));
         if (Name == "RunTests" && (!args.TryGetProperty("profile", out var profile) || profile.GetString() is not ("backend" or "frontend" or "e2e" or "all" or "node"))) throw new ArgumentException("Use a configured node, backend, frontend, e2e or all test profile.");
-        var response = await sandbox.ExecuteAsync(new(operationId, context.Run.Id, repository, Name, args, TimeoutSeconds: limits?.TimeoutSeconds ?? 60, CpuLimit: limits?.CpuLimit ?? 1, MemoryMb: limits?.MemoryMb ?? 512, OutputLimitBytes: limits?.OutputLimitBytes ?? 100000, Fence: context.Run.Version, LeaseOwner: context.Run.LeaseOwner, MaxTransientRetries: Math.Clamp(context.Run.Policy.MaxRetries, 0, 2)), ct);
+        SandboxResponse response;
+        try
+        {
+            response = await sandbox.ExecuteAsync(new(operationId, context.Run.Id, repository, Name, args, TimeoutSeconds: limits?.TimeoutSeconds ?? 60, CpuLimit: limits?.CpuLimit ?? 1, MemoryMb: limits?.MemoryMb ?? 512, OutputLimitBytes: limits?.OutputLimitBytes ?? 100000, Fence: context.Run.Version, LeaseOwner: context.Run.LeaseOwner, MaxTransientRetries: Math.Clamp(context.Run.Policy.MaxRetries, 0, 2)), ct);
+        }
+        catch (ExecutorFailureException failure) when (Name == "ReadFile" && failure.Operation == Name && failure.OperationId == operationId && failure.Category == ExecutorFailureCategory.InvalidArguments && failure.StatusCode == 400 && !failure.OutcomeUnknown)
+        {
+            // The workflow persists this failed result and charges the tool budget before the next model turn.
+            // Never expose remote exception text or infer that every HTTP 400 means a missing file.
+            return new(false, "ReadFile was rejected (InvalidArguments, HTTP 400). Use ListFiles to select an existing regular repository file, then issue a new ReadFile call with {path}. Paths must be relative, non-secret and contain no traversal or symbolic links; output bounds still apply. A planned file may not exist yet. Do not repeat the rejected request or claim its content was read.");
+        }
         return new(response.Success && (Name != "RunTests" || response.ExitCode == 0), SecretRedactor.Redact(response.Output), response.EvidenceId, response.DiffHash, response.ExitCode, response.Execution == null ? null : response.Execution with { Command = response.Execution.Command.Select(SecretRedactor.Redact).ToArray(), Stdout = SecretRedactor.Redact(response.Execution.Stdout), Stderr = SecretRedactor.Redact(response.Execution.Stderr) });
     }
 }
