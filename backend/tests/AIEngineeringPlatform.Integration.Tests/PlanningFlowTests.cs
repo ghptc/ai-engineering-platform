@@ -12,13 +12,15 @@ public sealed partial class RuntimeFlowTests
     [Theory]
     [InlineData("safe", RunStage.AwaitingHumanApproval, true)]
     [InlineData("noProfiles", RunStage.Paused, true)]
+    [InlineData("delivery", RunStage.Paused, true)]
+    [InlineData("deliveryVerified", RunStage.AwaitingHumanApproval, true)]
     [InlineData("unsupported", RunStage.Paused, true)]
     [InlineData("infrastructure", RunStage.Paused, true)]
     [InlineData("planning", RunStage.Paused, false)]
     public async Task ReadmeOnlyPlanningRoutesByBlockerStageAndNeverApprovesUntestedChanges(string scenario, RunStage expected, bool architectRuns)
     {
         await using var root = new PlatformFactory();
-        var sandbox = new PlanningSandbox(scenario == "unsupported", scenario == "noProfiles");
+        var sandbox = new PlanningSandbox(scenario is "unsupported" or "delivery", scenario == "noProfiles");
         await using var factory = root.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
         {
             services.RemoveAll<ILanguageModelProvider>(); services.AddSingleton<ILanguageModelProvider>(new PlanningModel(scenario));
@@ -32,14 +34,32 @@ public sealed partial class RuntimeFlowTests
         var tasks = await store.RecordsAsync("task", run.ProjectId, run.Id, null, 0, 0, 1000, default);
         Assert.Equal(architectRuns, tasks.Any(x => x.Name == "Architect"));
         if (architectRuns) Assert.Contains(run.AgentTransitions, x => x.SourceAgent == AgentRole.BusinessAnalyst && x.TargetAgent == AgentRole.Architect);
-        if (scenario is "planning" or "infrastructure" or "noProfiles") Assert.DoesNotContain("WriteFile", sandbox.Operations);
-        if (scenario != "safe")
+        if (scenario is "planning" or "infrastructure") Assert.DoesNotContain("WriteFile", sandbox.Operations);
+        if (scenario is "noProfiles" or "delivery")
+        {
+            Assert.Contains("WriteFile", sandbox.Operations);
+            Assert.Contains(tasks, x => x.Name == "TestEngineer");
+            Assert.Equal(RunStage.RunningTests, run.ResumeStage);
+        }
+        if (scenario is not ("safe" or "deliveryVerified"))
         {
             Assert.DoesNotContain(tasks, x => x.Name == "QAEngineer");
             Assert.DoesNotContain("RunTests", sandbox.Operations);
             Assert.Equal(ExecutionOutcome.Blocked, run.Outcome);
         }
         Assert.DoesNotContain("PushBranch", sandbox.Operations);
+        if (scenario == "delivery")
+        {
+            var writes = sandbox.Operations.Count(x => x == "WriteFile");
+            var checkpoints = tasks.Select(x => (x.Id, x.Content)).ToArray();
+            (await client.PostAsJsonAsync($"/api/v1/runs/{run.Id}/resume", new { })).EnsureSuccessStatusCode();
+            run = await Wait(store, run.Id, r => !r.IsRunnable);
+            Assert.Equal(RunStage.RunningTests, run.ResumeStage);
+            Assert.Equal(writes, sandbox.Operations.Count(x => x == "WriteFile"));
+            var resumed = await store.RecordsAsync("task", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+            Assert.All(checkpoints, item => Assert.Contains(resumed, x => x.Id == item.Id && x.Content == item.Content));
+            Assert.DoesNotContain(resumed, x => x.Name == "QAEngineer");
+        }
     }
 
     [Fact]
@@ -103,6 +123,7 @@ public sealed partial class RuntimeFlowTests
             if (!context.Context.Contains("README.md", StringComparison.Ordinal))
                 return result with { Output = result.Output with { ToolCalls = [new("ReadRepository", JsonSerializer.SerializeToElement(new { }))] } };
             PlanningBlocker[] blockers = scenario == "infrastructure" ? [new("Implementation", "Required offline dependency unavailable", "fixture-capability-evidence")]
+                : scenario is "delivery" or "deliveryVerified" ? [new("Delivery", "Real approved tests required", "fixture-missing-tests")]
                 : scenario == "planning" ? [new("Planning", "Authorized repository cannot be inspected", "fixture-denied-evidence")] : [];
             return result with { Output = result.Output with
             {
@@ -123,7 +144,7 @@ public sealed partial class RuntimeFlowTests
             var response = await inner.ExecuteAsync(request, ct);
             if (request.Operation != "ReadRepository") return response;
             var written = Operations.Contains("WriteFile");
-            return response with { Output = JsonSerializer.Serialize(new { Files = written ? new[] { "README.md", "backend/App.csproj" } : ["README.md"], TestProfiles = written && !unsupported ? new[] { "node" } : [], HasSourceChanges = written, Capabilities = new { Profiles = noProfiles ? Array.Empty<object>() : new object[] { new { Name = "node", Purpose = "Test" } } } }) };
+            return response with { Output = JsonSerializer.Serialize(new { Files = written ? new[] { "README.md", "backend/App.csproj" } : ["README.md"], TestProfiles = written && !unsupported && !noProfiles ? new[] { "node" } : [], HasSourceChanges = written, Capabilities = new { Profiles = noProfiles ? Array.Empty<object>() : new object[] { new { Name = "node", Purpose = "Test" } } } }) };
         }
     }
 }
