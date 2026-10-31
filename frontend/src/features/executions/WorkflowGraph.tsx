@@ -40,7 +40,13 @@ export function WorkflowGraph({
   ].sort((a, b) => a - b);
   const team = teamState(run, events, handoffs);
   const specialists = team
-    .filter((a) => ["BackendEngineer", "FrontendEngineer"].includes(a.role))
+    .filter((a) =>
+      [
+        "BackendEngineer",
+        "FrontendEngineer",
+        "InfrastructureEngineer",
+      ].includes(a.role),
+    )
     .map((a) => ({
       ...a,
       state:
@@ -52,6 +58,9 @@ export function WorkflowGraph({
             ? "Paused"
             : a.state,
     }));
+  const specialistSpacing = specialists.length > 2 ? 20 : 25;
+  const specialistHeight = specialists.length > 2 ? 18 : 22;
+  const specialistCenter = 74 + specialistHeight / 2;
   const fit = () => {
     setZoom(
       Math.max(
@@ -273,22 +282,26 @@ export function WorkflowGraph({
                 tx = p.rework && specialistIndex >= 0 ? to.x + 8 : to.x + 100,
                 ty =
                   p.rework && specialistIndex >= 0
-                    ? 85 + specialistIndex * 25
+                    ? specialistCenter + specialistIndex * specialistSpacing
                     : to.y + (to.id === "implementation" ? 102 : 78),
                 lane = (i % 3) * 3;
               const d =
-                p.source === p.target
-                  ? `M672 ${
-                      85 +
-                      Math.max(
-                        0,
-                        specialists.findIndex((a) => a.role === p.sourceAgent),
-                      ) *
-                        25
-                    } V${85 + Math.max(0, specialistIndex) * 25} H668`
-                  : from.y === to.y
-                    ? `M${sx} ${sy} C${sx} ${sy + 35 + lane},${tx} ${ty + 35 + lane},${tx} ${ty}`
-                    : `M${sx} ${sy} C${sx} ${sy + 35 + lane},${tx} ${ty - 35 - lane},${tx} ${ty}`;
+                p.source === p.target && from.id !== "implementation"
+                  ? `M${from.x + 190} ${from.y + 52} C${from.x + 235} ${from.y + 30},${from.x + 235} ${from.y + 85},${from.x + 190} ${from.y + 66}`
+                  : p.source === p.target
+                    ? `M672 ${
+                        specialistCenter +
+                        Math.max(
+                          0,
+                          specialists.findIndex(
+                            (a) => a.role === p.sourceAgent,
+                          ),
+                        ) *
+                          specialistSpacing
+                      } V${specialistCenter + Math.max(0, specialistIndex) * specialistSpacing} H668`
+                    : from.y === to.y
+                      ? `M${sx} ${sy} C${sx} ${sy + 35 + lane},${tx} ${ty + 35 + lane},${tx} ${ty}`
+                      : `M${sx} ${sy} C${sx} ${sy + 35 + lane},${tx} ${ty - 35 - lane},${tx} ${ty}`;
               return (
                 <path
                   key={p.id}
@@ -317,7 +330,7 @@ export function WorkflowGraph({
           {specialists.map((a, i) => (
             <g
               key={a.role}
-              transform={`translate(484,${74 + i * 25})`}
+              transform={`translate(484,${74 + i * specialistSpacing})`}
               className="pipeline-node"
               role="button"
               tabIndex={0}
@@ -332,14 +345,14 @@ export function WorkflowGraph({
             >
               <rect
                 width="184"
-                height="22"
+                height={specialistHeight}
                 rx="3"
                 fill={token.colorFillAlter}
                 stroke={token.colorBorder}
               />
               <text
                 x="7"
-                y="15"
+                y={specialistHeight - 7}
                 fill={token.colorText}
                 className="pipeline-specialist"
               >

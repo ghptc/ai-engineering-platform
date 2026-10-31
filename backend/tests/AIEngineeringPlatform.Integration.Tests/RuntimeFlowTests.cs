@@ -231,17 +231,117 @@ public sealed partial class RuntimeFlowTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = JsonContent.Create(response) });
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfiguredNineRoleTeamRunsThroughV2AndSecurityReworkIsTargeted(bool rejectSecurity)
+    {
+        await using var root = new PlatformFactory();
+        await using var factory = root.WithWebHostBuilder(builder => { builder.UseSetting("AGENT_RUNTIME_V2_NEW_RUNS", "true"); builder.ConfigureServices(services => {
+            if (rejectSecurity) { services.RemoveAll<ILanguageModelProvider>(); services.AddSingleton<ILanguageModelProvider>(new RejectOnce(AgentRole.SecurityEngineer, AgentRole.InfrastructureEngineer)); }
+        }); });
+        using var client = factory.CreateClient(); await Login(client);
+        var store = factory.Services.GetRequiredService<IPlatformStore>();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        while ((await store.AgentsAsync(timeout.Token)).Count < 9) await Task.Delay(20, timeout.Token);
+        foreach (var definition in (await store.AgentsAsync(default)).Where(x => x.Role is AgentRole.SecurityEngineer or AgentRole.InfrastructureEngineer))
+        { Assert.False(definition.Enabled); await store.SaveAgentAsync(definition with { Enabled = true }, default); }
+        var run = await Start(client, store, ExecutionPresets.StandardDevelopment, planning: true, specialists: true);
+        run = await Wait(store, run.Id, r => !r.IsRunnable);
+        Assert.Equal(RunStage.AwaitingHumanApproval, run.CurrentStage);
+        var tasks = await store.RecordsAsync("task", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.All(Enum.GetNames<AgentRole>(), role => Assert.Contains(tasks, x => x.Name == role));
+        var history = await client.GetFromJsonAsync<AIEngineeringPlatform.Application.RuntimeV2.AgentTaskWindow>($"/api/v1/runs/{run.Id}/agent-tasks?limit=100", Json);
+        Assert.All(history!.Items, row => Assert.Equal("Completed", row.Status));
+        var encoded = JsonSerializer.Serialize(history); Assert.DoesNotContain("SystemInstructions", encoded); Assert.DoesNotContain("ContextFrame", encoded);
+        var messages = await store.RecordsAsync("agentMessageV2", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        foreach (var kind in new[] { "EngineeringTask", "EngineeringHandoff", "ImplementationResult", "TestReport", "ReviewResult", "ApprovalRequest" }) Assert.Contains(messages, x => x.Name == kind);
+        if (rejectSecurity)
+        {
+            Assert.Equal(AgentRole.InfrastructureEngineer, Assert.Single(run.ReworkPlan).TargetAgent);
+            var corrections = tasks.Where(x => x.Metadata.GetValueOrDefault("iteration") == "2").ToArray();
+            Assert.Contains(corrections, x => x.Name == "InfrastructureEngineer");
+            Assert.DoesNotContain(corrections, x => x.Name is "BackendEngineer" or "FrontendEngineer" or "BusinessAnalyst" or "Architect");
+        }
+    }
+
+    [Fact]
+    public async Task IndependentRunsOverlapOnlyWithExplicitSchedulerCapacityAndSeparateWorkspaces()
+    {
+        await using var root = new PlatformFactory(); var model = new HoldTwoBackendTasks();
+        await using var factory = root.WithWebHostBuilder(builder => { builder.UseSetting("AGENT_RUNTIME_V2_NEW_RUNS", "true"); builder.UseSetting("ENGINEERING_CONCURRENT_RUNS", "2"); builder.ConfigureServices(services => { services.RemoveAll<ILanguageModelProvider>(); services.AddSingleton<ILanguageModelProvider>(model); }); });
+        using var client = factory.CreateClient(); await Login(client); var store = factory.Services.GetRequiredService<IPlatformStore>();
+        var first = await Start(client, store, ExecutionPresets.StandardDevelopment);
+        var second = await Start(client, store, ExecutionPresets.StandardDevelopment);
+        try
+        {
+            await model.BothEntered.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            var queue = factory.Services.GetRequiredService<AIEngineeringPlatform.Application.RuntimeV2.IAgentDispatchStore>();
+            var one = Assert.Single((await queue.HistoryAsync(first.ProjectId, first.Id, null, 25, default)).Items, x => x.Status == "Running");
+            var two = Assert.Single((await queue.HistoryAsync(second.ProjectId, second.Id, null, 25, default)).Items, x => x.Status == "Running");
+            Assert.NotEqual(one.Id, two.Id); Assert.NotEqual(first.ProjectId, second.ProjectId); Assert.NotNull(one.StartedAt); Assert.NotNull(two.StartedAt);
+            Assert.Null(one.CompletedAt); Assert.Null(two.CompletedAt);
+            client.DefaultRequestHeaders.Remove("Idempotency-Key"); client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
+            var duplicateProject = await client.PostAsJsonAsync($"/api/v1/projects/{first.ProjectId}/tasks", new { tasks = new[] { new EngineeringTask("Conflicting task", "Must not share a live project workspace", ["Reject overlapping project execution"]) } });
+            Assert.Equal(System.Net.HttpStatusCode.Conflict, duplicateProject.StatusCode);
+        }
+        finally { model.Release.TrySetResult(); }
+        first = await Wait(store, first.Id, r => !r.IsRunnable); second = await Wait(store, second.Id, r => !r.IsRunnable);
+        Assert.Equal(RunStage.AwaitingHumanApproval, first.CurrentStage); Assert.Equal(RunStage.AwaitingHumanApproval, second.CurrentStage);
+    }
+    private sealed class HoldTwoBackendTasks : ILanguageModelProvider
+    {
+        private readonly DeterministicModel inner = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> entered = new();
+        public TaskCompletionSource BothEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct)
+        {
+            if (context.Definition.Role == AgentRole.BackendEngineer && entered.TryAdd(context.Run.Id, true))
+            {
+                if (entered.Count == 2) BothEntered.TrySetResult();
+                await Release.Task.WaitAsync(ct);
+            }
+            return await inner.ExecuteAsync(context, ct);
+        }
+    }
+    [Fact]
+    public async Task V2RejectsSuccessfulReceiptWithZeroExecutedTestsBeforeQaOrDelivery()
+    {
+        await using var root = new PlatformFactory();
+        await using var factory = root.WithWebHostBuilder(builder => { builder.UseSetting("AGENT_RUNTIME_V2_NEW_RUNS", "true"); builder.ConfigureServices(services => { services.RemoveAll<IExecutionSandbox>(); services.AddSingleton<IExecutionSandbox>(new ZeroCountReceipt()); }); });
+        using var client = factory.CreateClient(); await Login(client); var store = factory.Services.GetRequiredService<IPlatformStore>();
+        var run = await Start(client, store, ExecutionPresets.StandardDevelopment);
+        run = await Wait(store, run.Id, r => !r.IsRunnable);
+        Assert.Equal(RunStage.Paused, run.CurrentStage); Assert.Equal(RunStage.RunningTests, run.ResumeStage);
+        Assert.Contains("nonzero", run.FailureReason);
+        var tasks = await store.RecordsAsync("task", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.DoesNotContain(tasks, x => x.Name is "QAEngineer" or "CodeReviewer");
+        var tools = await store.RecordsAsync("tool", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.DoesNotContain(tools, x => x.Name is "CreateCommit" or "CreatePullRequest");
+    }
+    private sealed class ZeroCountReceipt : IExecutionSandbox
+    {
+        private readonly DeterministicSandbox inner = new(); public bool Configured => true;
+        public async Task<SandboxResponse> ExecuteAsync(SandboxRequest request, CancellationToken ct)
+        {
+            var result = await inner.ExecuteAsync(request, ct);
+            return request.Operation == "RunTests" ? result with { Output = "TEST FIXTURE ONLY: zero tests\nExecutor evidence: tests=0; exit=0; timeout=False; outputLimit=False" } : result;
+        }
+    }
     private static async Task Login(HttpClient client)
     {
         client.DefaultRequestHeaders.Add("X-Requested-With", "AIEngineeringPlatform");
         (await client.PostAsJsonAsync("/api/v1/auth/login", new { password = PlatformFactory.Password })).EnsureSuccessStatusCode();
     }
-    private static async Task<ExecutionRun> Start(HttpClient client, IPlatformStore store, ExecutionPolicy policy, bool planning = false)
+    private static async Task<ExecutionRun> Start(HttpClient client, IPlatformStore store, ExecutionPolicy policy, bool planning = false, bool specialists = false)
     {
         var project = new Project { Name = "Runtime fixture", RepositoryConnection = new("owner", "fixture", 1) };
         await store.SaveProjectAsync(project, null, default);
+        client.DefaultRequestHeaders.Remove("Idempotency-Key");
         client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
-        var response = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/tasks", new { policy, tasks = new[] { new EngineeringTask("Answer", "Correct the fixture", ["Tests pass"], RequiresBusinessAnalysis: planning, RequiresArchitecture: planning, Developers: [AgentRole.BackendEngineer, AgentRole.FrontendEngineer]) } });
+        var response = await client.PostAsJsonAsync($"/api/v1/projects/{project.Id}/tasks", new { policy, tasks = new[] { new EngineeringTask("Answer", "Correct the fixture", ["Tests pass"], RequiresBusinessAnalysis: planning, RequiresArchitecture: planning, Developers: [AgentRole.BackendEngineer, AgentRole.FrontendEngineer], RequiresSecurityReview: specialists, RequiresInfrastructure: specialists) } });
         response.EnsureSuccessStatusCode(); return (await response.Content.ReadFromJsonAsync<ExecutionRun>(Json))!;
     }
     private static async Task<ExecutionRun> Wait(IPlatformStore store, string id, Func<ExecutionRun, bool> done)

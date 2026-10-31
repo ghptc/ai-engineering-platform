@@ -82,6 +82,13 @@ export function useLiveEvents(projectId?: string) {
         void client.invalidateQueries({
           predicate: (q) => {
             const path = String(q.queryKey[0]);
+            if (path.includes("/agent-tasks"))
+              return (
+                !path.includes("before=") &&
+                batch.some((e) =>
+                  path.startsWith(`/runs/${e.runId}/agent-tasks`),
+                )
+              );
             if (path.includes("/stream?kind=tool"))
               return (
                 !path.includes("before=") &&
@@ -112,6 +119,7 @@ export function useLiveEvents(projectId?: string) {
                 (id) =>
                   id &&
                   (path === `/runs/${id}` ||
+                    path.startsWith(`/runs/${id}/agent-tasks`) ||
                     path.startsWith(`/runs/${id}/stream?kind=`)),
               )
             );

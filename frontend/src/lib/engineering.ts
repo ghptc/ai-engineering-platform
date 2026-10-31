@@ -29,6 +29,8 @@ export const roles = [
   "TestEngineer",
   "QAEngineer",
   "CodeReviewer",
+  "SecurityEngineer",
+  "InfrastructureEngineer",
 ];
 export function human(value = "") {
   return value
