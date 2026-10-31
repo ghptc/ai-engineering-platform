@@ -217,6 +217,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 run = run with { Outcome = ExecutionOutcome.Implemented };
                 next = RunStage.Completed; break;
         }
+        await new AIEngineeringPlatform.Application.RuntimeV2.WorkflowCommunication(store).ReworkAsync(run, ct);
         var updated = advanceTask ? run.AdvanceTask() : run.Transition(next);
         if (!await store.SaveRunAsync(updated, run.Version, owner, ct)) throw new ConcurrencyException();
         // State and terminal events are committed atomically with the run and delivered by the outbox.
@@ -439,7 +440,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 {
                     await service.EventAsync(run, "AgentStarted", role.ToString(), ct);
                     var modelStarted = System.Diagnostics.Stopwatch.StartNew();
-                    try { response = await agents.Single(x => x.Role == role).ExecuteAsync(new(project, run, context, definition), ct); }
+                    try { response = await agents.Single(x => x.Role == role).ExecuteAsync(new(project, run, context, definition, taskId), ct); }
                     catch (ProviderException exception)
                     {
                         await service.EventAsync(run, "ProviderRequestFailed", JsonSerializer.Serialize(exception.Diagnostics), ct);
@@ -465,6 +466,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 }
                 var handoffId = Key(taskId + "/handoff");
                 await UpsertRecordAsync(new() { Id = handoffId, Kind = "handoff", ProjectId = project.Id, RunId = run.Id, Name = role.ToString(), Status = result.Decision is "BLOCKED" or "AWAITING_HUMAN_INPUT" ? "Blocked" : result.ToolCalls.Length == 0 ? "Completed" : "Working", Content = JsonSerializer.Serialize(new AgentHandoff(result.Summary, result.ToolCalls.Length == 0 ? result.Summary : "Work in progress; use persisted tool evidence.", result.Evidence, result.Checks ?? [], result.OpenQuestions ?? [], result.NextContext)), Metadata = new() { ["taskIndex"] = run.TaskIndex.ToString(), ["iteration"] = run.Iteration.ToString(), ["targetAgent"] = result.ToolCalls.Length == 0 ? NextAgent(role) : role.ToString(), ["sourceTaskId"] = taskId } });
+                await new AIEngineeringPlatform.Application.RuntimeV2.WorkflowCommunication(store).HandoffAsync(run, role, taskId, result, ct);
                 await service.EventAsync(run, "AgentHandoffCreated", JsonSerializer.Serialize(new { handoffId, role, run.TaskIndex }), ct);
                 // Full structured output is persisted above; subsequent turns retrieve it on demand.
                 var messageId = Key(taskId + "/message");

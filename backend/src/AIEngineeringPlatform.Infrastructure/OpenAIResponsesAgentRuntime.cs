@@ -24,7 +24,7 @@ public sealed class OpenAIResponsesAgentRuntime(ILanguageModelProvider provider,
             Definition = definition with { AllowedTools = task.AuthorizedTools, MaxInputTokens = task.Budget.MaxInputTokens, MaxOutputTokens = task.Budget.MaxOutputTokens },
             RuntimeLimits = new(task.Budget.MaxModelRequests, task.Budget.MaxCostUsd)
         };
-        var fingerprint = PersistedRuntimeContextFrames.Hash(EngineeringMessageContract.Serialize(message) + frame.Sha256 + definition.Model + definition.InstructionVersion + definition.SystemInstructions);
+        var fingerprint = RuntimeInvocationIdentity.Fingerprint(request);
         var begun = await checkpoints.BeginAsync(new(message.MessageId, fingerprint, frame.Id, "Running", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddSeconds(task.Budget.TimeoutSeconds), Guid.NewGuid().ToString("N"), null, null), deadline.Token);
         if (!begun.Acquired)
         {

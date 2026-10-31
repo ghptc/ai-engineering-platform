@@ -108,3 +108,7 @@ Implemented an opt-in Compose-managed API/UI, worker, private MongoDB and isolat
 ## Runtime V2 M2 — runtime and strict messages
 
 Added an opt-in Responses runtime boundary, eight closed versioned message contracts, immutable scoped context frames, atomic durable invocation checkpoints and real-receipt verification. Legacy scheduling remains compatible. Final solution build passed with zero warnings/errors; 312 backend tests passed and nine opt-in tests were skipped. See [M2 verification](runtime-v2-m2-verification.md) and [migration/rollback](architecture/012-agent-runtime-contracts.md). Independent workers and live autonomous certification remain outstanding; no existing execution was resumed.
+
+## Runtime V2 M3 — independent Backend/Test workers
+
+Implemented durable role-specific model-task dispatch, frozen contexts, atomic claims, bounded configurable allowances, cancellation and completed-outcome crash-gap reconciliation. Versioned handoffs/rework reference existing task/tool evidence; the orchestrator retains tool execution, progress detection, QA/review and owner delivery gates. New-run opt-in preserves legacy executions. Build and production image passed; 327 backend tests passed with nine opt-in skips. See [verification](runtime-v2-m3-verification.md) and [architecture/migration/recovery](architecture/013-independent-role-dispatch.md). Remaining-role/UI migration and live certification remain outstanding. No customer run was resumed and no live API spending occurred.

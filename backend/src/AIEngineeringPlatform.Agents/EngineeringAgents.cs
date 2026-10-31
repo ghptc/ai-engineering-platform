@@ -39,3 +39,11 @@ public static class AgentCatalog
         _ => throw new ArgumentOutOfRangeException(nameof(role))
     };
 }
+
+public sealed class DispatchedEngineeringAgent(AgentRole role, ILanguageModelProvider legacy, AIEngineeringPlatform.Application.RuntimeV2.DurableAgentDispatcher dispatcher) : IEngineeringAgent
+{
+    public AgentRole Role => role;
+    public Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct) => context.Run.AgentRuntimeVersion == 2
+        ? dispatcher.ExecuteAsync(context, ct)
+        : new EngineeringAgent(role, legacy).ExecuteAsync(context, ct);
+}
