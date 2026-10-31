@@ -401,3 +401,33 @@ it("progress summaries remain labelled as authored summaries without executing t
     ),
   ).not.toBeInTheDocument();
 });
+
+it("keeps a persisted Security-to-Code Review handoff inside the review phase", () => {
+  const reviewed = {
+    ...run,
+    currentStage: "Reviewing",
+    selectedAgents: ["SecurityEngineer", "CodeReviewer"],
+    agentTransitions: [
+      {
+        sourceAgent: "SecurityEngineer",
+        targetAgent: "CodeReviewer",
+        taskIndex: run.taskIndex,
+        iteration: run.iteration,
+        timestamp: "2026-10-31T12:00:00Z",
+      },
+    ],
+  };
+  const { container } = mount(<WorkflowGraph run={reviewed} events={[]} />);
+  const handoff = [...container.querySelectorAll("path")].find((path) =>
+    path
+      .querySelector("title")
+      ?.textContent?.includes("Security Engineer → Code Reviewer"),
+  );
+  expect(handoff).toBeDefined();
+  expect(handoff!.getAttribute("d")).toMatch(/^M440 /);
+  expect(
+    recordedPaths(reviewed, []).find(
+      (path) => path.sourceAgent === "SecurityEngineer",
+    ),
+  ).toMatchObject({ source: "review", target: "review" });
+});

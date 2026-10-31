@@ -45,7 +45,7 @@ public sealed class MongoRuntimeInvocationStore : IRuntimeInvocationStore
     {
         var current = await GetAsync(id, ct);
         if (current.Owner != owner) throw new UnauthorizedAccessException("Runtime checkpoint ownership changed.");
-        var completed = current with { Status = "Completed", Result = result, ErrorCategory = null };
+        var completed = current with { Status = "Completed", Result = result, ErrorCategory = null, CompletedAt = DateTimeOffset.UtcNow };
         var filter = Builders<BsonDocument>.Filter.Eq("_id", id) & Builders<BsonDocument>.Filter.Eq("Owner", owner) & Builders<BsonDocument>.Filter.Eq("Status", "Running");
         if ((await invocations.UpdateOneAsync(filter, Builders<BsonDocument>.Update.Set("Status", "Completed").Set("Data", JsonSerializer.Serialize(completed)), cancellationToken: ct)).MatchedCount != 1) throw new RuntimeReconciliationException("Runtime completion could not be checkpointed; reconcile the original invocation.");
     }
