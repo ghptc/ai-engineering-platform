@@ -1,3 +1,4 @@
+using AIEngineeringPlatform.Application.Estimation;
 using AIEngineeringPlatform.Api;
 using AIEngineeringPlatform.Application;
 using AIEngineeringPlatform.Application.RuntimeV2;
@@ -49,6 +50,9 @@ if (builder.Configuration["AUTH_KEY_RING_PATH"] is { Length: > 0 } keyRing)
     if (OperatingSystem.IsLinux()) File.SetUnixFileMode(keyRing, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     protection.PersistKeysToFileSystem(new DirectoryInfo(keyRing));
 }
+builder.Services.AddSingleton<IRequirementScopeStore>(sp => (MongoPlatformStore)sp.GetRequiredService<IPlatformStore>());
+builder.Services.AddSingleton<IRequirementDocumentExtractor, RequirementDocumentExtractor>();
+builder.Services.AddSingleton<RequirementIntake>();
 builder.Services.AddSingleton<IWorkspaceQueries>(sp => (MongoPlatformStore)sp.GetRequiredService<IPlatformStore>());
 builder.Services.Configure<LanguageModelOptions>(builder.Configuration.GetSection("LanguageModel"));
 builder.Services.AddSingleton<ILanguageModelProvider>(sp => new OpenAIProvider(builder.Configuration["OPENAI_API_KEY"], sp.GetRequiredService<IOptions<LanguageModelOptions>>().Value, store: sp.GetRequiredService<IPlatformStore>()));
@@ -150,6 +154,7 @@ app.MapPost("/api/v1/auth/login", async (LoginRequest request, HttpContext conte
 app.MapGet("/api/v1/auth/me", () => new { name = "owner" }).RequireAuthorization("Owner");
 app.MapPost("/api/v1/auth/logout", async (HttpContext ctx, OwnerConnections connections) => { var session = ctx.User.FindFirstValue("aep.session"); await ctx.SignOutAsync(); if (session != null) connections.Revoke(session); return Results.NoContent(); }).RequireAuthorization("Owner");
 var api = app.MapGroup("/api/v1").RequireAuthorization("Owner").RequireRateLimiting("api");
+api.MapRequirementIntake();
 api.MapGet("/runtime/contracts/{kind}", (string kind) => Enum.TryParse<EngineeringMessageKind>(kind, false, out var type) && Enum.IsDefined(type) && type.ToString() == kind ? Results.Json(EngineeringMessageContract.Schema(type)) : Results.Problem(statusCode: 400, title: "Unknown engineering message contract"));
 api.MapGet("/projects", async (IPlatformStore s, int? offset, int? limit, CancellationToken ct) => new Page<Project>(await s.ProjectsAsync(Offset(offset), Limit(limit), ct), Offset(offset), Limit(limit)));
 api.MapPost("/projects", async (ProjectInput input, PlatformService s, IOptions<ExecutionDefaults> defaults, CancellationToken ct) => { var p = await s.SaveProjectAsync(input.ToProject() with { ExecutionPolicy = input.ExecutionPolicy ?? defaults.Value.Policy() }, null, ct); return Results.Created($"/api/v1/projects/{p.Id}", p); });
