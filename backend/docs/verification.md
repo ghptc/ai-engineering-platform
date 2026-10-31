@@ -430,3 +430,7 @@ Verification uses only isolated MongoDB on localhost:27029 and deterministic tes
 ## Runtime V2 M1
 
 See [runtime-v2-m1-verification.md](runtime-v2-m1-verification.md) for the actual isolated Compose deployment, 293 passing backend tests (including real Docker), 50 passing frontend tests, four passing browser cases, and persistent/revocable eight-hour session verification. Existing production data and customer execution state were not modified; live autonomous certification remains separate.
+
+## Runtime V2 M2 — runtime and strict messages
+
+Added an opt-in Responses runtime boundary, eight closed versioned message contracts, immutable scoped context frames, atomic durable invocation checkpoints and real-receipt verification. Legacy scheduling remains compatible. Final solution build passed with zero warnings/errors; 312 backend tests passed and nine opt-in tests were skipped. See [M2 verification](runtime-v2-m2-verification.md) and [migration/rollback](architecture/012-agent-runtime-contracts.md). Independent workers and live autonomous certification remain outstanding; no existing execution was resumed.

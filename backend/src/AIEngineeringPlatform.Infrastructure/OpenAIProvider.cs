@@ -63,7 +63,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         if (context.Definition.InputCostPerMillion <= 0 || context.Definition.OutputCostPerMillion <= 0) throw new ConfigurationException("Configure positive model token prices before executing budget-controlled requests.");
         ct.ThrowIfCancellationRequested();
         if (settings?.AgentOutputTokens.TryGetValue(context.Definition.Role, out var agentOutput) == true)
-            context = context with { Definition = context.Definition with { MaxOutputTokens = agentOutput } };
+            context = context with { Definition = context.Definition with { MaxOutputTokens = context.RuntimeLimits == null ? agentOutput : Math.Min(agentOutput, context.Definition.MaxOutputTokens) } };
         using var deadline = new CancellationTokenSource();
         var remaining = context.Run.StartedAt.AddMinutes(context.Run.Policy.MaxDurationMinutes) - DateTimeOffset.UtcNow;
         if (remaining <= TimeSpan.Zero) throw new ProviderException(new(context.Definition.Model, null, null, null, null, ProviderErrorCategory.RunDeadline, null, null, 0));
@@ -107,6 +107,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
         for (var attempt = 0; ; attempt++)
         {
             ct.ThrowIfCancellationRequested();
+            if (context.RuntimeLimits is { } runtimeLimits && (attempt >= runtimeLimits.MaxModelRequests || charged + reserve > runtimeLimits.MaxCostUsd)) throw new InvalidOperationException("Bounded agent runtime request allowance exhausted.");
             var diagnostics = new ProviderDiagnostics(context.Definition.Model, null, null, null, null, null, null, null, attempt + 1, MaxOutputTokens: options.MaxOutputTokenCount, OutputStage: "ResponseEnvelope", SchemaSha256: schemaHash, OutputFormat: "json_schema_strict");
             var reservationId = Guid.NewGuid().ToString("N");
             if (spent + charged + reserve > context.Run.Policy.MaxBudgetUsd)
@@ -189,6 +190,7 @@ public sealed class OpenAIProvider(string? apiKey, LanguageModelOptions? setting
                 {
                     var current = options.MaxOutputTokenCount!.Value;
                     var ceiling = Math.Min((long)(settings?.MaxRecoveryOutputTokens ?? 16000), context.Definition.ModelContextTokens - inputReserve);
+                    if (context.RuntimeLimits != null) ceiling = Math.Min(ceiling, context.Definition.MaxOutputTokens);
                     var affordable = decimal.Floor((context.Run.Policy.MaxBudgetUsd - spent - charged - inputReserve * context.Definition.InputCostPerMillion / 1_000_000m) * 1_000_000m / context.Definition.OutputCostPerMillion);
                     var next = (int)Math.Max(0, Math.Min(Math.Min((long)current * 2, ceiling), Math.Min(affordable, int.MaxValue)));
                     if (next > current)

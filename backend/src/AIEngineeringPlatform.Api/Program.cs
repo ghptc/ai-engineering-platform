@@ -1,5 +1,6 @@
 using AIEngineeringPlatform.Api;
 using AIEngineeringPlatform.Application;
+using AIEngineeringPlatform.Application.RuntimeV2;
 using AIEngineeringPlatform.Domain;
 using AIEngineeringPlatform.Infrastructure;
 using AIEngineeringPlatform.Agents;
@@ -51,6 +52,11 @@ if (builder.Configuration["AUTH_KEY_RING_PATH"] is { Length: > 0 } keyRing)
 builder.Services.AddSingleton<IWorkspaceQueries>(sp => (MongoPlatformStore)sp.GetRequiredService<IPlatformStore>());
 builder.Services.Configure<LanguageModelOptions>(builder.Configuration.GetSection("LanguageModel"));
 builder.Services.AddSingleton<ILanguageModelProvider>(sp => new OpenAIProvider(builder.Configuration["OPENAI_API_KEY"], sp.GetRequiredService<IOptions<LanguageModelOptions>>().Value, store: sp.GetRequiredService<IPlatformStore>()));
+builder.Services.AddSingleton<IRuntimeContextFrames, PersistedRuntimeContextFrames>();
+builder.Services.AddSingleton<DurableEngineeringMessages>();
+builder.Services.AddSingleton<RuntimeEvidenceResolver>();
+builder.Services.AddSingleton<IRuntimeInvocationStore>(new MongoRuntimeInvocationStore(mongo, builder.Configuration["MONGODB_DATABASE"] ?? "ai_engineering_platform"));
+builder.Services.AddSingleton<IAgentRuntime, OpenAIResponsesAgentRuntime>();
 builder.Services.AddHttpClient("sandbox", h => h.Timeout = TimeSpan.FromSeconds(140)).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHttpClient("github", h => h.Timeout = TimeSpan.FromSeconds(60)).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddOptions<RemoteSandboxOptions>().Configure(o => { o.Provider = builder.Configuration["EXECUTION_SANDBOX_PROVIDER"] ?? "Remote"; o.Endpoint = builder.Configuration["EXECUTION_SANDBOX_ENDPOINT"]; o.Token = builder.Configuration["EXECUTION_SANDBOX_TOKEN_FILE"] is { Length: > 0 } tokenFile ? File.ReadAllText(tokenFile).Trim() : builder.Configuration["EXECUTION_SANDBOX_TOKEN"]; o.SocketPath = builder.Configuration["EXECUTION_SANDBOX_SOCKET_PATH"]; }).Validate(o => o.Provider is "Remote" or "LocalUnix", "Use Remote or LocalUnix sandbox provider.").ValidateOnStart();
@@ -132,6 +138,7 @@ app.MapPost("/api/v1/auth/login", async (LoginRequest request, HttpContext conte
 app.MapGet("/api/v1/auth/me", () => new { name = "owner" }).RequireAuthorization("Owner");
 app.MapPost("/api/v1/auth/logout", async (HttpContext ctx, OwnerConnections connections) => { var session = ctx.User.FindFirstValue("aep.session"); await ctx.SignOutAsync(); if (session != null) connections.Revoke(session); return Results.NoContent(); }).RequireAuthorization("Owner");
 var api = app.MapGroup("/api/v1").RequireAuthorization("Owner").RequireRateLimiting("api");
+api.MapGet("/runtime/contracts/{kind}", (string kind) => Enum.TryParse<EngineeringMessageKind>(kind, false, out var type) && Enum.IsDefined(type) && type.ToString() == kind ? Results.Json(EngineeringMessageContract.Schema(type)) : Results.Problem(statusCode: 400, title: "Unknown engineering message contract"));
 api.MapGet("/projects", async (IPlatformStore s, int? offset, int? limit, CancellationToken ct) => new Page<Project>(await s.ProjectsAsync(Offset(offset), Limit(limit), ct), Offset(offset), Limit(limit)));
 api.MapPost("/projects", async (ProjectInput input, PlatformService s, IOptions<ExecutionDefaults> defaults, CancellationToken ct) => { var p = await s.SaveProjectAsync(input.ToProject() with { ExecutionPolicy = input.ExecutionPolicy ?? defaults.Value.Policy() }, null, ct); return Results.Created($"/api/v1/projects/{p.Id}", p); });
 api.MapGet("/projects/{id}", (string id, PlatformService s, CancellationToken ct) => s.ProjectAsync(id, ct));

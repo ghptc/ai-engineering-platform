@@ -33,7 +33,7 @@ public interface IPlatformStore
     Task<bool> PingAsync(CancellationToken ct);
 }
 public interface IExecutionPublisher { Task PublishAsync(RecordEntry entry, CancellationToken ct); }
-public sealed record AgentContext(Project Project, ExecutionRun Run, string Context, AgentDefinition Definition);
+public sealed record AgentContext(Project Project, ExecutionRun Run, string Context, AgentDefinition Definition, string? InvocationId = null, RuntimeV2.AgentRuntimeLimits? RuntimeLimits = null);
 public sealed record ToolCall(string Name, JsonElement Arguments);
 public sealed record AgentResult(string Summary, string Decision, string[] AcceptanceCriteria, string[] Evidence, string[] Assumptions, ToolCall[] ToolCalls, string NextContext, RequirementProposal[]? Requirements = null, ReviewFinding[]? Findings = null, QualityCheck[]? Checks = null, string[]? OpenQuestions = null, ArchitectureDecision[]? ArchitectureDecisions = null, string[]? ReworkTargets = null, PlanningAssessment? Planning = null);
 public sealed record AgentHandoff(string Summary, string CompletedWork, string[] RelevantArtifacts, QualityCheck[] ValidationResults, string[] Blockers, string NextAction);
