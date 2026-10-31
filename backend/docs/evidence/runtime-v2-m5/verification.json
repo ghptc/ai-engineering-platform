@@ -1,0 +1,320 @@
+{
+  "version": 1,
+  "baselineCommit": "c9aaa3b970c90d6fd0c2c4a665694481319a918e",
+  "repository": "ghptc/aep-sandbox-m8-20261028-3a0ed9",
+  "installationId": 176070757,
+  "preflightBefore": {
+    "version": 1,
+    "checkedAt": "2026-10-31T21:39:50.3727121+00:00",
+    "repository": "ghptc/aep-sandbox-m8-20261028-3a0ed9",
+    "installationId": 176070757,
+    "repositoryId": 1436715372,
+    "permissions": {
+      "contents": "write",
+      "metadata": "read",
+      "pull_requests": "write"
+    },
+    "scopedRepositoryCount": 1,
+    "defaultBranch": "main",
+    "defaultHead": "eb4462114a9c7c5f95b4db99ee50013d5ea3f94a",
+    "defaultTree": "6abb50de578dc0dd3d1040c3c9d12da526ee4d4c",
+    "defaultProtected": false,
+    "branches": [
+      {
+        "name": "engineering/f90535012966492c97c04698c84803cb",
+        "sha": "1eb536ce57b8ebc0f5346f7d6f5572f142abdd85"
+      },
+      {
+        "name": "main",
+        "sha": "eb4462114a9c7c5f95b4db99ee50013d5ea3f94a"
+      }
+    ],
+    "files": [
+      {
+        "path": "README.md",
+        "sha": "760ee7d2a4e170b0deaccd5d6815a62893625736",
+        "size": 333
+      },
+      {
+        "path": "feature.mjs",
+        "sha": "55d0a5a851fb690eeec539127664556bba5f555a",
+        "size": 39
+      },
+      {
+        "path": "feature.test.mjs",
+        "sha": "3b7bab02d29afbe85a6fab16bfeb659d3393d701",
+        "size": 156
+      }
+    ],
+    "authorizedMaximumOpenAiUsd": 10,
+    "openAiSpentUsd": 0,
+    "targetSourceModified": false
+  },
+  "postFixRepositoryIdentitiesUnchanged": true,
+  "runId": "24464e57c4384cb38b5771eabe24fe1c",
+  "projectId": "4d2d73c89b7842b18c70c3d4effcbde6",
+  "agent": "BusinessAnalyst",
+  "status": "Paused",
+  "operationId": "b42cee1879c6e47e415a014117687f1d8902ecb79b9fd6ec7d72e5d2c382e3cb",
+  "operation": "ReadRepository",
+  "arguments": {},
+  "argumentsSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "executorReceiptExists": false,
+  "executorWorkspaceExists": false,
+  "successfulTools": 0,
+  "successfulWrites": 0,
+  "recordedConservativeCostUsd": 0.01924,
+  "authorizedMaximumUsd": 10,
+  "runCeilingUsd": 9.5,
+  "toolCeiling": 100,
+  "automaticResume": false,
+  "targetApplicationCertified": false,
+  "targetPullRequest": null,
+  "socketBefore": {
+    "uid": 0,
+    "gid": 0,
+    "mode": "0660",
+    "directoryMode": "0750",
+    "daemonEffectiveCapabilities": "0xB"
+  },
+  "socketAfter": {
+    "uid": 0,
+    "gid": 1654,
+    "mode": "0660",
+    "directoryMode": "2750",
+    "actualNonRootWorkerAuthenticatedReadiness": true,
+    "additionalCapabilities": []
+  },
+  "testResults": [
+    {
+      "file": "full-regression/_arch_2026-10-31_19_18_00.trx",
+      "sha256": "d8649d99543b5ae75ce612a2bb892ca557fc5848824972ae6e1df0e09440f35b",
+      "counters": {
+        "total": "81",
+        "executed": "81",
+        "passed": "81",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "full-regression/_arch_2026-10-31_19_18_02.trx",
+      "sha256": "3a63eae5e71ac8c36d95d0b350e72cc34335087f7b2cbcbca4d7a623e4e4a388",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "full-regression/_arch_2026-10-31_19_18_02[1].trx",
+      "sha256": "6431b9cf317f3766e694ffd24270cdc344d18e7f40c7f883a9558fe703b8e4e6",
+      "counters": {
+        "total": "19",
+        "executed": "19",
+        "passed": "19",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "full-regression/_arch_2026-10-31_19_18_03.trx",
+      "sha256": "6053ae2936540935d70ab9d09f753cc0b238c6659304aed53373095153f3a8d8",
+      "counters": {
+        "total": "227",
+        "executed": "225",
+        "passed": "225",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "full-regression/_arch_2026-10-31_19_20_13.trx",
+      "sha256": "0fb187d499defe69457d7c1daa80412d539406fb4c403b6a81aa0f97e23d0a37",
+      "counters": {
+        "total": "65",
+        "executed": "64",
+        "passed": "64",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "test-results/m5-harness-final.trx",
+      "sha256": "0f034f7f77f4333aea61c44b9ecce30e68b2fffca0093066cb284869eb27e641",
+      "counters": {
+        "total": "8",
+        "executed": "8",
+        "passed": "8",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "test-results/m5-harness.trx",
+      "sha256": "7b56b7d466b6ce83d05fa3bfada29be90c1d0832e1d3d7ca95761ec9f3cd905d",
+      "counters": {
+        "total": "3",
+        "executed": "3",
+        "passed": "3",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "test-results/m5-ipc-corrected.trx",
+      "sha256": "6725e4ae58e86eb9448966047f7a96d5385fc4cf59f743f0ae5864aee450befd",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "1",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "test-results/m5-ipc-final.trx",
+      "sha256": "75358701d903045c0161965c8445d113f94b6a1098cb0edd2a4e058c536ae6e8",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "test-results/m5-ipc.trx",
+      "sha256": "807db237e18d589f85a16a622d14e0a7d9887b87f29d3bf46418177e3270bb8e",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "1",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "sourceSha256": {
+    "backend/AIEngineeringPlatform.sln": "1b5f36ff1bb9109a7c389ac2ca716ed63196f13aeecb471759ebd1c7802a9b97",
+    "backend/tests/AIEngineeringPlatform.Integration.Tests/AIEngineeringPlatform.Integration.Tests.csproj": "a66a0f53ba8fe758909af3368dd6c1784293672eee2235eef4b12c8587cf462a",
+    "backend/tests/AIEngineeringPlatform.Integration.Tests/CertificationHarnessTests.cs": "5da2611e3d999b669eda84fa205343a7fd3e715d44a79e0982c992a1322fa9dd",
+    "backend/tests/AIEngineeringPlatform.LocalExecutor.Tests/ManagedIpcTests.cs": "c07f3acbc56a726008b3a6cb1dde84f7e6516c5ee206b2616074f285b9d0d5fe",
+    "backend/tools/AIEngineeringPlatform.Certification/AIEngineeringPlatform.Certification.csproj": "0e16f9458049842553dc426f8edf55cb7202535ad076ef61294df4e74295dec2",
+    "backend/tools/AIEngineeringPlatform.Certification/Execution.cs": "9d48f0379ca55d56bd301d14b9f4880c02428452b9ffa34f4b7023d13b5c9993",
+    "backend/tools/AIEngineeringPlatform.Certification/Program.cs": "061c6fd579ac044d4b2ed51c4380df970907d103286bdfbe7bdee0d4d130e5d1",
+    "compose.yaml": "283754939c1372908aa7ac677adfe9e1944abb94840ba9df1f3bbaffc0c9de91"
+  }
+}
