@@ -25,6 +25,14 @@ public static class ProfileSelection
     {
         var command = profile.Command;
         if (command.Length == 0 || !profile.RequiredFiles.All(files.Contains)) return false;
+        if (command.Length == 3 && command[0] == "python3" && command[1] == "/opt/aep/profiles.py")
+            return command[2] switch
+            {
+                "backend" => files.Any(x => x.StartsWith("backend/tests/", StringComparison.Ordinal) && x.EndsWith(".csproj", StringComparison.Ordinal)),
+                "frontend" or "typecheck" => files.Contains("frontend/package.json") && files.Contains("frontend/package-lock.json"),
+                "build" => files.Any(x => x.StartsWith("backend/", StringComparison.Ordinal) && x.EndsWith(".csproj", StringComparison.Ordinal)) || files.Contains("frontend/package-lock.json"),
+                _ => false
+            };
         if (command[0] == "node") return command.Length == 2 && command[1] == "--test" && files.Any(x => x.EndsWith(".test.mjs", StringComparison.Ordinal) || x.EndsWith(".test.js", StringComparison.Ordinal) || x.StartsWith("test/", StringComparison.Ordinal));
         if (command[0] == "dotnet") return DotNetTargetExists(files, command);
         if (command[0] == "npm")

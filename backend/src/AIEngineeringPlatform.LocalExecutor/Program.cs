@@ -4,9 +4,14 @@ using System.Security.Cryptography;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
-var configurationPath = builder.Configuration["EXECUTOR_CONFIG"] ?? throw new InvalidOperationException("EXECUTOR_CONFIG must identify an owner-managed executor JSON configuration.");
-builder.Configuration.AddJsonFile(configurationPath, optional: false, reloadOnChange: false);
-var options = builder.Configuration.GetSection("Executor").Get<ExecutorOptions>() ?? throw new InvalidOperationException("Executor configuration is required.");
+ExecutorOptions options;
+if (builder.Configuration.GetValue("EXECUTOR_MANAGED", false)) options = await ManagedExecutorConfiguration.CreateAsync(builder.Configuration, CancellationToken.None);
+else
+{
+    var configurationPath = builder.Configuration["EXECUTOR_CONFIG"] ?? throw new InvalidOperationException("EXECUTOR_CONFIG must identify an owner-managed executor JSON configuration.");
+    builder.Configuration.AddJsonFile(configurationPath, optional: false, reloadOnChange: false);
+    options = builder.Configuration.GetSection("Executor").Get<ExecutorOptions>() ?? throw new InvalidOperationException("Executor configuration is required.");
+}
 options.Validate(builder.Environment.IsEnvironment("Testing"));
 Directory.CreateDirectory(options.StateDirectory);
 if (new DirectoryInfo(options.StateDirectory).LinkTarget != null) throw new InvalidOperationException("Executor state directory cannot be a symlink.");
@@ -56,7 +61,8 @@ foreach (var directory in Directory.EnumerateDirectories(runsDirectory))
     if (File.Exists(stateFile))
     {
         var state = System.Text.Json.JsonSerializer.Deserialize<LocalExecutionService.WorkspaceState>(await File.ReadAllTextAsync(stateFile), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
-        if (state?.LastUsedAt < DateTimeOffset.UtcNow.AddDays(-options.RetentionDays)) Directory.Delete(directory, recursive: true);
+        // Retention never deletes persisted receipts or checkpoints during daemon startup.
+        if (state?.LastUsedAt < DateTimeOffset.UtcNow.AddDays(-options.RetentionDays)) app.Logger.LogWarning("Workspace {WorkspaceId} is past retention; preserve it for owner archival", Path.GetFileName(directory));
     }
 }
 await app.StartAsync();

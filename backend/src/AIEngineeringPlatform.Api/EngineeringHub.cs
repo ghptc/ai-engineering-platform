@@ -5,10 +5,21 @@ using Microsoft.AspNetCore.SignalR;
 namespace AIEngineeringPlatform.Api;
 
 [Authorize]
-public sealed class EngineeringHub(PlatformService service, IPlatformStore store, IWorkspaceQueries queries) : Hub
+public sealed class EngineeringHub(PlatformService service, IPlatformStore store, IWorkspaceQueries queries, OwnerConnections? connections = null) : Hub
 {
+    public override async Task OnConnectedAsync()
+    {
+        if (connections != null) connections.Add(Context.ConnectionId, Context.User?.FindFirst("aep.session")?.Value ?? "", Context.Abort);
+        await base.OnConnectedAsync();
+    }
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        connections?.Remove(Context.ConnectionId);
+        await base.OnDisconnectedAsync(exception);
+    }
     public async Task<long> SubscribeProject(string projectId, long afterSequence = 0)
     {
+        if (connections != null) await connections.PruneAsync(Context.ConnectionAborted);
         await service.ProjectAsync(projectId, Context.ConnectionAborted);
         await Groups.AddToGroupAsync(Context.ConnectionId, "project:" + projectId);
         if (afterSequence < 0)
@@ -26,12 +37,12 @@ public sealed class EngineeringHub(PlatformService service, IPlatformStore store
         }
     }
 }
-public sealed class SignalRPublisher(IHubContext<EngineeringHub> hub, IPlatformStore store, ILogger<SignalRPublisher> logger) : IExecutionPublisher
+public sealed class SignalRPublisher(IHubContext<EngineeringHub> hub, IPlatformStore store, ILogger<SignalRPublisher> logger, OwnerConnections? connections = null) : IExecutionPublisher
 {
     public async Task PublishAsync(RecordEntry entry, CancellationToken ct)
     {
         var saved = await store.GetRecordAsync(entry.Kind, entry.Id, ct) ?? throw new InvalidOperationException("Cannot publish an unpersisted event.");
-        try { await hub.Clients.Group("project:" + saved.ProjectId).SendAsync("EngineeringEvent", RecordPresentation.Preview(saved with { Content = AIEngineeringPlatform.Infrastructure.SecretRedactor.Redact(saved.Content) }), ct); await hub.Clients.Group("project:" + saved.ProjectId).SendAsync(saved.Kind == "message" ? "AgentMessageCreated" : saved.Name, RecordPresentation.Preview(saved with { Content = AIEngineeringPlatform.Infrastructure.SecretRedactor.Redact(saved.Content) }), ct); }
+        try { if (connections != null) await connections.PruneAsync(ct); await hub.Clients.Group("project:" + saved.ProjectId).SendAsync("EngineeringEvent", RecordPresentation.Preview(saved with { Content = AIEngineeringPlatform.Infrastructure.SecretRedactor.Redact(saved.Content) }), ct); await hub.Clients.Group("project:" + saved.ProjectId).SendAsync(saved.Kind == "message" ? "AgentMessageCreated" : saved.Name, RecordPresentation.Preview(saved with { Content = AIEngineeringPlatform.Infrastructure.SecretRedactor.Redact(saved.Content) }), ct); }
         catch (Exception e) when (e is not OperationCanceledException) { logger.LogWarning("Live event delivery failed for persisted event {EventId}", saved.Id); }
     }
 }

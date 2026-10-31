@@ -1,0 +1,11 @@
+{
+  "deployment": "aep-runtime-v2-review",
+  "loopbackPort": 18089,
+  "login": "passed",
+  "persistentCookie": "passed",
+  "uiDuringWorkerStop": "passed",
+  "sessionAfterApiRestart": "passed",
+  "logoutRevokesCapturedCookie": "passed",
+  "absoluteLifetimeHours": 8,
+  "liveApiCalls": 0
+}

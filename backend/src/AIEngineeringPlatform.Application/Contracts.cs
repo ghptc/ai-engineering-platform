@@ -22,6 +22,7 @@ public interface IPlatformStore
     Task ReleaseLeaseAsync(string id, string owner, CancellationToken ct);
     Task AppendAsync(RecordEntry entry, CancellationToken ct);
     Task<IReadOnlyList<RecordEntry>> RecordsAsync(string kind, string? projectId, string? runId, string? conversationId, long after, int offset, int limit, CancellationToken ct, string? status = null);
+    Task<IReadOnlyList<RecordEntry>> OperationalRecordsAsync(long after, int limit, bool newestFirst, CancellationToken ct) => throw new NotSupportedException("Operational relay is not supported by this store.");
     Task<RecordEntry?> GetRecordAsync(string kind, string id, CancellationToken ct);
     Task<bool> DecideApprovalAsync(string id, bool approve, string reason, CancellationToken ct);
     Task<bool> IngestWebhookAsync(RecordEntry entry, CancellationToken ct);
@@ -43,7 +44,7 @@ public sealed record ArchitectureDecision(string Title, string Context, string D
 public sealed record ModelExecutionResult(AgentResult Output, string ResponseId, long InputTokens, long OutputTokens, decimal Cost, ProviderDiagnostics? Diagnostics = null);
 public interface ILanguageModelProvider { Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct); }
 public interface IEngineeringAgent { AgentRole Role { get; } Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct); }
-public sealed record OperationExecution(string Profile, string[] Command, string WorkingDirectory, string Stdout, string Stderr);
+public sealed record OperationExecution(string Profile, string[] Command, string WorkingDirectory, string Stdout, string Stderr, string? Image = null);
 public sealed record ToolResult(bool Success, string Output, string? EvidenceId = null, string? WorkspaceRevision = null, int? ExitCode = null, OperationExecution? Execution = null);
 public sealed class SandboxExecutionLimits { public int TimeoutSeconds { get; set; } = 120; public int CpuLimit { get; set; } = 1; public int MemoryMb { get; set; } = 1024; public int OutputLimitBytes { get; set; } = 100000; }
 public sealed record SandboxRequest(string OperationId, string RunId, RepositoryConnection Repository, string Operation, JsonElement Arguments, int TimeoutSeconds = 60, int CpuLimit = 1, int MemoryMb = 512, int OutputLimitBytes = 100000, bool NetworkEnabled = false, long Fence = 0, string? LeaseOwner = null, int MaxTransientRetries = 0);

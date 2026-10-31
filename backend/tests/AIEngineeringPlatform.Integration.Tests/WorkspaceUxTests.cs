@@ -81,7 +81,8 @@ public class WorkspaceUxTests : IClassFixture<PlatformFactory>
         Assert.True(delivered.Count >= 1002);
         Assert.Equal(delivered.Count, delivered.Select(x => x.Id).Distinct().Count());
         Assert.Equal(delivered.Select(x => x.Sequence).Order(), delivered.Select(x => x.Sequence));
-        Assert.Equal("true", delivered.Last().Metadata["payloadPreview"]);
+        // Durable outbox events may arrive after the seeded history; verify the exact evidence identity.
+        Assert.Equal("true", Assert.Single(delivered, entry => entry.Id == huge.Id).Metadata["payloadPreview"]);
         delivered.Clear();
         await store.AppendAsync(new() { Kind = "event", Name = "RecoveredAfterReconnect", ProjectId = project.Id, RunId = run.Id }, default);
         Assert.True(await hub.SubscribeProject(project.Id, watermark) > watermark);
