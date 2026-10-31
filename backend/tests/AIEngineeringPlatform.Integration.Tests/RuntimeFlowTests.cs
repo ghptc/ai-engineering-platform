@@ -13,16 +13,20 @@ public sealed partial class RuntimeFlowTests
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
     [Theory]
-    [InlineData(AgentRole.QAEngineer, AgentRole.BackendEngineer)]
-    [InlineData(AgentRole.QAEngineer, AgentRole.FrontendEngineer)]
-    [InlineData(AgentRole.CodeReviewer, AgentRole.BackendEngineer)]
-    [InlineData(AgentRole.CodeReviewer, AgentRole.FrontendEngineer)]
-    public async Task ReworkRunsOnlyResponsibleDeveloperThenRepeatsTestsQaAndReview(AgentRole reviewer, AgentRole target)
+    [InlineData(AgentRole.QAEngineer, AgentRole.BackendEngineer, false)]
+    [InlineData(AgentRole.QAEngineer, AgentRole.FrontendEngineer, false)]
+    [InlineData(AgentRole.CodeReviewer, AgentRole.BackendEngineer, false)]
+    [InlineData(AgentRole.CodeReviewer, AgentRole.FrontendEngineer, false)]
+    [InlineData(AgentRole.QAEngineer, AgentRole.BackendEngineer, true)]
+    [InlineData(AgentRole.QAEngineer, AgentRole.FrontendEngineer, true)]
+    [InlineData(AgentRole.CodeReviewer, AgentRole.BackendEngineer, true)]
+    [InlineData(AgentRole.CodeReviewer, AgentRole.FrontendEngineer, true)]
+    public async Task ReworkRunsOnlyResponsibleDeveloperThenRepeatsTestsQaAndReview(AgentRole reviewer, AgentRole target, bool runtimeV2)
     {
         await using var root = new PlatformFactory();
-        await using var factory = root.WithWebHostBuilder(builder => builder.ConfigureServices(services => {
+        await using var factory = root.WithWebHostBuilder(builder => { builder.UseSetting("AGENT_RUNTIME_V2_NEW_RUNS", runtimeV2.ToString()); builder.ConfigureServices(services => {
             services.RemoveAll<ILanguageModelProvider>(); services.AddSingleton<ILanguageModelProvider>(new RejectOnce(reviewer, target));
-        }));
+        }); });
         using var client = factory.CreateClient(); await Login(client);
         var store = factory.Services.GetRequiredService<IPlatformStore>();
         var run = await Start(client, store, ExecutionPresets.StandardDevelopment);
@@ -38,9 +42,45 @@ public sealed partial class RuntimeFlowTests
         Assert.Contains(corrections, x => x.Name == "QAEngineer"); Assert.Contains(corrections, x => x.Name == "CodeReviewer");
         var tools = await store.RecordsAsync("tool", run.ProjectId, run.Id, null, 0, 0, 1000, default);
         Assert.Equal(2, tools.Count(x => x.Name == "RunTests"));
+        if (runtimeV2)
+        {
+            Assert.Equal(2, run.AgentRuntimeVersion);
+            var messages = await store.RecordsAsync("agentMessageV2", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+            Assert.Contains(messages, x => x.Name == "EngineeringTask");
+            Assert.Contains(messages, x => x.Name == "EngineeringHandoff");
+            var rework = Assert.Single(messages, x => x.Name == "ReworkRequest");
+            var envelope = AIEngineeringPlatform.Application.RuntimeV2.EngineeringMessageContract.Parse(rework.Content, reviewer.ToString(), new HashSet<string> { "Orchestrator" });
+            var payload = AIEngineeringPlatform.Application.RuntimeV2.EngineeringMessageContract.Payload<AIEngineeringPlatform.Application.RuntimeV2.ReworkRequestPayload>(envelope);
+            Assert.Equal(new[] { target.ToString() }, payload.ResponsibleAgents); Assert.NotEmpty(envelope.Evidence);
+            await factory.Services.GetRequiredService<AIEngineeringPlatform.Application.RuntimeV2.RuntimeEvidenceResolver>().ResolveAsync(envelope, default);
+            Assert.DoesNotContain(tools, x => x.Name is "CreateCommit" or "CreatePullRequest");
+        }
         // A new store instance recovers the explicit plan and counters; no in-memory graph state.
         var recovered = await new MongoPlatformStore(Environment.GetEnvironmentVariable("TEST_MONGODB_CONNECTION_STRING") ?? "mongodb://127.0.0.1:27028", root.Database).GetRunAsync(run.Id, default);
         Assert.Equal(JsonSerializer.Serialize(run.ReworkPlan), JsonSerializer.Serialize(recovered!.ReworkPlan)); Assert.Equal(tools.Count, recovered.ToolCalls);
+    }
+
+    [Fact]
+    public async Task V2WorkerProposalsPassThroughSourceTestsQaReviewAndOwnerDeliveryGate()
+    {
+        await using var root = new PlatformFactory();
+        await using var factory = root.WithWebHostBuilder(builder => builder.UseSetting("AGENT_RUNTIME_V2_NEW_RUNS", "true"));
+        using var client = factory.CreateClient(); await Login(client);
+        var store = factory.Services.GetRequiredService<IPlatformStore>();
+        var run = await Start(client, store, ExecutionPresets.StandardDevelopment);
+        run = await Wait(store, run.Id, r => !r.IsRunnable);
+        Assert.Equal(RunStage.AwaitingHumanApproval, run.CurrentStage); Assert.Equal(2, run.AgentRuntimeVersion);
+        var before = await store.RecordsAsync("tool", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.Contains(before, x => x.Name == "WriteFile"); Assert.Contains(before, x => x.Name == "RunTests");
+        Assert.DoesNotContain(before, x => x.Name is "CreateCommit" or "CreatePullRequest");
+        var approval = Assert.Single(await store.RecordsAsync("approval", run.ProjectId, run.Id, null, 0, 0, 100, default), x => x.Status == "Pending");
+        (await client.PostAsJsonAsync($"/api/v1/approvals/{approval.Id}/decision", new { approve = true, reason = "Deterministic V2 fixture delivery approval" })).EnsureSuccessStatusCode();
+        run = await Wait(store, run.Id, r => r.CurrentStage is RunStage.Completed or RunStage.Failed or RunStage.Paused);
+        Assert.Equal(RunStage.Completed, run.CurrentStage);
+        var after = await store.RecordsAsync("tool", run.ProjectId, run.Id, null, 0, 0, 1000, default);
+        Assert.Single(after, x => x.Name == "CreateCommit"); Assert.Single(after, x => x.Name == "CreatePullRequest");
+        Assert.All(before, original => Assert.Single(after, x => x.Id == original.Id && x.Content == original.Content));
+        Assert.Equal(after.Count, run.ToolCalls);
     }
     [Fact]
     public async Task ProviderFailureAndExplicitResumePreserveSuccessfulWritesAndDeliveryIds()

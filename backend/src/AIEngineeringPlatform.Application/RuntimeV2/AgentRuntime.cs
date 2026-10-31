@@ -89,3 +89,8 @@ public interface IRuntimeInvocationStore
     Task FailAsync(string id, string owner, string category, CancellationToken ct);
 }
 public sealed class RuntimeReconciliationException(string message) : InvalidOperationException(message);
+
+public static class RuntimeInvocationIdentity
+{
+    public static string Fingerprint(AgentRuntimeRequest request) => PersistedRuntimeContextFrames.Hash(EngineeringMessageContract.Serialize(request.Task) + request.ContextSha256 + request.Context.Definition.Model + request.Context.Definition.InstructionVersion + request.Context.Definition.SystemInstructions);
+}

@@ -59,6 +59,7 @@ public sealed record AgentTransition(AgentRole SourceAgent, AgentRole TargetAgen
 public sealed record ReworkTransition(AgentRole SourceAgent, AgentRole TargetAgent, string Reason, string[] FindingIds, string TaskId, int Iteration, string? WorkspaceRevision, DateTimeOffset Timestamp);
 public sealed record ExecutionRun
 {
+    public int AgentRuntimeVersion { get; init; } = 1;
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
     public string ProjectId { get; init; } = "";
     public string IdempotencyKey { get; init; } = "";

@@ -10,17 +10,19 @@ namespace AIEngineeringPlatform.Integration.Tests;
 
 public sealed partial class RuntimeFlowTests
 {
-    [Fact]
-    public async Task RepeatedInspectionGetsFeedbackThenBlocksAndCannotEscapeThroughResume()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RepeatedInspectionGetsFeedbackThenBlocksAndCannotEscapeThroughResume(bool runtimeV2)
     {
         await using var root = new PlatformFactory();
         var model = new InspectForeverModel();
         var sandbox = new DeterministicSandbox();
-        await using var factory = root.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        await using var factory = root.WithWebHostBuilder(builder => { builder.UseSetting("AGENT_RUNTIME_V2_NEW_RUNS", runtimeV2.ToString()); builder.ConfigureServices(services =>
         {
             services.RemoveAll<ILanguageModelProvider>(); services.AddSingleton<ILanguageModelProvider>(model);
             services.RemoveAll<IExecutionSandbox>(); services.AddSingleton<IExecutionSandbox>(sandbox);
-        }));
+        }); });
         using var client = factory.CreateClient(); await Login(client);
         var store = factory.Services.GetRequiredService<IPlatformStore>();
         var run = await Start(client, store, ExecutionPresets.StandardDevelopment);

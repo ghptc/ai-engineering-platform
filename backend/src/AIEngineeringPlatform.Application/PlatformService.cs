@@ -2,7 +2,7 @@ using AIEngineeringPlatform.Domain;
 using System.Text.Json;
 namespace AIEngineeringPlatform.Application;
 
-public sealed class PlatformService(IPlatformStore store, IExecutionPublisher publisher, ExecutionCapacity? capacity = null)
+public sealed class PlatformService(IPlatformStore store, IExecutionPublisher publisher, ExecutionCapacity? capacity = null, RuntimeV2.AgentRuntimeOptions? runtimeOptions = null)
 {
     public async Task<ExecutionRun> StartTasksAsync(string projectId, string key, EngineeringTask[] tasks, CancellationToken ct, ExecutionPolicy? policy = null)
     {
@@ -23,7 +23,7 @@ public sealed class PlatformService(IPlatformStore store, IExecutionPublisher pu
                 if (message?.ProjectId != projectId || message.Name != "Client") throw new ArgumentException("Task instructions must reference this project's human messages.");
             }
         }
-        return await store.CreateRunAsync(new() { ProjectId = projectId, IdempotencyKey = key, ProjectSnapshot = project, Policy = project.ExecutionPolicy, Tasks = tasks, RequirementIds = tasks[0].RequirementIds ?? [] }, ct);
+        return await store.CreateRunAsync(new() { AgentRuntimeVersion = runtimeOptions?.EnableNewRuns == true ? 2 : 1, ProjectId = projectId, IdempotencyKey = key, ProjectSnapshot = project, Policy = project.ExecutionPolicy, Tasks = tasks, RequirementIds = tasks[0].RequirementIds ?? [] }, ct);
     }
     public async Task<ExecutionRun> ClarifyAsync(string id, string content, long expectedVersion, CancellationToken ct)
     {
@@ -71,7 +71,7 @@ public sealed class PlatformService(IPlatformStore store, IExecutionPublisher pu
         if (project.Status != "Active") throw new InvalidOperationException("Project is archived.");
         var requirements = await store.RecordsAsync("requirement", projectId, null, null, 0, 0, 1000, ct);
         var superseded = requirements.Select(x => x.Metadata.GetValueOrDefault("supersedes")).Where(x => x != null).ToHashSet();
-        return await store.CreateRunAsync(new() { ProjectId = projectId, IdempotencyKey = key, Policy = project.ExecutionPolicy, ProjectSnapshot = project, RequirementIds = requirements.Where(x => x.Status != "Verified" && !superseded.Contains(x.Id)).Select(x => x.Id).ToArray() }, ct);
+        return await store.CreateRunAsync(new() { AgentRuntimeVersion = runtimeOptions?.EnableNewRuns == true ? 2 : 1, ProjectId = projectId, IdempotencyKey = key, Policy = project.ExecutionPolicy, ProjectSnapshot = project, RequirementIds = requirements.Where(x => x.Status != "Verified" && !superseded.Contains(x.Id)).Select(x => x.Id).ToArray() }, ct);
     }
     public async Task<ExecutionRun> ExtendLimitsAsync(string id, ExecutionPolicy policy, string reason, long version, CancellationToken ct)
     {
