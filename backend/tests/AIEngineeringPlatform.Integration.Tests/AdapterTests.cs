@@ -501,6 +501,34 @@ public class AdapterTests
         Assert.Equal(properties, schema.RootElement.GetProperty("required").EnumerateArray().Select(x => x.GetString()).Order());
         Assert.False(schema.RootElement.GetProperty("additionalProperties").GetBoolean());
     }
+
+    [Fact]
+    public async Task RuntimeModelRequestLimitStopsRetriesBeforeAnotherPaidRequest()
+    {
+        var handler = new ModelHandler { Status = _ => HttpStatusCode.InternalServerError };
+        var f = Fixture(handler);
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => f.Provider.ExecuteAsync(f.Context with { RuntimeLimits = new(1, 1) }, default));
+        Assert.Equal(1, handler.Requests);
+        Assert.Single(await ProviderAccounting.ChargesAsync(f.Store, f.Context.Run.Id, default));
+    }
+    [Fact]
+    public async Task RuntimeOutputCapCannotBeRaisedByGlobalOverridesOrAdaptiveRecovery()
+    {
+        var handler = new ModelHandler { Transform = Exhaust };
+        var f = Fixture(handler, options: new() { AgentOutputTokens = new() { [AgentRole.BackendEngineer] = 8000 } });
+        await Assert.ThrowsAsync<ProviderException>(() => f.Provider.ExecuteAsync(f.Context with { RuntimeLimits = new(3, 1) }, default));
+        Assert.Equal(1, handler.Requests);
+        using var request = JsonDocument.Parse(handler.Body);
+        Assert.Equal(4000, request.RootElement.GetProperty("max_output_tokens").GetInt32());
+    }
+    [Fact]
+    public async Task RuntimeCostAllowanceIsReservedBeforeAnyProviderRequest()
+    {
+        var handler = new ModelHandler(); var f = Fixture(handler);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.Provider.ExecuteAsync(f.Context with { RuntimeLimits = new(2, .000001m) }, default));
+        Assert.Equal(0, handler.Requests);
+        Assert.Empty(f.Records);
+    }
     private sealed class ModelHandler : HttpMessageHandler
     {
         public string Body = "";

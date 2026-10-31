@@ -104,3 +104,7 @@ Corrected a separate proven recovery defect: completed cache hits now have immut
 ## Runtime V2 M1 — independent Compose and persistent authentication
 
 Implemented an opt-in Compose-managed API/UI, worker, private MongoDB and isolated executor; persistent server-validated eight-hour owner sessions; revocation and live-connection expiry; and a globally ordered persisted-event relay. Added retained runtime pins and per-volume cleanup ownership, preserving legacy executor modes and all existing execution state. Verified 293 backend tests including real Docker checks, 50 frontend tests, 4 Playwright cases, and real Compose login/restart/logout behavior. See [M1 evidence and limits](runtime-v2-m1-verification.md), [migration/rollback](runtime-v2-migration.md) and [architecture audit](architecture/011-runtime-v2-migration.md). Runtime abstraction, role-worker migration and live autonomous certification are not yet claimed.
+
+## Runtime V2 M2 — runtime and strict messages
+
+Added an opt-in Responses runtime boundary, eight closed versioned message contracts, immutable scoped context frames, atomic durable invocation checkpoints and real-receipt verification. Legacy scheduling remains compatible. Final solution build passed with zero warnings/errors; 312 backend tests passed and nine opt-in tests were skipped. See [M2 verification](runtime-v2-m2-verification.md) and [migration/rollback](architecture/012-agent-runtime-contracts.md). Independent workers and live autonomous certification remain outstanding; no existing execution was resumed.
