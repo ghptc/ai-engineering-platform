@@ -217,7 +217,7 @@ describe("engineering workspace", () => {
       screen
         .getByLabelText("Live directed engineering workflow")
         .querySelectorAll("g[role=button]"),
-    ).toHaveLength(4);
+    ).toHaveLength(12);
   });
   it("keeps activity to 50 rows, pauses updates and jumps to latest", async () => {
     const events = Array.from({ length: 1000 }, (_, i) =>
