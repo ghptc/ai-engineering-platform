@@ -5,8 +5,9 @@ using System.Text;
 using System.Text.Json;
 namespace AIEngineeringPlatform.Orchestration;
 
-public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService service, ContextBuilder contextBuilder, IEnumerable<IEngineeringAgent> agents, IEnumerable<IAgentTool> tools, IExecutionSandbox sandbox)
+public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService service, ContextBuilder contextBuilder, IEnumerable<IEngineeringAgent> agents, IEnumerable<IAgentTool> tools, IExecutionSandbox sandbox, InspectionProgressOptions? progressOptions = null)
 {
+    private readonly InspectionProgressOptions progress = progressOptions ?? new();
     private static string Key(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     public async Task ProcessAsync(ExecutionRun run, string owner, CancellationToken ct)
     {
@@ -315,7 +316,8 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 await service.EventAsync(run, "InspectionReused", JsonSerializer.Serialize(new { SourceId = cached.Id, name, cached.Result.WorkspaceRevision }), ct);
                 return cached.Result;
             }
-            if (!readOnlyInspection) inspections.Clear();
+            // Remote reads and memory retrieval do not invalidate local source observations.
+            if (!readOnlyInspection && name is not ("ReconcileRepository" or "ReadPullRequest" or "ReadProjectMemory" or "SaveArtifact")) inspections.Clear();
             var definition = (await store.AgentsAsync(ct)).Single(x => x.Role == role);
             if (delivery) definition = definition with { AllowedTools = [name] };
             await service.EventAsync(run, "ToolInvocationStarted", name, ct);
@@ -371,6 +373,37 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 var agentBudget = run.Policy.AgentToolBudgets?.GetValueOrDefault(role, run.Policy.MaxToolCalls) ?? run.Policy.MaxToolCalls;
                 if (run.ToolCalls >= run.Policy.MaxToolCalls * 0.8 || agentCount >= agentBudget * 0.8)
                     context += "\nCapacity notice: " + JsonSerializer.Serialize(new { RemainingExecutionTools = run.Policy.MaxToolCalls - run.ToolCalls, AgentAdvisoryRemaining = agentBudget - agentCount, Instruction = "Checkpoint completed work and evidence now. Reuse revision evidence. Do not start a multi-operation change unless it fits remaining capacity. Agent allocation is advisory; unused execution capacity remains shared." });
+                var taskId = Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/{role}/{turn}");
+                var saved = await store.GetRecordAsync("task", taskId, ct);
+                if (saved == null)
+                {
+                    if (run.CurrentStage is RunStage.Implementing or RunStage.GeneratingTests)
+                    {
+                        if (!progress.IsValid) throw new ConfigurationException("Invalid inspection progress thresholds; feedback must precede a stop within 1000 repeated turns.");
+                        var progressRecords = new List<RecordEntry>();
+                        foreach (var kind in new[] { "task", "tool" })
+                            for (var offset = 0; ; offset += 1000)
+                            {
+                                var page = await store.RecordsAsync(kind, project.Id, run.Id, null, 0, offset, 1000, ct);
+                                progressRecords.AddRange(page.Where(x => x.Metadata.GetValueOrDefault("taskIndex", "0") == run.TaskIndex.ToString()
+                                    && x.Metadata.GetValueOrDefault("iteration") == run.Iteration.ToString()
+                                    && (kind == "task" ? x.Name == role.ToString() : x.Metadata.GetValueOrDefault("agent") == role.ToString())));
+                                if (page.Count < 1000) break;
+                            }
+                        var repeatedTurns = InspectionProgress.RepeatedTurns(progressRecords);
+                        if (repeatedTurns >= progress.StopAfterRepeatedTurns)
+                        {
+                            await service.EventAsync(run, "InspectionProgressBlocked", JsonSerializer.Serialize(new { role, repeatedTurns, Instruction = InspectionProgress.Feedback }), ct);
+                            throw new TaskReconciliationException(ExecutionOutcome.Blocked, InspectionProgress.Feedback + " Inspection limit reached; human reconciliation is required before further model work.");
+                        }
+                        if (repeatedTurns >= progress.FeedbackAfterRepeatedTurns)
+                        {
+                            if (!context.Contains("\nInspection progress feedback: " + InspectionProgress.Feedback, StringComparison.Ordinal))
+                                context += "\nInspection progress feedback: " + InspectionProgress.Feedback;
+                            await service.EventAsync(run, "InspectionProgressFeedback", JsonSerializer.Serialize(new { role, repeatedTurns }), ct);
+                        }
+                    }
+                }
                 var beforeTokens = ContextBudget.Tokens(context);
                 try { context = ContextBudget.Compact(context, definition); }
                 catch (InvalidOperationException)
@@ -379,8 +412,6 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                     throw;
                 }
                 await service.EventAsync(run, "ContextBudgetEvaluated", JsonSerializer.Serialize(new { role, definition.Model, BeforeTokens = beforeTokens, InputTokensUpperBound = ContextBudget.Tokens(context), InstructionTokensUpperBound = ContextBudget.Tokens(definition.SystemInstructions), ProtocolAndFramingReserve = 13024, InputLimit = ContextBudget.InputLimit(definition), OutputReserved = definition.MaxOutputTokens, Compacted = beforeTokens != ContextBudget.Tokens(context), Estimator = "utf8-byte-upper-bound" }), ct);
-                var taskId = Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/{role}/{turn}");
-                var saved = await store.GetRecordAsync("task", taskId, ct);
                 ModelExecutionResult response;
                 if (saved != null) response = JsonSerializer.Deserialize<ModelExecutionResult>(saved.Content)!;
                 else

@@ -9,6 +9,17 @@ namespace AIEngineeringPlatform.Integration.Tests;
 
 public sealed class ExecutorHttpTests
 {
+    [Fact]
+    public async Task ReceiptRetentionConflictHasKnownOutcomeAndIsNeverRetried()
+    {
+        var handler = new Handler(_ => new(HttpStatusCode.Conflict) { Content = new StringContent("{\"code\":\"operation_retention_limit\",\"detail\":\"secret path\"}") });
+        var error = await Assert.ThrowsAsync<ExecutorFailureException>(() => Sandbox(handler).ExecuteAsync(Request("ListFiles"), default));
+        Assert.Equal(ExecutorFailureReason.OperationRetentionLimit, error.Reason);
+        Assert.Equal(ExecutorFailureCategory.WorkspaceConflict, error.Category);
+        Assert.False(error.OutcomeUnknown);
+        Assert.Single(handler.Keys);
+        Assert.DoesNotContain("secret", error.Message);
+    }
     [Theory]
     [InlineData(400, ExecutorFailureCategory.InvalidArguments)]
     [InlineData(401, ExecutorFailureCategory.Authorization)]

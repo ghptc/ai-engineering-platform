@@ -17,6 +17,8 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton(builder.Configuration.GetSection("ExecutionCapacity").Get<ExecutionCapacity>() ?? new());
+builder.Services.AddOptions<InspectionProgressOptions>().Bind(builder.Configuration.GetSection("InspectionProgress")).Validate(o => o.IsValid, "Invalid inspection progress thresholds.").ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<InspectionProgressOptions>>().Value);
 builder.Logging.ClearProviders(); builder.Logging.AddJsonConsole();
 builder.Services.AddOptions<OwnerOptions>().Configure(o => { o.Mode = builder.Configuration["APPLICATION_AUTH_MODE"] ?? "Owner"; o.CredentialHash = builder.Configuration["APPLICATION_OWNER_CREDENTIAL_SECRET"] ?? ""; })
     .Validate(o => o.Mode == "Owner" && OwnerCredentials.ValidFormat(o.CredentialHash), "Owner authentication requires a PBKDF2 credential hash; see README.").ValidateOnStart();

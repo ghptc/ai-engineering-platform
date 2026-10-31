@@ -14,6 +14,36 @@ public sealed class DockerFactAttribute : FactAttribute
 }
 public sealed class ExecutorTests
 {
+    [Fact]
+    public async Task ReceiptRetentionRejectsNewOperationBeforeWorkspaceAccessButPreservesReplay()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "aep-retention-" + Guid.NewGuid().ToString("N"));
+        var directory = Path.Combine(root, "runs", "retention");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var options = new ExecutorOptions { StateDirectory = root, Repositories = [new() { Owner = "test-owner", Name = "aep-fixture", InstallationId = 1 }] };
+            var process = new ControlledProcess(options);
+            var executor = new LocalExecutionService(options, process, new(options, process));
+            var request = Request("retention", "saved", "ListFiles", new { });
+            var fingerprint = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { request.RunId, request.Repository, request.Operation, request.Arguments, request.TimeoutSeconds, request.CpuLimit, request.MemoryMb, request.OutputLimitBytes, request.NetworkEnabled })))).ToLowerInvariant();
+            var response = new SandboxResponse(true, "preserved files", "receipt", 0, request.RunId, "revision");
+            var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            await File.WriteAllTextAsync(Path.Combine(directory, "state.json"), JsonSerializer.Serialize(new LocalExecutionService.WorkspaceState { RepositoryIdentity = "test-owner/aep-fixture@1:main", Fence = 1, Owner = "test-worker" }, json));
+            await File.WriteAllTextAsync(Path.Combine(directory, "saved.json"), JsonSerializer.Serialize(new LocalExecutionService.OperationReceipt(fingerprint, response), json));
+            for (var i = 0; i < 200; i++) await File.WriteAllTextAsync(Path.Combine(directory, $"receipt-{i}.json"), "preserved receipt");
+            var before = Directory.GetFiles(directory).Where(x => !x.EndsWith("state.json")).ToDictionary(x => x, File.ReadAllText);
+            var failure = await Assert.ThrowsAsync<ExecutorFailureException>(() => executor.ExecuteAsync(request with { OperationId = "new", Fence = 2, LeaseOwner = "next-worker" }, default));
+            Assert.Equal(ExecutorFailureReason.OperationRetentionLimit, failure.Reason);
+            Assert.False(failure.OutcomeUnknown);
+            Assert.Equal(409, failure.StatusCode);
+            Assert.False(File.Exists(Path.Combine(directory, "new.json")));
+            Assert.Equal(response, await executor.ExecuteAsync(request with { Fence = 2, LeaseOwner = "next-worker" }, default));
+            Assert.All(before, pair => Assert.Equal(pair.Value, File.ReadAllText(pair.Key)));
+            Assert.Equal(202, Directory.GetFiles(directory).Length);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
     [Theory]
     [InlineData("ℹ tests 1\nℹ pass 1\nℹ fail 0\n", 1)]
     [InlineData("# tests 2\n# pass 2\n", 2)]
