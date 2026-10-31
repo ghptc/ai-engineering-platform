@@ -29,6 +29,7 @@ public sealed partial class MongoPlatformStore : IPlatformStore, IWorkspaceQueri
             new(new BsonDocument("ProjectId", 1), new CreateIndexOptions<RunDocument>() { Unique = true, PartialFilterExpression = new BsonDocument("Active", true), Name = "one_active_run" }),
             new(new BsonDocument { { "Runnable", 1 }, { "LeaseExpiry", 1 } })], ct);
         await entries.Indexes.CreateManyAsync([
+            new(new BsonDocument("Sequence", 1), new CreateIndexOptions<EntryDocument> { Name = "operational_sequence" }),
             new(new BsonDocument { { "Kind", 1 }, { "ProjectId", 1 }, { "Sequence", 1 } }),
             new(new BsonDocument { { "RunId", 1 }, { "Kind", 1 }, { "Sequence", 1 } }),
             new(new BsonDocument { { "ConversationId", 1 }, { "Sequence", 1 } }),
@@ -137,6 +138,14 @@ public sealed partial class MongoPlatformStore : IPlatformStore, IWorkspaceQueri
         if (runId != null) f &= Builders<EntryDocument>.Filter.Eq(x => x.RunId, runId);
         if (conversationId != null) f &= Builders<EntryDocument>.Filter.Eq(x => x.ConversationId, conversationId);
         return (await entries.Find(f).SortBy(x => x.Sequence).Skip(offset).Limit(limit).ToListAsync(ct)).Select(x => Decode<RecordEntry>(x.Data)! with { Status = x.Status }).ToArray();
+    }
+    public async Task<IReadOnlyList<RecordEntry>> OperationalRecordsAsync(long after, int limit, bool newestFirst, CancellationToken ct)
+    {
+        if (after < 0 || limit is < 1 or > 100) throw new ArgumentException("Invalid operational window.");
+        var filter = Builders<EntryDocument>.Filter.In(x => x.Kind, new[] { "event", "message", "tool", "handoff", "approval", "artifact" }) & Builders<EntryDocument>.Filter.Gt(x => x.Sequence, after);
+        var query = entries.Find(filter);
+        query = newestFirst ? query.SortByDescending(x => x.Sequence) : query.SortBy(x => x.Sequence);
+        return (await query.Limit(limit).ToListAsync(ct)).Select(x => Decode<RecordEntry>(x.Data)! with { Status = x.Status }).ToArray();
     }
     public async Task<RecordEntry?> GetRecordAsync(string kind, string id, CancellationToken ct)
     {

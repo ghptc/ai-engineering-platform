@@ -1,0 +1,114 @@
+name: aep
+services:
+  mongo:
+    image: mongo:8
+    command: ["mongod", "--bind_ip_all"]
+    volumes: ["mongo-data:/data/db"]
+    networks: [database]
+    ulimits:
+      nofile: { soft: 65536, hard: 65536 }
+    mem_limit: 1g
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand('ping').ok ? 0 : 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    # No host publication: only the owner API/worker can reach the private database network.
+  runtime-image:
+    image: aep-managed-runtime:local
+    build:
+      context: .
+      dockerfile: backend/executor/managed/runtime.Dockerfile
+    entrypoint: ["/usr/bin/true"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  executor:
+    image: aep-managed-executor:local
+    build:
+      context: .
+      dockerfile: backend/executor/managed/Dockerfile
+    environment:
+      EXECUTOR_MANAGED: "true"
+      EXECUTOR_RUNTIME_IMAGE: aep-managed-runtime:local
+      EXECUTOR_REPOSITORIES: ${EXECUTOR_REPOSITORIES:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY_PATH: /run/aep-credentials/github-app.pem
+    depends_on:
+      runtime-image: { condition: service_completed_successfully }
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - executor-state:/var/lib/aep-executor
+      - executor-control:/run/aep-executor
+      - github-credentials:/run/aep-credentials:ro
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=64m"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --unix-socket /run/aep-executor/executor.sock -H \"Authorization: Bearer $$(cat /run/aep-executor/control-token)\" http://localhost/health/ready >/dev/null"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+  api:
+    image: aep-platform:local
+    build: .
+    environment: &platform-environment
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      APPLICATION_AUTH_MODE: Owner
+      APPLICATION_OWNER_CREDENTIAL_SECRET: ${APPLICATION_OWNER_CREDENTIAL_SECRET:?Set an owner PBKDF2 hash using backend/scripts/owner-credential.py}
+      AUTH_LOCAL_HTTP: ${AUTH_LOCAL_HTTP:-true}
+      AUTH_KEY_RING_PATH: /var/lib/aep/keys
+      MONGODB_CONNECTION_STRING: mongodb://mongo:27017
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-ai_engineering_platform}
+      EXECUTION_SANDBOX_PROVIDER: LocalUnix
+      EXECUTION_SANDBOX_SOCKET_PATH: /run/aep-executor/executor.sock
+      EXECUTION_SANDBOX_TOKEN_FILE: /run/aep-executor/control-token
+      WORKER_ENABLED: "false"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_DEFAULT_MODEL: ${OPENAI_DEFAULT_MODEL:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY_PATH: /run/aep-credentials/github-app.pem
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+    ports: ["127.0.0.1:${AEP_HTTP_PORT:-8080}:8080"]
+    volumes: &platform-volumes
+      - owner-keys:/var/lib/aep
+      - executor-control:/run/aep-executor:ro
+      - github-credentials:/run/aep-credentials:ro
+    networks: [default, database]
+    depends_on:
+      mongo: { condition: service_healthy }
+      executor: { condition: service_healthy }
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=128m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+  worker:
+    image: aep-platform:local
+    pull_policy: never
+    environment:
+      <<: *platform-environment
+      WORKER_ENABLED: "true"
+    volumes: *platform-volumes
+    networks: [default, database]
+    depends_on:
+      api: { condition: service_healthy }
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=128m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+volumes:
+  mongo-data:
+  owner-keys:
+  executor-state:
+  executor-control:
+  github-credentials:
+networks:
+  database: { internal: true }

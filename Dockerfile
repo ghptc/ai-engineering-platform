@@ -15,6 +15,7 @@ RUN dotnet publish backend/src/AIEngineeringPlatform.Api/AIEngineeringPlatform.A
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /var/lib/aep && chown app:app /var/lib/aep && chmod 0700 /var/lib/aep
 WORKDIR /app
 COPY --from=backend --chown=app:app /publish ./
 COPY --from=frontend --chown=app:app /build/frontend/dist ./wwwroot

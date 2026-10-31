@@ -1,0 +1,19 @@
+{
+  "name": "aep-approved-react-profile",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "antd": "6.6.8",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "jsdom": "27.4.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

@@ -133,7 +133,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                     ProcessResult execution;
                     try { execution = await docker.ExecuteAsync(workspace, profile, request, ct); }
                     catch (InvalidOperationException) { throw new ExecutorFailureException(ExecutorFailureCategory.Infrastructure, request.OperationId, request.Operation, 503, true); }
-                    operationExecution = new(name, profile.Command, "/workspace", SecretRedactor.Redact(execution.Stdout), SecretRedactor.Redact(execution.Stderr));
+                    operationExecution = new(name, profile.Command, "/workspace", SecretRedactor.Redact(execution.Stdout), SecretRedactor.Redact(execution.Stderr), profile.Image);
                     output = execution.Output; exitCode = execution.ExitCode; success = exitCode == 0 && !execution.TimedOut && !execution.OutputExceeded;
                     if (request.Operation == "RunTests")
                     {

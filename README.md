@@ -1,3 +1,5 @@
+> Runtime V2 M1 adds a standalone Compose deployment and persistent eight-hour owner sessions. After initial owner credential/allowlist setup, run `docker compose up -d --build`. See [migration, security and rollback](backend/docs/runtime-v2-migration.md) and [runtime V2 audit](backend/docs/architecture/011-runtime-v2-migration.md). Legacy manual-daemon instructions below remain for existing installations. M2–M5 are not certified by M1.
+
 # AI Engineering Platform
 
 A single-owner engineering orchestration platform built with .NET 10, MongoDB, React, TypeScript and Ant Design. A client supplies product context and focused tasks. Seven specialized agents are available; straightforward tasks use a Developer, Test Engineer, QA and Reviewer, with BA/Architect and frontend expertise selected when needed. A human approves delivery. The platform records execution history, conversations, usage, artifacts and decisions.

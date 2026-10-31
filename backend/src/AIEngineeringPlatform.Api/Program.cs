@@ -8,6 +8,7 @@ using AIEngineeringPlatform.Worker;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
@@ -32,23 +33,39 @@ builder.Services.AddOptions<ExecutionDefaults>().Configure(o =>
 var mongo = builder.Configuration["MONGODB_CONNECTION_STRING"];
 if (string.IsNullOrWhiteSpace(mongo)) throw new InvalidOperationException("MONGODB_CONNECTION_STRING is required.");
 builder.Services.AddSingleton<IPlatformStore>(new MongoPlatformStore(mongo, builder.Configuration["MONGODB_DATABASE"] ?? "ai_engineering_platform"));
+builder.Services.AddSingleton<IOwnerSessionStore>(new MongoOwnerSessionStore(mongo, builder.Configuration["MONGODB_DATABASE"] ?? "ai_engineering_platform"));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<OwnerTicketStore>();
+builder.Services.AddSingleton<OwnerConnections>();
+builder.Services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, OwnerCookieConfiguration>();
+builder.Services.AddHostedService<OwnerSessionInitialization>();
+var protection = builder.Services.AddDataProtection().SetApplicationName("AIEngineeringPlatform.Owner.v2");
+if (builder.Configuration["AUTH_KEY_RING_PATH"] is { Length: > 0 } keyRing)
+{
+    if (!Path.IsPathFullyQualified(keyRing)) throw new InvalidOperationException("AUTH_KEY_RING_PATH must be absolute.");
+    Directory.CreateDirectory(keyRing);
+    if (OperatingSystem.IsLinux()) File.SetUnixFileMode(keyRing, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    protection.PersistKeysToFileSystem(new DirectoryInfo(keyRing));
+}
 builder.Services.AddSingleton<IWorkspaceQueries>(sp => (MongoPlatformStore)sp.GetRequiredService<IPlatformStore>());
 builder.Services.Configure<LanguageModelOptions>(builder.Configuration.GetSection("LanguageModel"));
 builder.Services.AddSingleton<ILanguageModelProvider>(sp => new OpenAIProvider(builder.Configuration["OPENAI_API_KEY"], sp.GetRequiredService<IOptions<LanguageModelOptions>>().Value, store: sp.GetRequiredService<IPlatformStore>()));
 builder.Services.AddHttpClient("sandbox", h => h.Timeout = TimeSpan.FromSeconds(140)).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHttpClient("github", h => h.Timeout = TimeSpan.FromSeconds(60)).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
-builder.Services.AddOptions<RemoteSandboxOptions>().Configure(o => { o.Provider = builder.Configuration["EXECUTION_SANDBOX_PROVIDER"] ?? "Remote"; o.Endpoint = builder.Configuration["EXECUTION_SANDBOX_ENDPOINT"]; o.Token = builder.Configuration["EXECUTION_SANDBOX_TOKEN"]; o.SocketPath = builder.Configuration["EXECUTION_SANDBOX_SOCKET_PATH"]; }).Validate(o => o.Provider is "Remote" or "LocalUnix", "Use Remote or LocalUnix sandbox provider.").ValidateOnStart();
+builder.Services.AddOptions<RemoteSandboxOptions>().Configure(o => { o.Provider = builder.Configuration["EXECUTION_SANDBOX_PROVIDER"] ?? "Remote"; o.Endpoint = builder.Configuration["EXECUTION_SANDBOX_ENDPOINT"]; o.Token = builder.Configuration["EXECUTION_SANDBOX_TOKEN_FILE"] is { Length: > 0 } tokenFile ? File.ReadAllText(tokenFile).Trim() : builder.Configuration["EXECUTION_SANDBOX_TOKEN"]; o.SocketPath = builder.Configuration["EXECUTION_SANDBOX_SOCKET_PATH"]; }).Validate(o => o.Provider is "Remote" or "LocalUnix", "Use Remote or LocalUnix sandbox provider.").ValidateOnStart();
 builder.Services.AddSingleton<IExecutionSandbox>(sp => { var options = sp.GetRequiredService<IOptions<RemoteSandboxOptions>>().Value; return options.Provider == "LocalUnix" ? new UnixExecutionSandbox(options.SocketPath ?? "", options.Token ?? "") : new RemoteExecutionSandbox(sp.GetRequiredService<IHttpClientFactory>().CreateClient("sandbox"), options.Endpoint, options.Token); });
 builder.Services.AddSingleton<ISourceControl>(sp => new GitHubSourceControl(sp.GetRequiredService<IHttpClientFactory>().CreateClient("github"), builder.Configuration["GITHUB_APP_ID"], builder.Configuration["GITHUB_APP_PRIVATE_KEY_PATH"], builder.Configuration["GITHUB_WEBHOOK_SECRET"]));
 foreach (var role in Enum.GetValues<AgentRole>()) builder.Services.AddSingleton<IEngineeringAgent>(sp => new EngineeringAgent(role, sp.GetRequiredService<ILanguageModelProvider>()));
 builder.Services.AddOptions<SandboxExecutionLimits>().Bind(builder.Configuration.GetSection("SandboxExecution")).Validate(o => o.TimeoutSeconds is >= 1 and <= 120 && o.MemoryMb is >= 128 and <= 4096 && o.CpuLimit is >= 1 and <= 4 && o.OutputLimitBytes is >= 1024 and <= 100000, "Invalid sandbox execution limits.").ValidateOnStart();
 foreach (var name in EngineeringTool.Names) builder.Services.AddSingleton<IAgentTool>(sp => new EngineeringTool(name, sp.GetRequiredService<IExecutionSandbox>(), sp.GetRequiredService<ISourceControl>(), sp.GetRequiredService<IPlatformStore>(), sp.GetRequiredService<IOptions<SandboxExecutionLimits>>().Value));
 builder.Services.AddSingleton<GitHubWebhookProcessor>(); builder.Services.AddSingleton<ConversationResponder>(); builder.Services.AddSingleton<PlatformService>(); builder.Services.AddSingleton<ContextBuilder>(); builder.Services.AddSingleton<EngineeringWorkflow>(); builder.Services.AddSingleton<IExecutionPublisher, SignalRPublisher>();
-builder.Services.AddHostedService<EngineeringWorker>();
+if (builder.Configuration.GetValue("WORKER_ENABLED", true)) builder.Services.AddHostedService<EngineeringWorker>();
+else builder.Services.AddHostedService<PersistedEventRelay>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
 {
     o.Cookie.Name = "aep.owner"; o.Cookie.HttpOnly = true; o.Cookie.SameSite = SameSiteMode.Strict;
-    o.Cookie.SecurePolicy = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing") ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+    o.Cookie.SecurePolicy = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing") || builder.Configuration.GetValue("AUTH_LOCAL_HTTP", false) ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
     o.ExpireTimeSpan = TimeSpan.FromHours(8); o.SlidingExpiration = false;
     o.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = 401; return Task.CompletedTask; };
     o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = 403; return Task.CompletedTask; };
@@ -92,23 +109,28 @@ app.Use(async (ctx, next) =>
     ctx.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; worker-src 'self' blob:; frame-ancestors 'none'";
     ctx.Response.Headers["X-Correlation-Id"] = ctx.TraceIdentifier;
     if (!app.Environment.IsDevelopment()) ctx.Response.Headers["Strict-Transport-Security"] = "max-age=31536000";
+    // Explicit local HTTP mode is restricted to loopback publication and loopback browser hosts.
+    if (builder.Configuration.GetValue("AUTH_LOCAL_HTTP", false) && ctx.Request.Host.Host is not ("localhost" or "127.0.0.1" or "[::1]")) { await Results.Problem(statusCode: 403, title: "Local HTTP requires a loopback host").ExecuteAsync(ctx); return; }
     // Same-origin custom headers plus SameSite cookies protect all REST mutations, including login.
     if (ctx.Request.Path.StartsWithSegments("/api") && ctx.Request.Path != "/api/v1/webhooks/github" && (HttpMethods.IsPost(ctx.Request.Method) || HttpMethods.IsPut(ctx.Request.Method) || HttpMethods.IsPatch(ctx.Request.Method) || HttpMethods.IsDelete(ctx.Request.Method)))
     {
-        if (ctx.Request.Headers["X-Requested-With"] != "AIEngineeringPlatform") { await Results.Problem(statusCode: 403, title: "Missing same-origin request header").ExecuteAsync(ctx); return; }
+        if (ctx.Request.Headers["X-Requested-With"] != "AIEngineeringPlatform" || ctx.Request.Headers.TryGetValue("Origin", out var mutationOrigin) && (!Uri.TryCreate(mutationOrigin.ToString(), UriKind.Absolute, out var sourceOrigin) || sourceOrigin.GetLeftPart(UriPartial.Authority) != $"{ctx.Request.Scheme}://{ctx.Request.Host}")) { await Results.Problem(statusCode: 403, title: "Missing same-origin request header").ExecuteAsync(ctx); return; }
     }
     if (ctx.Request.Path.StartsWithSegments("/hubs") && ctx.Request.Headers.TryGetValue("Origin", out var origin) && (!Uri.TryCreate(origin.ToString(), UriKind.Absolute, out var originUri) || !string.Equals(originUri.Authority, ctx.Request.Host.Value, StringComparison.OrdinalIgnoreCase))) { await Results.Problem(statusCode: 403, title: "Cross-origin hub connections are not allowed").ExecuteAsync(ctx); return; }
     await next();
 });
 app.UseDefaultFiles(); app.UseStaticFiles(); app.UseAuthentication(); app.UseAuthorization(); app.UseRateLimiter();
-app.MapPost("/api/v1/auth/login", async (LoginRequest request, HttpContext context, IOptions<OwnerOptions> options) =>
+app.MapPost("/api/v1/auth/login", async (LoginRequest request, HttpContext context, IOptions<OwnerOptions> options, TimeProvider clock, OwnerConnections connections) =>
 {
     if (!OwnerCredentials.Verify(request.Password, options.Value.CredentialHash)) return Results.Problem(statusCode: 401, title: "Invalid credentials");
-    await context.SignInAsync(new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "owner"), new Claim("role", "owner")], CookieAuthenticationDefaults.AuthenticationScheme)));
+    var previousSession = context.User.FindFirstValue("aep.session");
+    await context.SignOutAsync(); // Reauthentication revokes the previous server-side identity.
+    if (previousSession != null) connections.Revoke(previousSession);
+    await context.SignInAsync(new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "owner"), new Claim("role", "owner")], CookieAuthenticationDefaults.AuthenticationScheme)), new AuthenticationProperties { IsPersistent = true, AllowRefresh = false, IssuedUtc = clock.GetUtcNow(), ExpiresUtc = clock.GetUtcNow() + OwnerTicketStore.MaximumLifetime });
     return Results.Ok(new { name = "owner" });
 }).RequireRateLimiting("login");
 app.MapGet("/api/v1/auth/me", () => new { name = "owner" }).RequireAuthorization("Owner");
-app.MapPost("/api/v1/auth/logout", async (HttpContext ctx) => { await ctx.SignOutAsync(); return Results.NoContent(); }).RequireAuthorization("Owner");
+app.MapPost("/api/v1/auth/logout", async (HttpContext ctx, OwnerConnections connections) => { var session = ctx.User.FindFirstValue("aep.session"); await ctx.SignOutAsync(); if (session != null) connections.Revoke(session); return Results.NoContent(); }).RequireAuthorization("Owner");
 var api = app.MapGroup("/api/v1").RequireAuthorization("Owner").RequireRateLimiting("api");
 api.MapGet("/projects", async (IPlatformStore s, int? offset, int? limit, CancellationToken ct) => new Page<Project>(await s.ProjectsAsync(Offset(offset), Limit(limit), ct), Offset(offset), Limit(limit)));
 api.MapPost("/projects", async (ProjectInput input, PlatformService s, IOptions<ExecutionDefaults> defaults, CancellationToken ct) => { var p = await s.SaveProjectAsync(input.ToProject() with { ExecutionPolicy = input.ExecutionPolicy ?? defaults.Value.Policy() }, null, ct); return Results.Created($"/api/v1/projects/{p.Id}", p); });
@@ -230,7 +252,7 @@ api.MapGet("/settings", async (IExecutionSandbox sandbox, ISourceControl source,
 app.MapGet("/health/live", () => Results.Ok(new { status = "Healthy" }));
 app.MapGet("/health/ready", async (IPlatformStore store, CancellationToken ct) => { try { return await store.PingAsync(ct) ? Results.Ok(new { status = "Healthy" }) : Results.StatusCode(503); } catch { return Results.StatusCode(503); } });
 app.MapOpenApi().RequireAuthorization("Owner");
-app.MapHub<EngineeringHub>("/hubs/engineering").RequireAuthorization("Owner");
+app.MapHub<EngineeringHub>("/hubs/engineering", options => options.CloseOnAuthenticationExpiration = true).RequireAuthorization("Owner");
 app.Map("/api/{**path}", () => Results.Problem(statusCode: 404, title: "API route not found"));
 app.Map("/hubs/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");

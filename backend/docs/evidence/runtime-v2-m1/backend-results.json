@@ -1,0 +1,1615 @@
+{
+  "passed": 293,
+  "failed": 0,
+  "skipped": 3,
+  "realDocker": true,
+  "testMongo": "isolated localhost:27048",
+  "pinnedTestImage": "sha256:b66f58d9e568bcf58e5552bb8087be6b1d98024c6bd1b912cd54e9ffc5d72c04",
+  "projects": [
+    {
+      "project": "AIEngineeringPlatform.Application.Tests",
+      "trxFile": "backend/tests/AIEngineeringPlatform.Application.Tests/TestResults/runtime-v2-m1-complete_net10.0_20261031133323.trx",
+      "trxSha256": "7c835befd5846368b74adb60465156f0355b29a4f3b45e09f553456b5a72768f",
+      "counters": {
+        "total": "55",
+        "executed": "55",
+        "passed": "55",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.RejectionPersistsExplicitTargetAndActualFindingReference(source: CodeReviewer, target: \"BackendEngineer\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0108799"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.InspectionProgressTests.NewReceiptIdsAreNotMistakenForNewInformation",
+          "outcome": "Passed",
+          "duration": "00:00:00.0077181"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: TestEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0816810"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: FrontendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0874538"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.PlanningPolicyTests.GenuinePlanningOrAmbiguousBlockerRemainsBlocked(stage: \"Unknown\", evidence: \"repository-evidence\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001303"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.InspectionProgressTests.RepeatedCachedRequestsAreBoundedAcrossCheckpointRecovery",
+          "outcome": "Passed",
+          "duration": "00:00:00.0116445"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.PlanningPolicyTests.ArchitectMustAddressBootstrapDependenciesAndTestsBeforeDeferredHandoff",
+          "outcome": "Passed",
+          "duration": "00:00:00.0026090"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.InspectionProgressTests.InvalidThresholdsFailClosed(feedback: 6, stop: 1001)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001598"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: FrontendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0306984"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.PublishedReviewContainsActionableFindingsWithoutInventedInlinePositions",
+          "outcome": "Passed",
+          "duration": "00:00:00.0051813"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.ConcurrencyConflictIsSurfaced",
+          "outcome": "Passed",
+          "duration": "00:00:00.0494125"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.InspectionProgressTests.ImplementationAndVerificationEndAnInspectionStreak(operation: \"ApplyPatch\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005595"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.BothTargetsAreBoundedAndAmbiguityNeverSelectsArbitrarily",
+          "outcome": "Passed",
+          "duration": "00:00:00.0004472"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.MessagesPersistBeforeDelivery",
+          "outcome": "Passed",
+          "duration": "00:00:00.0029778"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.LargeSnapshotsDoNotAccumulateAcrossStages",
+          "outcome": "Passed",
+          "duration": "00:00:00.0692403"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: QAEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0317648"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.InspectionProgressTests.InvalidThresholdsFailClosed(feedback: 6, stop: 6)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000026"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.StartCopiesProjectPolicy",
+          "outcome": "Passed",
+          "duration": "00:00:00.0029684"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.StartRequiresIdempotencyKey",
+          "outcome": "Passed",
+          "duration": "00:00:00.0009680"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.FocusedTaskTests.TaskReferencesCannotImportAnotherProjectsRequirementsOrHumanInstructions(human: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005306"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: BackendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0890017"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: Architect)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0946164"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.ProtectedOverflowFailsExplicitlyInsteadOfTruncating",
+          "outcome": "Passed",
+          "duration": "00:00:00.0033022"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.FocusedTaskTests.TaskReferencesCannotImportAnotherProjectsRequirementsOrHumanInstructions(human: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0593077"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: CodeReviewer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0823940"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.LongToolLoopCompactsEarlierOutputsWithoutLosingEvidenceStatus",
+          "outcome": "Passed",
+          "duration": "00:00:00.0034127"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: CodeReviewer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0315654"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.NonPausedRunCannotResume",
+          "outcome": "Passed",
+          "duration": "00:00:00.0010802"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: BackendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0298161"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: Architect)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0301540"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: BusinessAnalyst)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0306500"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.PlanningPolicyTests.GenuinePlanningOrAmbiguousBlockerRemainsBlocked(stage: \"Implementation\", evidence: \"\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000026"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.RejectionPersistsExplicitTargetAndActualFindingReference(source: CodeReviewer, target: \"FrontendEngineer\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002969"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.ArchitectContextDoesNotGrowWithHistoricalAgentProposals",
+          "outcome": "Passed",
+          "duration": "00:00:00.0137764"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: QAEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.1491838"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.PlanningPolicyTests.LegacyBlockersMissingBacklogAndHumanDecisionsCannotBeOverridden",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001144"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.HundredsOfDistinctEvidenceRecordsRemainBounded(role: BusinessAnalyst)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0892751"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.RejectionPersistsExplicitTargetAndActualFindingReference(source: QAEngineer, target: \"BackendEngineer\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000301"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.UseCaseTests.ContextIncludesEvidenceAndUserContext",
+          "outcome": "Passed",
+          "duration": "00:00:00.0232665"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.ExtensionKeepsUsageCheckpointsAndPolicyAndDoesNotResumeAutomatically",
+          "outcome": "Passed",
+          "duration": "00:00:00.0032318"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.InspectionProgressTests.NewReadRangesDoNotCountAsRepeatsAndChangedWorkspaceResetsTheStreak",
+          "outcome": "Passed",
+          "duration": "00:00:00.0051785"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.EveryRoleDropsRepeatedModelRepliesAndDeduplicatesEvidence(role: TestEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0306189"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.InspectionProgressTests.InvalidThresholdsFailClosed(feedback: 0, stop: 12)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001559"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.CompactionPreservesProtectedContentAndCurrentEvidence",
+          "outcome": "Passed",
+          "duration": "00:00:00.0009802"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.QualityGateTests.QaApprovalRequiresExactRequiredEvidenceIdsRatherThanProseClaims",
+          "outcome": "Passed",
+          "duration": "00:00:00.0025770"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.PlanningPolicyTests.ExplicitFutureExecutionBlockerAllowsBusinessPlanningHandoff",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001667"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.TestReportSummaryPreservesActualEvidenceAndRevision",
+          "outcome": "Passed",
+          "duration": "00:00:00.0024298"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.UnicodeUsesConservativeTokenBoundAndOutputIsReserved",
+          "outcome": "Passed",
+          "duration": "00:00:00.0105792"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.InspectionProgressTests.ImplementationAndVerificationEndAnInspectionStreak(operation: \"WriteFile\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002640"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ClarificationTests.OwnerAnswerIsPersistedAttachedAndResumedWithoutResettingLimits",
+          "outcome": "Passed",
+          "duration": "00:00:00.0713063"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.PlanningPolicyTests.GenuinePlanningOrAmbiguousBlockerRemainsBlocked(stage: \"Planning\", evidence: \"repository-evidence\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001169"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.RuntimeReliabilityTests.RejectionPersistsExplicitTargetAndActualFindingReference(source: QAEngineer, target: \"FrontendEngineer\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000164"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.InspectionProgressTests.ImplementationAndVerificationEndAnInspectionStreak(operation: \"RunTests\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0499451"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.ContextBudgetTests.ToolCompactionRetainsFailureRevisionAndRetrievableId",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002534"
+        },
+        {
+          "name": "AIEngineeringPlatform.Application.Tests.FocusedTaskTests.FocusedTaskDoesNotLoadConversationsOrProjectArtifactHistory",
+          "outcome": "Passed",
+          "duration": "00:00:00.0126447"
+        }
+      ]
+    },
+    {
+      "project": "AIEngineeringPlatform.Architecture.Tests",
+      "trxFile": "backend/tests/AIEngineeringPlatform.Architecture.Tests/TestResults/runtime-v2-m1-complete_net10.0_20261031133323.trx",
+      "trxSha256": "d12c1e885f1866c1ca1bd6b78193c637f3700e804c7cd4ab7885b4f84c3a76ad",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "AIEngineeringPlatform.Architecture.Tests.DependencyTests.DomainHasNoOuterDependencies",
+          "outcome": "Passed",
+          "duration": "00:00:00.0004144"
+        },
+        {
+          "name": "AIEngineeringPlatform.Architecture.Tests.DependencyTests.ApplicationDoesNotReferenceInfrastructureOrApi",
+          "outcome": "Passed",
+          "duration": "00:00:00.0025813"
+        }
+      ]
+    },
+    {
+      "project": "AIEngineeringPlatform.Domain.Tests",
+      "trxFile": "backend/tests/AIEngineeringPlatform.Domain.Tests/TestResults/runtime-v2-m1-complete_net10.0_20261031133324.trx",
+      "trxSha256": "d9170ea0491257e1577a5a3414e9f166961c6eb93a6ea5c0e75699341dda25a4",
+      "counters": {
+        "total": "18",
+        "executed": "18",
+        "passed": "18",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.TaskPlanTests.DesignTaskIncludesBothDesignSpecialists",
+          "outcome": "Passed",
+          "duration": "00:00:00.0055644"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.CorrectionsConsumeIteration",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000656"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.AutomaticMergeRemainsDisabled",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002480"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.CompletedRunCannotResume",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000909"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.ReviewCannotCompleteDelivery",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005290"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.TaskPlanTests.SimpleTaskSkipsDesignAndKeepsValidationSpecialists",
+          "outcome": "Passed",
+          "duration": "00:00:00.0006263"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.DurationExhaustionStopsExecution",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005560"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.IterationLimitRejectsCorrection",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001078"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.BudgetExhaustionStopsExecution",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001325"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.CannotSkipQualityGates",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000613"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.ProjectRequiresName",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002951"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.PauseResumesCorrectStage",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000621"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.RetryAllowancesAreIndependentPerStage",
+          "outcome": "Passed",
+          "duration": "00:00:00.0003687"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.TaskPlanTests.AdvancingTaskPreservesCumulativeBudgetsAndRequiresDeliveryStage",
+          "outcome": "Passed",
+          "duration": "00:00:00.0066183"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.RetryResumesFailedStageAndIsBounded",
+          "outcome": "Passed",
+          "duration": "00:00:00.0011859"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.PolicyRejectsUnsafeLimits",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002951"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.ToolLimitStopsExecution",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001074"
+        },
+        {
+          "name": "AIEngineeringPlatform.Domain.Tests.ExecutionTests.FailedRunCanBeCancelled",
+          "outcome": "Passed",
+          "duration": "00:00:00.0042756"
+        }
+      ]
+    },
+    {
+      "project": "AIEngineeringPlatform.Integration.Tests",
+      "trxFile": "backend/tests/AIEngineeringPlatform.Integration.Tests/TestResults/runtime-v2-m1-complete_net10.0_20261031133412.trx",
+      "trxSha256": "1b369ce85f757a4adc631ef327d576b15bdf3e79d9cdff804234d3b0591648b3",
+      "counters": {
+        "total": "181",
+        "executed": "179",
+        "passed": "179",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PersistenceIdempotencyTests.ConcurrentWebhookReplayReportsExactlyOneNewInsertion",
+          "outcome": "Passed",
+          "duration": "00:00:00.0735598"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.SandboxAdapterSendsBoundedIsolatedRequest",
+          "outcome": "Passed",
+          "duration": "00:00:00.0014241"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ProviderFailureAndExplicitResumePreserveSuccessfulWritesAndDeliveryIds",
+          "outcome": "Passed",
+          "duration": "00:00:03.3588940"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.OpenAIAdapterFailsClosedWithoutCredentials",
+          "outcome": "Passed",
+          "duration": "00:00:00.0004164"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.RepeatedInspectionGetsFeedbackThenBlocksAndCannotEscapeThroughResume",
+          "outcome": "Passed",
+          "duration": "00:00:02.4364570"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.UnixReadinessTests.OutdatedDaemonCannotAdvertiseImplementationReadiness(body: \"{}\", expected: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0209604"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"arrayArguments\", category: InvalidToolArguments)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005901"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 400, category: InvalidArguments)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0004048"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StrictSchemaMatchesEntireAgentDtoContract(role: Architect)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001477"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"failed\", category: ResponseFailed)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0004742"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.PublishedReviewReworkTargetsDeveloperAndRequiresAnotherOwnerDecision",
+          "outcome": "Passed",
+          "duration": "00:00:02.4397985"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.OwnerSessionTests.RevokedAndExpiredSessionsLoseLiveConnectionsBeforePublication",
+          "outcome": "Passed",
+          "duration": "00:00:00.0054201"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StructuredPipelineRejectsAmbiguousOrInvalidInstructions(scenario: \"unrelated\", category: UnexpectedContent, stage: \"OutputExtraction\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0012248"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.UnixReadinessTests.OutdatedDaemonCannotAdvertiseImplementationReadiness(body: \"{\\\"contractVersion\\\":\\\"2\\\"}\", expected: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0334545"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 401, category: Authorization)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000139"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.GitHubWebhookUsesConstantTimeHmacVerification",
+          "outcome": "Passed",
+          "duration": "00:00:00.0003116"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.IncompleteReasonIsClassifiedWithoutGuessing(reason: \"unknown\", classification: \"Unknown\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005289"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"status\", category: UnexpectedContent)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0004726"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ReasoningAndSegmentedTextUseOneCompleteAssistantMessage",
+          "outcome": "Passed",
+          "duration": "00:00:00.0020120"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.OperationalRelayTests.ApiRelayPublishesIndependentWorkerRecordsOnlyAfterPersistenceInGlobalOrder",
+          "outcome": "Passed",
+          "duration": "00:00:00.8648802"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ReconciliationTests.NoOpRequiresCurrentTestsAndQaAndReusesExistingDelivery(existingPr: False, revisionMismatch: True)",
+          "outcome": "Passed",
+          "duration": "00:00:01.8336710"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.FocusedQueueSelectsSpecialistsAndAdvancesWithinOriginalBudget(analysis: True, architecture: False)",
+          "outcome": "Passed",
+          "duration": "00:00:03.4380025"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.CallerCancellationPropagatesWithoutRetry",
+          "outcome": "Passed",
+          "duration": "00:00:00.0008592"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.UnixReadinessTests.OutdatedDaemonCannotAdvertiseImplementationReadiness(body: \"{\\\"contractVersion\\\":2}\", expected: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0103853"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.EveryRoleUsesTheSameValidatedProvider(role: FrontendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0013519"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.HttpFailuresAreSanitizedAndRetriesAreBounded(status: ServiceUnavailable, count: 2)",
+          "outcome": "Passed",
+          "duration": "00:00:02.0030763"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.RedactionRemovesEnvironmentSecretsPrivateKeysAndCredentialUrls",
+          "outcome": "Passed",
+          "duration": "00:00:00.0010171"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.MongoLeasesFenceStaleWorkersAndEnforceIdempotency",
+          "outcome": "Passed",
+          "duration": "00:00:00.0690441"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StructuredPipelineRejectsAmbiguousOrInvalidInstructions(scenario: \"twoObjects\", category: MalformedJson, stage: \"JsonSyntax\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0004906"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PersistenceIdempotencyTests.ImmutableConflictsAreReportedWithoutOverwritingReceipts(otherKind: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0637946"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"truncated\", category: MalformedJson)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005429"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.OfficialResponsesSdkContractUsesStrictSchemaAndRecordsUsage",
+          "outcome": "Passed",
+          "duration": "00:00:00.0011841"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReworkRunsOnlyResponsibleDeveloperThenRepeatsTestsQaAndReview(reviewer: CodeReviewer, target: BackendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:01.3102961"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ArtifactToolDoesNotCollideWithItsInvocationCheckpoint",
+          "outcome": "Passed",
+          "duration": "00:00:00.0026503"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"arguments\", category: InvalidToolArguments)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0008691"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.FocusedQueueSelectsSpecialistsAndAdvancesWithinOriginalBudget(analysis: False, architecture: False)",
+          "outcome": "Passed",
+          "duration": "00:00:03.5646580"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.FullWorkflowPersistsEvidenceAndRequiresApproval(reviewBeforeCommit: True)",
+          "outcome": "Passed",
+          "duration": "00:00:02.4438558"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"usage\", category: MissingUsage)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005671"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.MemoryRetrievalIsBoundedTraceableAndProjectScoped",
+          "outcome": "Passed",
+          "duration": "00:00:00.0053503"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.MismatchedReuseCheckpointFailsClosedWithoutSendingTheInspection(corruptSourceHash: True)",
+          "outcome": "Passed",
+          "duration": "00:00:01.2353829"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.WorkspaceUxTests.ReadModelsAndPricingRemainOwnerProtected",
+          "outcome": "Passed",
+          "duration": "00:00:00.0019154"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.EveryRoleUsesTheSameValidatedProvider(role: QAEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005821"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.OwnerSessionTests.BrowserCookieSurvivesApiRestartAndLogoutRevokesCapturedCookie",
+          "outcome": "Passed",
+          "duration": "00:00:00.5447871"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.WorkspaceUxTests.ProviderReservationsSettleWithoutDoubleChargingSuccessfulTasks",
+          "outcome": "Passed",
+          "duration": "00:00:00.0670752"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.IncompleteReasonIsClassifiedWithoutGuessing(reason: \"max_output_tokens\", classification: \"OutputLimit\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0003228"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.EveryRoleUsesTheSameValidatedProvider(role: BusinessAnalyst)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005470"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.ToolRejectsTraversal(path: \".env.production\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002665"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.IncompatibleModelOrSchemaNeverDowngradesStrictOutput(code: \"invalid_json_schema\", param: \"text.format.schema\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0019505"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReadmeOnlyPlanningRoutesByBlockerStageAndNeverApprovesUntestedChanges(scenario: \"deliveryVerified\", expected: AwaitingHumanApproval, architectRuns: True)",
+          "outcome": "Passed",
+          "duration": "00:00:01.5085092"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReadmeOnlyPlanningRoutesByBlockerStageAndNeverApprovesUntestedChanges(scenario: \"unsupported\", expected: Paused, architectRuns: True)",
+          "outcome": "Passed",
+          "duration": "00:00:01.3078109"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.SecondaryRealMongoConflictDoesNotMaskOriginal409CommandRejection",
+          "outcome": "Passed",
+          "duration": "00:00:01.2316796"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.RunDeadlineIsDistinctAndBounded",
+          "outcome": "Passed",
+          "duration": "00:00:01.0004549"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.InvalidProjectReturnsProblemDetails",
+          "outcome": "Passed",
+          "duration": "00:00:00.0582132"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.DisabledRetriesAndUnqualifiedServerFailuresStopImmediately(retries: 2, status: 500)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0006604"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.SdkAggregationOfMultipleMessagesIsAmbiguousForAnAgentDecision",
+          "outcome": "Passed",
+          "duration": "00:00:00.0120441"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ExplicitCommentaryNeverBecomesTheStructuredDecision(commentaryLast: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0007071"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.UnixReadinessTests.OutdatedDaemonCannotAdvertiseImplementationReadiness(body: \"{\\\"contractVersion\\\":1}\", expected: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0016164"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.EveryRoleUsesTheSameValidatedProvider(role: CodeReviewer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005756"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReadmeOnlyPlanningRoutesByBlockerStageAndNeverApprovesUntestedChanges(scenario: \"noProfiles\", expected: Paused, architectRuns: True)",
+          "outcome": "Passed",
+          "duration": "00:00:01.3160553"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 409, category: WorkspaceConflict)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001051"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.WorkspaceUxTests.UsageLedgerUsesPersistedReceiptsAndPricingOnlyChangesFutureConfiguration",
+          "outcome": "Passed",
+          "duration": "00:00:00.6727031"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.PhaseSelectionRequiresOneUnambiguousDecision(phase: \"unknown\", category: UnexpectedContent)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0007990"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StrictSchemaMatchesEntireAgentDtoContract(role: BusinessAnalyst)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001354"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.OnlyKnownReadFileArgumentRejectionsBecomeCorrectiveFeedback(operation: \"ReadFile\", category: Infrastructure, status: 503, unknown: True, recoverable: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.1513596"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StructuredPipelineRejectsAmbiguousOrInvalidInstructions(scenario: \"prose\", category: MalformedJson, stage: \"JsonSyntax\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0046599"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.OnlyKnownReadFileArgumentRejectionsBecomeCorrectiveFeedback(operation: \"ReadFile\", category: InvalidArguments, status: 400, unknown: True, recoverable: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.1577813"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ExplicitCommentaryNeverBecomesTheStructuredDecision(commentaryLast: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0073472"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.IncompleteReasonIsClassifiedWithoutGuessing(reason: \"steered\", classification: \"Steered\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0003392"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.InspectionsRetryWithSameIdentityWithinBound(status: 502)",
+          "outcome": "Passed",
+          "duration": "00:00:00.6008204"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.OwnerAuthenticationAndCsrfAreRequired",
+          "outcome": "Passed",
+          "duration": "00:00:00.0011091"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.ToolRejectsTraversal(path: \"nested/../../escape\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000067"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.WebhookTests.PullRequestReceiptsAreDeduplicatedAndMatchInstalledRepository",
+          "outcome": "Passed",
+          "duration": "00:00:00.5009973"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.BudgetReservationSurvivesFailureAndPreventsAnotherRequest",
+          "outcome": "Passed",
+          "duration": "00:00:00.0436626"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.OutputRecoveryCannotExceedExistingLimits(limit: \"ceiling\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002901"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.ContractCodeDistinguishesRepositoryFromAuthorization",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005096"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.MalformedRecoveryStopsAtRemainingLimits(limit: \"budget\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0033864"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StrictSchemaMatchesEntireAgentDtoContract(role: TestEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001367"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.GreenfieldFrontendReceivesPlanningAndBackendHandoffBeforeWritingWithoutProfilesOrPr(focused: True)",
+          "outcome": "Passed",
+          "duration": "00:00:02.3166460"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.HttpFailuresAreSanitizedAndRetriesAreBounded(status: Unauthorized, count: 1)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0006474"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.LiveAgentCycleTests.RealOpenAIProducesStructuredOutputAndUsage",
+          "outcome": "NotExecuted",
+          "duration": "00:00:00.0010000"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReworkRunsOnlyResponsibleDeveloperThenRepeatsTestsQaAndReview(reviewer: QAEngineer, target: FrontendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:01.3142311"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ArchitectCheckpointRetryPreservesCompletedAnalysisAndValidToolEvidence",
+          "outcome": "Passed",
+          "duration": "00:00:02.3450114"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.DisabledRetriesAndUnqualifiedServerFailuresStopImmediately(retries: 2, status: 503)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0003276"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.RetryAfterIsRespectedWithoutExceedingAttemptBound(seconds: 1, attempts: 3)",
+          "outcome": "Passed",
+          "duration": "00:00:02.0017176"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.OwnerExtensionPreservesOperationIdsAndContinuesCheckpointedStage",
+          "outcome": "Passed",
+          "duration": "00:00:02.3348413"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.DisabledRetriesAndUnqualifiedServerFailuresStopImmediately(retries: 0, status: 429)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000331"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.OutputRecoveryIsBoundedAndAgentAllowanceIsConfigurable",
+          "outcome": "Passed",
+          "duration": "00:00:00.0015221"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 422, category: ProfileRestriction)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0056450"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.InspectionsRetryWithSameIdentityWithinBound(status: 504)",
+          "outcome": "Passed",
+          "duration": "00:00:00.6004820"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.OutputRecoveryCannotExceedExistingLimits(limit: \"disabled\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005877"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.MalformedRecoveryKeepsStrictSchemaAndCheckpointsAndChargesBothRequests",
+          "outcome": "Passed",
+          "duration": "00:00:00.0020797"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ExecutorFailurePausesWithDurableActionableEvidenceAndNoStageRetry",
+          "outcome": "Passed",
+          "duration": "00:00:01.2212469"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.OnlyKnownReadFileArgumentRejectionsBecomeCorrectiveFeedback(operation: \"ReadFile\", category: WorkspaceConflict, status: 409, unknown: True, recoverable: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.1637656"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StructuredPipelineRejectsAmbiguousOrInvalidInstructions(scenario: \"unregisteredTool\", category: InvalidToolArguments, stage: \"ToolValidation\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0006146"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 504, category: Timeout)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000675"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.VerifiedPreflightRejectionIsKnownNotStarted(status: 503, code: \"image_unavailable\", reason: ImageUnavailable)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0009997"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.OwnerSessionTests.CredentialRotationAndTamperedStoredTicketsAreRejected",
+          "outcome": "Passed",
+          "duration": "00:00:00.0078823"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.CommittedTransitionSurvivesRestartBeforeEventDelivery",
+          "outcome": "Passed",
+          "duration": "00:00:00.0486253"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.EveryRoleUsesTheSameValidatedProvider(role: Architect)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005820"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.ConversationSurvivesIndependentRequests",
+          "outcome": "Passed",
+          "duration": "00:00:00.0753316"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ReconciliationTests.NoOpRequiresCurrentTestsAndQaAndReusesExistingDelivery(existingPr: False, revisionMismatch: False)",
+          "outcome": "Passed",
+          "duration": "00:00:01.3910194"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.OnlyKnownReadFileArgumentRejectionsBecomeCorrectiveFeedback(operation: \"ReadFile\", category: InvalidArguments, status: 400, unknown: False, recoverable: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.1521269"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.SeparateStreamsRemainBoundedAcrossRemoteTransport(overflow: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0004838"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.WorkspaceUxTests.LargeEventHistoryIsLatestFirstPagedAndOriginalDetailsArePreserved",
+          "outcome": "Passed",
+          "duration": "00:00:00.4838770"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 500, category: Infrastructure)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000200"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.EveryRoleUsesTheSameValidatedProvider(role: TestEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0007738"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReadmeOnlyPlanningRoutesByBlockerStageAndNeverApprovesUntestedChanges(scenario: \"infrastructure\", expected: Paused, architectRuns: True)",
+          "outcome": "Passed",
+          "duration": "00:00:01.7060572"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.PhaseSelectionRequiresOneUnambiguousDecision(phase: \"ambiguous\", category: AmbiguousOutput)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0003704"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.PhaseSelectionRequiresOneUnambiguousDecision(phase: \"commentary\", category: EmptyOutput)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0012497"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.OutputSchemaIsStrictAndRequiresOperationalFields",
+          "outcome": "Passed",
+          "duration": "00:00:00.0008644"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"malformed\", category: MalformedJson)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0010061"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.ToolRejectsTraversal(path: \"secrets/app.pem\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000100"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.SeparateStreamsRemainBoundedAcrossRemoteTransport(overflow: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0020056"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReadmeOnlyPlanningRoutesByBlockerStageAndNeverApprovesUntestedChanges(scenario: \"planning\", expected: Paused, architectRuns: False)",
+          "outcome": "Passed",
+          "duration": "00:00:01.2071940"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.IncompleteReasonIsClassifiedWithoutGuessing(reason: \"content_filter\", classification: \"ContentFilter\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0009496"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ExistingFrontendInstructionsAreVersionedWithoutExpandingTools",
+          "outcome": "Passed",
+          "duration": "00:00:00.3487735"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PersistenceIdempotencyTests.ExternalIdConstraintIsNotMistakenForSameRecordReplay",
+          "outcome": "Passed",
+          "duration": "00:00:00.0912925"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.DevPulseCommandRejectionPreservesTwoWritesAndResumeIsExplicit(uncertain: True)",
+          "outcome": "Passed",
+          "duration": "00:00:02.2119646"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.GreenfieldFrontendReceivesPlanningAndBackendHandoffBeforeWritingWithoutProfilesOrPr(focused: False)",
+          "outcome": "Passed",
+          "duration": "00:00:02.3360648"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.GitHubContractTests.SecretOutputIsRedacted",
+          "outcome": "Passed",
+          "duration": "00:00:00.0076535"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.DevPulseCommandRejectionPreservesTwoWritesAndResumeIsExplicit(uncertain: False)",
+          "outcome": "Passed",
+          "duration": "00:00:02.2235668"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"incomplete\", category: IncompleteResponse)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0009467"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.MismatchedReuseCheckpointFailsClosedWithoutSendingTheInspection(corruptSourceHash: False)",
+          "outcome": "Passed",
+          "duration": "00:00:01.2180388"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.FailedToolAndItsRetryHaveSeparateDurableUsage",
+          "outcome": "Passed",
+          "duration": "00:00:01.3079763"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.OnlyKnownReadFileArgumentRejectionsBecomeCorrectiveFeedback(operation: \"ReadFile\", category: Authorization, status: 403, unknown: False, recoverable: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.1532428"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.OwnerSessionTests.CrossOriginMutationsAreRejectedEvenWithTheCustomHeader",
+          "outcome": "Passed",
+          "duration": "00:00:00.2360272"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"refusal\", category: UnexpectedContent)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0041649"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 502, category: Infrastructure)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000702"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReadmeOnlyPlanningRoutesByBlockerStageAndNeverApprovesUntestedChanges(scenario: \"delivery\", expected: Paused, architectRuns: True)",
+          "outcome": "Passed",
+          "duration": "00:00:02.4346272"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.RetryAfterIsRespectedWithoutExceedingAttemptBound(seconds: 10, attempts: 1)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0017060"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReworkRunsOnlyResponsibleDeveloperThenRepeatsTestsQaAndReview(reviewer: CodeReviewer, target: FrontendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:01.3104261"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.MissingReadIsPersistedChargedAndReturnedToModelWithoutReplayingWrites",
+          "outcome": "Passed",
+          "duration": "00:00:01.3201951"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.TransportFailureRequiresReconciliationAndCancellationPropagates",
+          "outcome": "Passed",
+          "duration": "00:00:00.0296713"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.FullWorkflowPersistsEvidenceAndRequiresApproval(reviewBeforeCommit: False)",
+          "outcome": "Passed",
+          "duration": "00:00:02.7912376"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 503, category: Infrastructure)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000173"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StructuredPipelineRejectsAmbiguousOrInvalidInstructions(scenario: \"unknownTool\", category: InvalidSchema, stage: \"SchemaValidation\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0006965"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.OwnerSessionTests.PersistentStoreSurvivesRecreationAndEnforcesAbsoluteExpiryAndRevocation",
+          "outcome": "Passed",
+          "duration": "00:00:00.0267238"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PersistenceIdempotencyTests.ConcurrentReplayAndMetadataOrderingPreserveOneImmutableEvent",
+          "outcome": "Passed",
+          "duration": "00:00:00.1368955"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.ToolRejectsTraversal(path: \"../secrets\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000273"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StrictSchemaMatchesEntireAgentDtoContract(role: QAEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001483"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 404, category: RepositoryAccess)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000124"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StrictSchemaMatchesEntireAgentDtoContract(role: FrontendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0003241"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 429, category: RateLimited)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000196"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReadmeOnlyPlanningRoutesByBlockerStageAndNeverApprovesUntestedChanges(scenario: \"safe\", expected: AwaitingHumanApproval, architectRuns: True)",
+          "outcome": "Passed",
+          "duration": "00:00:01.4229517"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.InspectionsRetryWithSameIdentityWithinBound(status: 429)",
+          "outcome": "Passed",
+          "duration": "00:00:00.6034648"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.MalformedRecoveryStopsAtRemainingLimits(limit: \"retries\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0280606"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.OwnerSessionTests.ReauthenticationRotatesIdentityAndRevokesThePreviousCookie",
+          "outcome": "Passed",
+          "duration": "00:00:00.6428949"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.IncompatibleModelOrSchemaNeverDowngradesStrictOutput(code: \"unsupported_parameter\", param: \"text.format\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0007355"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PersistenceIdempotencyTests.ImmutableConflictsAreReportedWithoutOverwritingReceipts(otherKind: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0593048"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.RemoteSandboxFailsClosed",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005281"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.OutputRecoveryCannotExceedExistingLimits(limit: \"context\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0006424"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.ReworkRunsOnlyResponsibleDeveloperThenRepeatsTestsQaAndReview(reviewer: QAEngineer, target: BackendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:01.3074085"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ExhaustedOutputRecoversWithAccountedLargerRequestAndPreservesEvidence",
+          "outcome": "Passed",
+          "duration": "00:00:00.0026462"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderRejectsOversizedProtectedInputBeforeSendingRequest",
+          "outcome": "Passed",
+          "duration": "00:00:00.0012629"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.CachedInspectionSurvivesOwnershipRecoveryWithoutReexecutionOrRevisionDrift",
+          "outcome": "Passed",
+          "duration": "00:00:01.2197126"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.OutputRecoveryCannotExceedExistingLimits(limit: \"budget\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0019471"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.MutationIsNeverRetriedAndErrorIsSafe(status: 403, category: Authorization)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000132"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.GitHubContractTests.AppScopesTokensAndDeduplicatesPullRequestAndReview",
+          "outcome": "Passed",
+          "duration": "00:00:00.0421816"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.RuntimeFlowTests.OnlyKnownReadFileArgumentRejectionsBecomeCorrectiveFeedback(operation: \"WriteFile\", category: InvalidArguments, status: 400, unknown: False, recoverable: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.1736095"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"schema\", category: InvalidSchema)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005524"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StrictSchemaMatchesEntireAgentDtoContract(role: CodeReviewer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001380"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.EveryRoleUsesTheSameValidatedProvider(role: BackendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005653"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ReconciliationTests.NoOpRequiresCurrentTestsAndQaAndReusesExistingDelivery(existingPr: True, revisionMismatch: False)",
+          "outcome": "Passed",
+          "duration": "00:00:01.3051198"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.ToolRejectsTraversal(path: \".git/config\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.3031019"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderDeadlineIsTypedAndDoesNotReplayStage",
+          "outcome": "Passed",
+          "duration": "00:00:05.0030664"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"noMessages\", category: EmptyOutput)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0004691"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.OversizedAndMalformedBodiesAreDiscarded",
+          "outcome": "Passed",
+          "duration": "00:00:00.0013838"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PersistenceIdempotencyTests.RepeatedExecutorFailureIgnoresNewAppendTimestampAndPreservesOriginalRecord",
+          "outcome": "Passed",
+          "duration": "00:00:00.0472525"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.FocusedQueueSelectsSpecialistsAndAdvancesWithinOriginalBudget(analysis: True, architecture: True)",
+          "outcome": "Passed",
+          "duration": "00:00:03.4379121"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.ProviderValidatesBeforeAnyToolCanExecute(scenario: \"empty\", category: EmptyOutput)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005294"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.SdkTimeoutIsDistinctFromCallerCancellation",
+          "outcome": "Passed",
+          "duration": "00:00:00.0007219"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StructuredPipelineRejectsAmbiguousOrInvalidInstructions(scenario: \"multipleMessages\", category: AmbiguousOutput, stage: \"OutputExtraction\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005035"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.FocusedQueueSelectsSpecialistsAndAdvancesWithinOriginalBudget(analysis: False, architecture: True)",
+          "outcome": "Passed",
+          "duration": "00:00:03.4514177"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StrictSchemaMatchesEntireAgentDtoContract(role: BackendEngineer)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0009644"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.VerifiedPreflightRejectionIsKnownNotStarted(status: 422, code: \"profile_target_missing\", reason: ProfileTargetMissing)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002400"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.LiveAgentCycleTests.RealAgentsDeliverPullRequestOnlyInAuthorizedDisposableRepository",
+          "outcome": "NotExecuted",
+          "duration": "00:00:00.0010000"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.TransientRetryOnlyRepeatsModelRequestAndPreservesCheckpoints",
+          "outcome": "Passed",
+          "duration": "00:00:02.0031693"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.PlatformTests.ToolRejectsTraversal(path: \"/etc/passwd\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000078"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.ExecutorHttpTests.ReceiptRetentionConflictHasKnownOutcomeAndIsNeverRetried",
+          "outcome": "Passed",
+          "duration": "00:00:00.0019356"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.OperationalRelayTests.IndependentWorkerRecordsKeepGlobalOrderAcrossMessageKinds",
+          "outcome": "Passed",
+          "duration": "00:00:00.1682061"
+        },
+        {
+          "name": "AIEngineeringPlatform.Integration.Tests.AdapterTests.StructuredPipelineRejectsAmbiguousOrInvalidInstructions(scenario: \"duplicateProperty\", category: InvalidSchema, stage: \"SchemaValidation\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005261"
+        }
+      ]
+    },
+    {
+      "project": "AIEngineeringPlatform.LocalExecutor.Tests",
+      "trxFile": "backend/tests/AIEngineeringPlatform.LocalExecutor.Tests/TestResults/runtime-v2-m1-complete_net10.0_20261031133422.trx",
+      "trxSha256": "c0ccec185d87c3bf038b0d96f3fcc8fc662856e33566e6f27e27b7a9e61423f6",
+      "counters": {
+        "total": "40",
+        "executed": "39",
+        "passed": "39",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ManagedConfigurationTests.MalformedAllowlistFailsClosed(input: \"owner/../repo@1:main\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000027"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.DevPulseBuildProfileMustTargetTheActualGeneratedStructure(target: \".\", applicable: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000011"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.ExistingFeatureBranchIsVerifiedWithoutChangingDefaultBranch",
+          "outcome": "Passed",
+          "duration": "00:00:00.5222590"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.DevPulseBuildProfileMustTargetTheActualGeneratedStructure(target: \"src/DevPulse.Core/DevPulse.Core.csproj\", applicable: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000017"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(output: \"arbitrary output, no tests executed\", expected: 0)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000044"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.ReceiptRetentionRejectsNewOperationBeforeWorkspaceAccessButPreservesReplay",
+          "outcome": "Passed",
+          "duration": "00:00:00.0060197"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(output: \"\u2139 tests 0\\n\", expected: 0)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001644"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PathsRejectSecretsAndTraversal(path: \"../escape\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0027979"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ManagedConfigurationTests.MalformedAllowlistFailsClosed(input: \"owner/repo@1:../main\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000065"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.DevPulseBuildProfileMustTargetTheActualGeneratedStructure(target: \"backend\", applicable: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000100"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PathsRejectSecretsAndTraversal(path: \"private.pem\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005377"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PathsRejectSecretsAndTraversal(path: \".git/config\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000029"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.NodeOnlyRepositoryAdvertisesOnlyFixedNodeTests",
+          "outcome": "Passed",
+          "duration": "00:00:00.0003212"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ManagedConfigurationTests.MalformedAllowlistFailsClosed(input: \"owner/repo@1:main;echo evil\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0050678"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.RealUnixDaemonRequiresAuthenticationAndSurvivesRestart",
+          "outcome": "Passed",
+          "duration": "00:00:00.7857218"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NetworkingIsNeverModelControlled",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002515"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.NpmCiRequiresBothManifestAndLockfile(manifest: True, locked: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0035695"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PatchesRequireUniqueMatchesAndRevisionIncludesNewFiles",
+          "outcome": "Passed",
+          "duration": "00:00:00.0005295"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.DevPulseBuildProfileMustTargetTheActualGeneratedStructure(target: \"src\", applicable: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000015"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.DevPulseBootstrapRejectsWrongTargetAndBuildsActualProjectsInIsolation",
+          "outcome": "Passed",
+          "duration": "00:00:04.5137273"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PathsRejectSecretsAndTraversal(path: \".env.local\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000080"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ManagedConfigurationTests.MalformedAllowlistFailsClosed(input: \"owner/repo@0:main\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001469"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.PathsRejectSecretsAndTraversal(path: \"/etc/passwd\")",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000026"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(output: \"\u2139 tests 1\\n\u2139 pass 1\\n\u2139 fail 0\\n\", expected: 1)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000120"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ManagedConfigurationTests.ApprovedDigestRemainsAvailableAfterTheMovingAliasIsRemoved",
+          "outcome": "Passed",
+          "duration": "00:00:00.0898103"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.NpmCiRequiresBothManifestAndLockfile(manifest: True, locked: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000045"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.ConfigRequiresPinnedImagesAndRejectsProductionFileRemotes",
+          "outcome": "Passed",
+          "duration": "00:00:00.0004095"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.NpmCiRequiresBothManifestAndLockfile(manifest: False, locked: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001813"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.NodeTestProfileCannotSubstituteShellOrArbitraryNodeArguments",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000832"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.RealDisposableRepositoryCompletesIsolatedNodeAndDotnetCycle",
+          "outcome": "Passed",
+          "duration": "00:00:01.8876974"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.DevPulseBuildProfileMustTargetTheActualGeneratedStructure(target: \"src/DevPulse.Core\", applicable: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001761"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.DisposableRepositoryTests.ExistingDisposableDefaultRevisionPassesNodeTestsWithoutNewDelivery",
+          "outcome": "NotExecuted",
+          "duration": "00:00:00.0010000"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ManagedConfigurationTests.IndependentContainerStateVolumesCannotShareCleanupOwnership",
+          "outcome": "Passed",
+          "duration": "00:00:00.0008968"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ManagedConfigurationTests.OwnerAllowlistProducesOnlyFixedPinnedProfiles",
+          "outcome": "Passed",
+          "duration": "00:00:00.0047929"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(output: \"# tests 2\\n# pass 2\\n\", expected: 2)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0000096"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.NodeTestReporterCountsAreRecognizedWithoutAcceptingZeroTests(output: \"\\x1b[32m\u2139 tests 1\\x1b[0m\\n\", expected: 1)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002491"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.DevPulseBuildProfileMustTargetTheActualGeneratedStructure(target: \"src/DevPulse.Api/DevPulse.Api.csproj\", applicable: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0001772"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ExecutorTests.RealDockerEnforcesIsolationTimeoutOutputLimitsAndCleanup",
+          "outcome": "Passed",
+          "duration": "00:00:01.6159746"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.EmptyRepositoriesExposeConfiguredCapabilitiesWithoutAdvertisingExecutableTests(readme: True)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0002901"
+        },
+        {
+          "name": "AIEngineeringPlatform.LocalExecutor.Tests.ProfileSelectionTests.EmptyRepositoriesExposeConfiguredCapabilitiesWithoutAdvertisingExecutableTests(readme: False)",
+          "outcome": "Passed",
+          "duration": "00:00:00.0290219"
+        }
+      ]
+    }
+  ]
+}

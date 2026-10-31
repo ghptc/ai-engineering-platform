@@ -6,7 +6,7 @@ namespace AIEngineeringPlatform.LocalExecutor;
 public sealed class DockerWorkload(ExecutorOptions options, ControlledProcess process)
 {
     private bool cleanupFaulted;
-    public string OwnershipLabel => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(options.StateDirectory))).ToLowerInvariant()[..24];
+    public string OwnershipLabel => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(options.WorkloadOwnershipId ?? options.StateDirectory))).ToLowerInvariant()[..24];
     public async Task RecoverAsync(CancellationToken ct)
     {
         await VerifyHostAsync(ct);
