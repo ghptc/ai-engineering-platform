@@ -13,6 +13,7 @@ var store = factory.Services.GetRequiredService<IPlatformStore>();
 for (var attempt = 0; attempt < 30; attempt++) { try { await store.InitializeAsync(default); break; } catch when (attempt < 29) { await Task.Delay(1000); } }
 if (Environment.GetEnvironmentVariable("E2E_SEED_UX_HISTORY") == "1")
 {
+    await WorkerHistoryFixture.SeedAsync(factory, store, default);
     var project = new Project { Id = "ux-history-project", Name = "Engineering history fixture", Description = "**Product objective:** a focused JavaScript change.", OriginalContext = "# Product knowledge\n\n" + string.Concat(Enumerable.Repeat("Historical context stays behind disclosure.\n", 2000)) };
     await store.SaveProjectAsync(project, null, default);
     var run = new ExecutionRun { Id = "ux-history-run", ProjectId = project.Id, ProjectSnapshot = project, CurrentStage = RunStage.Paused, ResumeStage = RunStage.Implementing, Tasks = [new("Inspect a large engineering history", "Verify bounded activity and preserved evidence", ["Show only one bounded event window"]) ] };

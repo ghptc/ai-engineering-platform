@@ -22,6 +22,8 @@ type TaskFields = {
   criteria: string;
   requiresBusinessAnalysis?: boolean;
   requiresArchitecture?: boolean;
+  requiresSecurityReview?: boolean;
+  requiresInfrastructure?: boolean;
   developers?: string[];
 };
 export function TaskLauncher({
@@ -176,6 +178,23 @@ export function TaskLauncher({
                       valuePropName="checked"
                     >
                       <Checkbox>Architecture needs specialist input</Checkbox>
+                    </Form.Item>
+                    <Form.Item
+                      name={[field.name, "requiresSecurityReview"]}
+                      valuePropName="checked"
+                    >
+                      <Checkbox>
+                        Include specialist security review (configured V2 role)
+                      </Checkbox>
+                    </Form.Item>
+                    <Form.Item
+                      name={[field.name, "requiresInfrastructure"]}
+                      valuePropName="checked"
+                    >
+                      <Checkbox>
+                        Include repository infrastructure work (configured V2
+                        role; no deployment)
+                      </Checkbox>
                     </Form.Item>
                     {fields.length > 1 && (
                       <Button onClick={() => remove(field.name)}>

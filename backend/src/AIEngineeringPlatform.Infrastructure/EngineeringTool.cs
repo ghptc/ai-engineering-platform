@@ -6,7 +6,7 @@ namespace AIEngineeringPlatform.Infrastructure;
 public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISourceControl source, IPlatformStore store, SandboxExecutionLimits? limits = null) : IAgentTool
 {
     public string Name => name;
-    public static readonly string[] Names = ["ReadRepository", "ReconcileRepository", "SelectBranch", "ListFiles", "SearchCode", "ReadFile", "ApplyPatch", "WriteFile", "RunCommand", "RunTests", "InspectDiff", "CreateBranch", "CreateCommit", "PushBranch", "CreatePullRequest", "ReadPullRequest", "SubmitCodeReview", "ReadProjectMemory", "SaveArtifact"];
+    public static readonly string[] Names = ["ReadRepository", "ReconcileRepository", "SelectBranch", "ListFiles", "SearchCode", "ReadFile", "ApplyPatch", "WriteFile", "PrepareFrontendLock", "RunCommand", "RunTests", "InspectDiff", "CreateBranch", "CreateCommit", "PushBranch", "CreatePullRequest", "ReadPullRequest", "SubmitCodeReview", "ReadProjectMemory", "SaveArtifact"];
     public async Task<ToolResult> ExecuteAsync(AgentContext context, JsonElement args, string operationId, CancellationToken ct)
     {
         if (args.ValueKind != JsonValueKind.Object || args.GetRawText().Length > 100000) throw new ArgumentException("Tool arguments must be a bounded JSON object.");
@@ -19,6 +19,7 @@ public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISou
         if (Name is "ReadFile" or "WriteFile" && !args.TryGetProperty("path", out _)) throw new ArgumentException("path is required.");
         if (Name == "WriteFile" && !args.TryGetProperty("content", out _)) throw new ArgumentException("content is required.");
         if (Name == "ApplyPatch" && !args.TryGetProperty("patch", out _)) throw new ArgumentException("patch is required.");
+        if (Name == "PrepareFrontendLock" && args.EnumerateObject().Any()) throw new ArgumentException("PrepareFrontendLock accepts an empty argument object only.");
         if (Name == "RunCommand" && (!args.TryGetProperty("profile", out var commandProfile) || commandProfile.GetString() is not ("build" or "lint" or "format" or "typecheck") || args.EnumerateObject().Any(x => x.Name != "profile"))) throw new UnauthorizedAccessException("RunCommand accepts only administrator-defined build, lint, format or typecheck profiles; shell text is not allowed.");
         if (Name == "ReadProjectMemory")
         {
@@ -62,6 +63,10 @@ public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISou
         try
         {
             response = await sandbox.ExecuteAsync(new(operationId, context.Run.Id, repository, Name, args, TimeoutSeconds: limits?.TimeoutSeconds ?? 60, CpuLimit: limits?.CpuLimit ?? 1, MemoryMb: limits?.MemoryMb ?? 512, OutputLimitBytes: limits?.OutputLimitBytes ?? 100000, Fence: context.Run.Version, LeaseOwner: context.Run.LeaseOwner, MaxTransientRetries: Math.Clamp(context.Run.Policy.MaxRetries, 0, 2)), ct);
+        }
+        catch (ExecutorFailureException failure) when (Name == "PrepareFrontendLock" && failure.Operation == Name && failure.OperationId == operationId && failure.Category == ExecutorFailureCategory.InvalidArguments && failure.StatusCode == 400 && !failure.OutcomeUnknown)
+        {
+            return new(false, "PrepareFrontendLock was rejected before writing (InvalidArguments, HTTP 400). Inspect the existing frontend/package.json and lockfile. For a missing lockfile, match the complete exact ApprovedDependencies advertised by ReadRepository Capabilities.ApprovedFrontend; supply a bounded package name/version and no overrides, workspaces or optional dependencies. Correct the authorized manifest once, or report the concrete incompatibility. Existing lockfiles are preserved: inspect/reuse them rather than repeating bootstrap. No command or network authority is granted.");
         }
         catch (ExecutorFailureException failure) when (Name == "ReadFile" && failure.Operation == Name && failure.OperationId == operationId && failure.Category == ExecutorFailureCategory.InvalidArguments && failure.StatusCode == 400 && !failure.OutcomeUnknown)
         {

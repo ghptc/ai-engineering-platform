@@ -464,3 +464,74 @@ test("persisted contract fixture exposes responsible rework, retries and measure
     fullPage: true,
   });
 });
+
+test("independent task history is bounded, safe and separate from verified tool evidence", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByLabel("Owner credential")
+    .fill("testing-owner-credential-2026");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your engineering workspace" }),
+  ).toBeVisible();
+  await page.goto("/executions/ux-worker-run");
+  await page.getByText("Independent agent tasks", { exact: true }).click();
+  const panel = page.locator(".ant-collapse-item").filter({
+    has: page.getByText("Independent agent tasks", { exact: true }),
+  });
+  await expect(
+    panel.getByText("Deterministic task objective 54", { exact: true }),
+  ).toBeVisible();
+  await expect(panel.locator("tbody tr.ant-table-row")).toHaveCount(25);
+  await panel
+    .getByRole("button", { name: /Expand row/i })
+    .first()
+    .click();
+  await expect(
+    panel.getByText("Model-authored progress summary", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    panel.getByText(/no verified source, tests or live provider call/),
+  ).toBeVisible();
+  await expect(
+    page.getByText("PRIVATE_CONTEXT_FIXTURE_DO_NOT_RENDER"),
+  ).toHaveCount(0);
+  await panel.getByRole("button", { name: "Older tasks" }).click();
+  await expect(
+    panel.getByText("Deterministic task objective 29", { exact: true }),
+  ).toBeVisible();
+  await expect(panel.locator("tbody tr.ant-table-row")).toHaveCount(25);
+  await panel.getByRole("button", { name: "Older tasks" }).click();
+  await expect(panel.locator("tbody tr.ant-table-row")).toHaveCount(5);
+  await expect(
+    panel.getByRole("button", { name: "Older tasks" }),
+  ).toBeDisabled();
+  await panel.getByRole("button", { name: "Latest tasks" }).click();
+  await expect(panel.locator("tbody tr.ant-table-row")).toHaveCount(25);
+  await panel.getByRole("button", { name: "Pause task follow" }).click();
+  await page.screenshot({
+    path: "../backend/docs/ux-evidence/runtime-v2-worker-desktop.png",
+    fullPage: true,
+  });
+  expect(
+    await panel
+      .locator(".ant-table-body")
+      .evaluate((element) => element.getBoundingClientRect().height),
+  ).toBeLessThanOrEqual(320);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Fit to view", exact: true }).click();
+  await expect(
+    panel.getByRole("button", { name: "Follow latest tasks" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+    ),
+  ).toBeTruthy();
+  await page.screenshot({
+    path: "../backend/docs/ux-evidence/runtime-v2-worker-mobile.png",
+    fullPage: true,
+  });
+});

@@ -102,6 +102,8 @@ export function agentStage(role: string): StageId | undefined {
       TestEngineer: "tests",
       QAEngineer: "qa",
       CodeReviewer: "review",
+      SecurityEngineer: "review",
+      InfrastructureEngineer: "implementation",
     } as Record<string, StageId>
   )[role];
 }

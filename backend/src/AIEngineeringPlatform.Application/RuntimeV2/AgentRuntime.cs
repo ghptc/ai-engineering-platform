@@ -65,8 +65,9 @@ public sealed class RuntimeEvidenceResolver(IPlatformStore store)
             var count = 0;
             if (row.Name == "RunTests")
             {
-                var match = System.Text.RegularExpressions.Regex.Matches(result.Output, @"(?m)^Executor evidence: tests=(\d+); exit=0;").LastOrDefault();
-                if (match?.Success == true && int.TryParse(match.Groups[1].Value, out var found)) count = found;
+                var summary = ExecutorTestSummary.Read(result.Output);
+                if (summary != null && summary.ExitCode != result.ExitCode) throw new InvalidOperationException("Executor test summary exit status does not match the persisted receipt.");
+                count = summary?.ExecutedTests ?? 0;
             }
             verified.Add(new(reference.OperationId, result.EvidenceId, row.Name, result.WorkspaceRevision, result.Success && row.Status == "Succeeded", result.ExitCode, count, result.Execution?.Image));
         }
@@ -79,7 +80,7 @@ public sealed class RuntimeEvidenceResolver(IPlatformStore store)
     }
 }
 
-public sealed record RuntimeInvocationCheckpoint(string Id, string Fingerprint, string ContextFrameId, string Status, DateTimeOffset StartedAt, DateTimeOffset Deadline, string Owner, ModelExecutionResult? Result, string? ErrorCategory, int Version = 1);
+public sealed record RuntimeInvocationCheckpoint(string Id, string Fingerprint, string ContextFrameId, string Status, DateTimeOffset StartedAt, DateTimeOffset Deadline, string Owner, ModelExecutionResult? Result, string? ErrorCategory, int Version = 1, DateTimeOffset? CompletedAt = null);
 public sealed record RuntimeInvocationStart(bool Acquired, RuntimeInvocationCheckpoint Checkpoint);
 public interface IRuntimeInvocationStore
 {
