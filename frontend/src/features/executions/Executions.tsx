@@ -4,7 +4,6 @@ import {
   Alert,
   Button,
   Card,
-  Descriptions,
   Empty,
   Input,
   Popconfirm,
@@ -20,14 +19,14 @@ import { api } from "../../services/api";
 import { Heading, QueryState, Status, useApi } from "../../components/Common";
 import { useLiveEvents, type RecordWindow } from "../../hooks/useLiveEvents";
 import { human, summary, teamState, terminal } from "../../lib/engineering";
-import { TeamWorkspace } from "../collaboration/Collaboration";
+import { ExecutionWorkspace } from "./ExecutionWorkspace";
 import { ApprovalCard } from "../reviews/Approvals";
 import { Collapse } from "antd";
 import { Markdown } from "../../components/Readable";
 import { EvidenceDrawer } from "../../components/EvidenceDrawer";
 import { ExecutionCapacity } from "./ExecutionCapacity";
 import { ProviderDiagnostics } from "./ProviderDiagnostics";
-import { ActivityFeed } from "./ActivityFeed";
+import { ExecutionHistory } from "./ExecutionHistory";
 import type { Entry, Page, Run } from "../../types";
 export function Executions() {
   const [status, setStatus] = useState<string>();
@@ -208,117 +207,96 @@ export function ExecutionDetail() {
   const current = team.find((a) =>
     ["Working", "Waiting for tool", "Failed", "Blocked"].includes(a.state),
   );
-  const next = team.find((a) => a.state === "Queued");
   return (
     <QueryState loading={run.isLoading} error={run.error}>
       {r && (
         <>
-          <Heading
-            eyebrow={`LIVE EXECUTION · ${id.slice(0, 12)}`}
-            title={r.tasks?.[r.taskIndex]?.title ?? "Engineering execution"}
-            description={
-              r.tasks?.[r.taskIndex]?.description?.slice(0, 220) ??
-              "Persisted engineering progress and owner decisions."
-            }
-            actions={
-              <Space wrap>
-                {!terminal.has(r.currentStage) && (
-                  <Button
-                    loading={control.isPending}
-                    onClick={() => control.mutate("pause")}
-                  >
-                    Pause
-                  </Button>
-                )}
-                {r.currentStage === "Paused" && (
-                  <Button
-                    type="primary"
-                    onClick={() => control.mutate("resume")}
-                  >
-                    Resume
-                  </Button>
-                )}
-                {r.currentStage === "Failed" &&
-                  !r.failureReason?.startsWith(
-                    "Human clarification required:",
-                  ) && (
+          <div className="execution-sticky-header">
+            <Heading
+              eyebrow={`LIVE EXECUTION · ${id.slice(0, 12)}`}
+              title={r.tasks?.[r.taskIndex]?.title ?? "Engineering execution"}
+              description={
+                r.tasks?.[r.taskIndex]?.description?.slice(0, 220) ??
+                "Persisted engineering progress and owner decisions."
+              }
+              actions={
+                <Space wrap>
+                  {!terminal.has(r.currentStage) && (
                     <Button
-                      type="primary"
-                      onClick={() => control.mutate("retry")}
+                      loading={control.isPending}
+                      onClick={() => control.mutate("pause")}
                     >
-                      Retry stage
+                      Pause
                     </Button>
                   )}
-                {!["Completed", "Cancelled"].includes(r.currentStage) && (
-                  <Popconfirm
-                    title="Cancel this execution?"
-                    description="Saved messages, source evidence and execution history will be retained."
-                    onConfirm={() => control.mutate("cancel")}
-                  >
-                    <Button danger>Cancel</Button>
-                  </Popconfirm>
-                )}
-              </Space>
-            }
-          />
-          <Card className="execution-strip" size="small">
-            <Descriptions
-              size="small"
-              column={{ xs: 1, sm: 2, md: 3, lg: 4 }}
-              items={[
-                {
-                  key: "stage",
-                  label: "Current stage",
-                  children: <Status value={r.currentStage} />,
-                },
-                {
-                  key: "agent",
-                  label: "Current agent",
-                  children: current
-                    ? `${human(current.role)} · ${current.state}`
-                    : r.currentStage === "Completed"
-                      ? "Team finished"
-                      : "No agent currently working",
-                },
-                {
-                  key: "next",
-                  label: "Next specialist",
-                  children: next
-                    ? human(next.role)
-                    : r.currentStage === "AwaitingHumanApproval"
-                      ? "Owner delivery decision"
-                      : "No further agent queued",
-                },
-                {
-                  key: "iteration",
-                  label: "Development iteration",
-                  children: `${r.iteration} / ${r.policy?.maxIterations ?? "—"}`,
-                },
-                {
-                  key: "tools",
-                  label: "Tool calls",
-                  children: `${r.toolCalls} / ${r.policy?.maxToolCalls ?? "—"}`,
-                },
-                {
-                  key: "time",
-                  label: "Time limit",
-                  children: `${r.policy?.maxDurationMinutes ?? "—"} minutes`,
-                },
-                {
-                  key: "task",
-                  label: "Task",
-                  children: `${(r.taskIndex ?? 0) + 1} / ${r.tasks?.length || 1}`,
-                },
-                {
-                  key: "live",
-                  label: "Updates",
-                  children: (
-                    <span role="status">{live} · persisted replay</span>
-                  ),
-                },
-              ]}
+                  {r.currentStage === "Paused" && (
+                    <Button
+                      type="primary"
+                      onClick={() => control.mutate("resume")}
+                    >
+                      Resume
+                    </Button>
+                  )}
+                  {r.currentStage === "Failed" &&
+                    !r.failureReason?.startsWith(
+                      "Human clarification required:",
+                    ) && (
+                      <Button
+                        type="primary"
+                        onClick={() => control.mutate("retry")}
+                      >
+                        Retry stage
+                      </Button>
+                    )}
+                  {!["Completed", "Cancelled"].includes(r.currentStage) && (
+                    <Popconfirm
+                      title="Cancel this execution?"
+                      description="Saved messages, source evidence and execution history will be retained."
+                      onConfirm={() => control.mutate("cancel")}
+                    >
+                      <Button danger>Cancel</Button>
+                    </Popconfirm>
+                  )}
+                </Space>
+              }
             />
-          </Card>
+            <div className="execution-strip execution-compact-strip">
+              <Status value={r.currentStage} />
+              <span>
+                <strong>
+                  {current ? human(current.role) : "No active agent"}
+                </strong>{" "}
+                ·{" "}
+                {r.currentStage === "Paused" && !r.failureReason
+                  ? "Paused"
+                  : (current?.state ?? "Recorded state")}
+              </span>
+              <span>
+                Iteration{" "}
+                <b>
+                  {r.iteration}/{r.policy.maxIterations}
+                </b>
+              </span>
+              <span>
+                Tools{" "}
+                <b>
+                  {r.toolCalls}/{r.policy.maxToolCalls}
+                </b>
+              </span>
+              <span>
+                Retries <b>{r.retryCount}</b>
+              </span>
+              <span role="status">{live} · persisted replay</span>
+              <span className="muted">
+                Next:{" "}
+                {r.currentStage === "AwaitingHumanApproval"
+                  ? "Owner decision"
+                  : r.currentStage === "Paused"
+                    ? "Explicit owner recovery"
+                    : "Not recorded"}
+              </span>
+            </div>
+          </div>
           {r.tasks?.[r.taskIndex] && (
             <Collapse
               className="section-gap"
@@ -344,13 +322,13 @@ export function ExecutionDetail() {
           )}
           {r.failureReason &&
             !r.failureReason.startsWith("Human clarification required:") && (
-              <Alert
-                className="section-gap"
-                type="error"
-                showIcon
-                title={`${r.failureCategory?.startsWith("Executor") ? "Executor needs attention" : "Stage failed"}${r.failureCategory ? ` · ${human(r.failureCategory)}` : ""}`}
-                description={r.failureReason}
-              />
+              <details className="execution-diagnostic">
+                <summary>
+                  {`${r.failureCategory?.startsWith("Executor") ? "Executor needs attention" : "Stage failed"}${r.failureCategory ? ` · ${human(r.failureCategory)}` : ""}`}{" "}
+                  <span>Inspect persisted diagnostic</span>
+                </summary>
+                <p>{r.failureReason}</p>
+              </details>
             )}
           {r.failureCategory?.startsWith("OpenAI") && (
             <ProviderDiagnostics runId={r.id} />
@@ -400,21 +378,23 @@ export function ExecutionDetail() {
                   : "warning"
               }
               title={`${r.toolCalls / r.policy.maxToolCalls >= 0.95 ? "95%" : "80%"} tool allowance reached`}
-              description="Checkpoint current work. Review the Capacity tab to explicitly approve an extension."
+              classNames={{ root: "execution-budget-notice" }}
             />
           )}
           <Tabs
+            destroyOnHidden
             activeKey={params.get("tab") ?? "team"}
             onChange={(tab) => setParams({ tab }, { replace: true })}
             items={[
               {
                 key: "team",
-                label: "Agent collaboration",
+                label: "Execution workspace",
                 children: (
-                  <TeamWorkspace
+                  <ExecutionWorkspace
                     key={r.id}
                     run={r}
                     events={events.data?.items ?? []}
+                    handoffs={handoffs.data?.items ?? []}
                   />
                 ),
               },
@@ -426,7 +406,14 @@ export function ExecutionDetail() {
               {
                 key: "timeline",
                 label: "Execution timeline",
-                children: <ActivityFeed key={id} runId={id} />,
+                children: (
+                  <ExecutionHistory
+                    key={id}
+                    run={r}
+                    initialKind="event"
+                    initialView="Timeline"
+                  />
+                ),
               },
               {
                 key: "artifacts",

@@ -82,6 +82,18 @@ export function useLiveEvents(projectId?: string) {
         void client.invalidateQueries({
           predicate: (q) => {
             const path = String(q.queryKey[0]);
+            if (path.includes("/stream?kind=tool"))
+              return (
+                !path.includes("before=") &&
+                batch.some(
+                  (e) =>
+                    path.startsWith(`/runs/${e.runId}/stream`) &&
+                    [
+                      "ToolInvocationCompleted",
+                      "ExecutorOperationBlocked",
+                    ].includes(e.name),
+                )
+              );
             if (
               path.includes("/stream") &&
               !path.includes("kind=artifact") &&

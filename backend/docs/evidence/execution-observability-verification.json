@@ -1,0 +1,56 @@
+{
+  "baseCommit": "e524ff637b0685f58aa2a86ef5b937334ff29774",
+  "branch": "feat/execution-observability",
+  "verifiedSourceSha256": {
+    "backend/tests/AIEngineeringPlatform.E2EHost/Program.cs": "25f1f97c87707b87fcbd664fcefa3c837bc6eb7d90892213cd02cb334f2d058f",
+    "frontend/src/features/executions/AgentFlow.tsx": "2e8b1af7dae8abb19d474f6924261d38aaad2d9e85671ed180257d68fd617a87",
+    "frontend/src/features/executions/ExecutionHistory.tsx": "b1197fd9c49008a4252ee4c95b94790456004989c009c96cf9dc103990dd4d80",
+    "frontend/src/features/executions/ExecutionWorkspace.tsx": "3c1d27a68c3c474d3285d341a9f808468dad1cd411a73db5d754c5613d3e5f0b",
+    "frontend/src/features/executions/Executions.tsx": "a7fc4a404fb383555780c91cf077064b88e3beffa3d9c017dcd28007a82b1ad3",
+    "frontend/src/features/executions/WorkflowGraph.tsx": "589f30fe7a79a16d11bd8367a21d5e3aaaa6389e6a6ccbece707e17bd3127ac9",
+    "frontend/src/features/executions/observability.ts": "b2570a90af405fd3db4049e945a4653066f3c025c53d71b086b623d2f1e8168a",
+    "frontend/src/hooks/useLiveEvents.ts": "105f0ed45228a2989538d26fe794e9329902dc20d49d7585eae6e81ad74397cd",
+    "frontend/src/styles/app.css": "d3ef38a8a8059b0360443f79d78ea3d6af2d758588a869c5a5111188d5714a86",
+    "frontend/tests/e2e/workflow.spec.ts": "310dd68783e81a6ddbfbfbc04285a961b277064ef732086cc1af7068b2d8cb49",
+    "frontend/tests/fixtures/devpulse-persisted.json": "d90782332e37e61bb352641f3ccdf63c452c009d07ae36e80f7d68c04903dd10",
+    "frontend/tests/live-events.test.tsx": "7e923fdb80af09ca7a5dcf7f0767cd3237ba9ef31e251c416592f29568c882b3",
+    "frontend/tests/observability.test.tsx": "abf02093c9a8e01aa566cfc13f003a354823a3a710a54791118b0f6018d87504",
+    "frontend/tests/platform.test.tsx": "9cadb31eefb4ff958f05a1c3b08b323da5ef8db0ff4bb9ac9c0daf178a57ad81",
+    "frontend/tests/workspace.test.tsx": "3b505297d4711f335cf81a358da5135af53cea5bad6f15d02ecb9a9b50f5d6b2"
+  },
+  "sourceManifestSha256": "7e9e2c1cf072dfd7c11d70392aa544d69c055b1fabe8148b8a33dcef8e9cbd87",
+  "verification": {
+    "typecheck": "passed",
+    "frontendTests": 50,
+    "frontendTestFiles": 6,
+    "productionBuild": "passed",
+    "browserFull": 4,
+    "browserCaptureRefinement": 1,
+    "testMongoDB": "isolated localhost:27029",
+    "dedicatedPorts": [
+      15588,
+      15673
+    ],
+    "externalOpenAIGitHubExecution": "not run",
+    "deployment": "not performed"
+  },
+  "reviewScreenshotsSha256": {
+    "backend/docs/ux-evidence/execution-observability-dark.png": "eef62eb53a075c1d425b41fecf4398101deaaafc657455cab27d8a1af8a97b50",
+    "backend/docs/ux-evidence/execution-observability-history.png": "f64e39cd9b8ec20fa696896fe341576f0f12f18d5b3d90683e5250be2d5dc20c",
+    "backend/docs/ux-evidence/execution-observability-mobile.png": "c680ea78eb812eb47fffcdd9b1e188407477edfb0138942271c18bca95acd279",
+    "backend/docs/ux-evidence/execution-observability-rework.png": "5dd00f3bc9863c45235db9ff0eb7ab95e3edc31ef0876ebd09242172975c0fe1",
+    "backend/docs/ux-evidence/execution-observability-tool.png": "3c2318b61e13af873ac29eec102da46e5a8f6753c43d8717c55ebbc177c21dec"
+  },
+  "localVerificationLogsSha256": {
+    "/tmp/aep-ui-tests.log": "1859fd56c68ffcd54094c26053eeaffd697e6d0af50dcf1be0e1e18bf8df648c",
+    "/tmp/aep-ui-build.log": "67faba324fa409a38811848c202d5e6c44a558447959c3cdf44fa2fae09e28a7",
+    "/tmp/aep-ui-e2e.log": "7cbdbdc5d116ca42e8ba3f54e0b841da4bb2403e04f86fc33124c4448f7d585f",
+    "/tmp/aep-ui-capture.log": "82826103ae5fa498e18ced05a592fee8b68766ce95f827f4fddcef783c9322d7"
+  },
+  "fixtureProvenance": {
+    "runId": "b09188be6e3743c797092d1e73ededd6",
+    "source": "Read-only MongoDB export used in backend/docs/devpulse-inspection-loop.md",
+    "sanitization": "Operational subset; no new events or outputs invented. Tool outputs are bounded filename/write evidence; model tool plans excluded.",
+    "productionRunMutated": false
+  }
+}

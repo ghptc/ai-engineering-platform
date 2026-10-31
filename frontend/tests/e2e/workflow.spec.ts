@@ -90,24 +90,23 @@ test("owner creates a project, runs engineering cycle, reviews evidence and appr
     page
       .getByLabel("Live directed engineering workflow")
       .locator("g[role=button]"),
-  ).toHaveCount(4);
-  await expect(
-    page.getByText("Recorded handoffs", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Backend Engineer → Test Engineer", { exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(12);
   await page
     .getByRole("button", { name: /Backend Engineer · Completed/ })
     .click();
   await expect(
-    page.getByRole("tab", { name: "Execution Terminal", exact: true }),
+    page.getByRole("region", { name: "Execution history", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "WriteFile", exact: true }).click();
-  await expect(page.locator(".execution-terminal")).toContainText(
+  await page
+    .getByRole("button", { name: /Write File/ })
+    .first()
+    .click();
+  await expect(page.locator(".execution-terminal")).toContainText([
     "written backend/Feature.cs",
-  );
-  await expect(page.getByText("Copy output", { exact: true })).toBeVisible();
+  ]);
+  await expect(
+    page.getByText("Copy output page", { exact: true }),
+  ).toBeVisible();
   await page
     .getByRole("tab", { name: "Execution timeline", exact: true })
     .click();
@@ -144,7 +143,7 @@ test("owner creates a project, runs engineering cycle, reviews evidence and appr
     .filter({ hasText: /^Browser verified product$/ })
     .click();
   await expect(
-    page.getByText("Backend Engineer", { exact: true }).first(),
+    page.getByRole("button", { name: /Backend Engineer ·/ }).first(),
   ).toBeVisible();
   await page.getByRole("link", { name: "Approvals", exact: true }).click();
   await page
@@ -213,7 +212,9 @@ test("large histories, safe details, cost separation and mobile navigation", asy
   await expect(
     page.getByText("COMPLETE_CONTEXT_PAYLOAD", { exact: false }),
   ).toHaveCount(0);
-  await page.getByText("Context sources measured", { exact: true }).click();
+  await page
+    .getByRole("button", { name: /Inspect evidence ux-history-event-999/ })
+    .click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "Raw payload", exact: true }).click();
   await page.getByRole("button", { name: /Payload · 3 fields/ }).click();
@@ -235,7 +236,7 @@ test("large histories, safe details, cost separation and mobile navigation", asy
     page.getByText("Inspecting older activity", { exact: false }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Jump to Latest", exact: true })
+    .getByRole("button", { name: "Jump to latest", exact: true })
     .click();
   await expect(
     page.getByText("Context sources measured", { exact: true }),
@@ -281,13 +282,185 @@ test("large histories, safe details, cost separation and mobile navigation", asy
     page
       .getByLabel("Live directed engineering workflow")
       .locator("g[role=button]"),
-  ).toHaveCount(4);
+  ).toHaveCount(12);
   await page.keyboard.press("Escape");
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
   await page.screenshot({
     path: "../backend/docs/ux-evidence/mobile-light.png",
+    fullPage: true,
+  });
+});
+
+test("persisted DevPulse incident has an honest pipeline, bounded terminal and responsive controls", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByLabel("Owner credential")
+    .fill("testing-owner-credential-2026");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your engineering workspace" }),
+  ).toBeVisible();
+  await page.goto("/executions/b09188be6e3743c797092d1e73ededd6");
+  await expect(
+    page.getByRole("button", { name: "Implementation · Blocked", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Build · Not observed", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Tests · Not observed", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Fit to view", exact: true }).click();
+  await page.getByRole("button", { name: /Inspect path records/ }).click();
+  await expect(
+    page.getByText("Business Analyst → Architect", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Hide path records/ }).click();
+  await page.getByLabel("Pipeline canvas height").fill("400");
+  await page.getByLabel("Pipeline canvas height").press("Enter");
+  await page
+    .getByRole("button", { name: /Write File/ })
+    .first()
+    .click();
+  await expect(
+    page.getByText("Safe recorded arguments", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Arguments not recorded for this operation/),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Recorded evidence", { exact: true }),
+  ).toBeVisible();
+  await page.locator(".execution-history-window").evaluate((el) => {
+    el.scrollTop = 0;
+  });
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+    window.scrollTo(0, 0);
+  });
+  await page.screenshot({
+    path: "../backend/docs/ux-evidence/execution-observability-tool.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: /Collapse pipeline/ }).click();
+  await expect(
+    page.getByRole("region", { name: "Live directed engineering workflow" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: /Expand pipeline/ }).click();
+  await page
+    .getByRole("button", { name: /Write File/ })
+    .first()
+    .click();
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+    window.scrollTo(0, 0);
+  });
+  await page.screenshot({
+    path: "../backend/docs/ux-evidence/execution-observability-dark.png",
+    fullPage: true,
+  });
+  await page.getByText("Timeline", { exact: true }).click();
+  await expect(page.locator(".timeline-track").first()).toBeVisible();
+  await page.getByText("Detailed", { exact: true }).click();
+  await expect(page.locator(".record-identity").first()).toContainText("#");
+  await page
+    .getByLabel("Search execution history")
+    .fill("no matching operation");
+  await expect(
+    page.getByText(/No matching records in this page/),
+  ).toBeVisible();
+  await page.getByLabel("Search execution history").clear();
+  await page
+    .getByRole("button", { name: "Jump to latest", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Pause-follow", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Pause-follow", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Follow latest", exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Fit to view", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: /Backend Engineer ·/ }),
+  ).toBeAttached();
+  await page.getByRole("button", { name: /Collapse pipeline/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("button", { name: /Expand pipeline/ }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+    window.scrollTo(0, 0);
+  });
+  await page.screenshot({
+    path: "../backend/docs/ux-evidence/execution-observability-mobile.png",
+    fullPage: true,
+  });
+});
+
+test("persisted contract fixture exposes responsible rework, retries and measured waiting", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByLabel("Owner credential")
+    .fill("testing-owner-credential-2026");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your engineering workspace" }),
+  ).toBeVisible();
+  await page.goto("/executions/ux-rework-run");
+  await expect(
+    page.getByRole("button", { name: /Implementation · Blocked/ }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Inspect path records/ }).click();
+  await expect(
+    page.getByText(
+      "QA Engineer → Frontend Engineer: Deterministic fixture: inaccessible control",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.locator(".pipeline-edge.flow-rework")).toHaveCount(2);
+  await page.getByRole("combobox", { name: "Workflow iteration" }).click();
+  await page
+    .locator(".ant-select-item-option-content")
+    .filter({ hasText: /^Iteration 2$/ })
+    .click();
+  await expect(page.locator(".pipeline-edge.flow-rework")).toHaveCount(1);
+  await page.getByRole("button", { name: /Hide path records/ }).click();
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+    window.scrollTo(0, 0);
+  });
+  await page.screenshot({
+    path: "../backend/docs/ux-evidence/execution-observability-rework.png",
+    fullPage: true,
+  });
+  await page
+    .getByRole("tab", { name: "Execution timeline", exact: true })
+    .click();
+  await expect(page.getByText("Retry", { exact: true })).toBeVisible();
+  await expect(page.getByText("Resumed", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(/Waiting period: Paused · 1.0 min/),
+  ).toBeVisible();
+  await page.getByText("Detailed", { exact: true }).click();
+  await expect(page.getByText(/ux-retry-event-2/)).toBeVisible();
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+    window.scrollTo(0, 0);
+  });
+  await page.screenshot({
+    path: "../backend/docs/ux-evidence/execution-observability-history.png",
     fullPage: true,
   });
 });

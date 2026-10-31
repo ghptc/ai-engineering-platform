@@ -198,13 +198,11 @@ describe("execution boundaries", () => {
         <Route path="/executions/:id" element={<ExecutionDetail />} />
       </Routes>,
     );
-    expect(
-      await screen.findByText("Development iteration"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("2 / 3")).toBeInTheDocument();
+    expect(await screen.findByText("2/3")).toBeInTheDocument();
+    expect(screen.getByText("2/3")).toBeInTheDocument();
     expect(screen.queryByText("Estimated cost")).not.toBeInTheDocument();
     expect(screen.queryByText("Tokens used")).not.toBeInTheDocument();
-    expect(screen.getByText("7 / 25")).toBeInTheDocument();
-    expect(screen.getByText("15 minutes")).toBeInTheDocument();
+    expect(screen.getByText("7/25")).toBeInTheDocument();
+    expect(screen.getByText("Retries", { exact: false })).toBeInTheDocument();
   });
 });

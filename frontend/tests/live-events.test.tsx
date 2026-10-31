@@ -43,6 +43,52 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
 });
+it("refreshes the latest tool window on persisted completion while keeping historical pages stable", async () => {
+  const client = new QueryClient();
+  client.setQueryData(["/runs/r/stream?kind=tool&limit=50"], {
+    items: [],
+    hasMore: false,
+  });
+  client.setQueryData(["/runs/r/stream?kind=tool&limit=50&before=20"], {
+    items: [],
+    hasMore: false,
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <Listener />
+    </QueryClientProvider>,
+  );
+  await act(async () => {});
+  client.setQueryData(["/runs/r/stream?kind=tool&limit=50"], {
+    items: [],
+    hasMore: false,
+  });
+  client.setQueryData(["/runs/r/stream?kind=tool&limit=50&before=20"], {
+    items: [],
+    hasMore: false,
+  });
+  const receive = hub.on.mock.calls.find(
+    (c) => c[0] === "EngineeringEvent",
+  )![1];
+  await act(async () => {
+    receive({
+      id: "completion",
+      kind: "event",
+      name: "ToolInvocationCompleted",
+      runId: "r",
+      projectId: "p",
+      sequence: 21,
+    });
+    vi.advanceTimersByTime(500);
+  });
+  expect(
+    client.getQueryState(["/runs/r/stream?kind=tool&limit=50"])?.isInvalidated,
+  ).toBe(true);
+  expect(
+    client.getQueryState(["/runs/r/stream?kind=tool&limit=50&before=20"])
+      ?.isInvalidated,
+  ).toBe(false);
+});
 it("shares subscriptions, batches replay, deduplicates out-of-order entries and cleans up", async () => {
   const client = new QueryClient();
   const key = ["/runs/r/stream?limit=50"];

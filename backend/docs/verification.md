@@ -388,3 +388,23 @@ QA regressions cover repeated cached requests, persisted checkpoint reload, feed
 Initial sandbox test execution could not open the .NET runner socket; it was rerun with authorized host permissions. A focused integration attempt on the pre-existing isolated MongoDB at port 27028 stalled with server writes pending; only this investigation's three test processes were stopped. No database was reset or owner service stopped. Final verification used the separate existing isolated server on port 27029. Host npm used installed dependencies; Docker's reproducible frontend stage uses npm ci (cached). No frontend dependencies or lockfile changed.
 
 Live OpenAI/GitHub App workflow checks and external repository verification remain unverified/skipped. The platform PR is a proposed correction, not human approval of DevPulse delivery. Original workspace files, receipts, policy, budgets, operation IDs and the paused execution were preserved. Deployment, receipt migration, resumption and M01 completion were not performed.
+
+## Engineering Execution observability UI — 2026-10-30
+
+The [design report](../../frontend/docs/execution-observability.md) documents lifecycle mapping, original event/operation identity, rework/retry paths, data gaps, rendering limits, accessibility and the five review screenshots. `evidence/execution-observability-verification.json` hashes the verified source/test/fixture bytes and image artifacts, independently of subsequent documentation edits.
+
+| Verification | Result |
+| --- | --- |
+| `npm run typecheck --prefix frontend` | Passed |
+| `npm test --prefix frontend` | 50 passed across six files |
+| `npm run build --prefix frontend` | Passed; existing large-chunk advisory remains |
+| `TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27029 E2E_API_PORT=15588 E2E_FRONTEND_PORT=15673 npm run e2e --prefix frontend` | Four passed: persisted lifecycle/approval/tool evidence; 1,000-event pagination and mobile navigation; real DevPulse incident; deterministic responsible-engineer rework, retries and measured waits |
+| Focused final DevPulse browser scenario | Passed after refining the tool screenshot's scroll position; production source and other browser scenarios unchanged |
+| Test-only .NET host compilation | Passed as part of Playwright startup; no production backend change |
+| Real diff and staged artifact review; `git diff --check` | Passed; reviewed evidence-driven edges/states, missing-data handling, bounded output/DOM, SignalR invalidation, inactive-tab cleanup and fixture isolation |
+
+Component coverage includes routing and state updates, QA-to-frontend rework, historical iterations, real incident identities, no invented build/test success, exact sequence sorting/deduplication, measured and missing durations, retry/resume markers, waits, safe argument previews, separate stdout/stderr and exit/evidence identity, output bounds, search/status filtering, pagination, pause-follow/live cache updates, honest empty states, keyboard graph selection, and verified-test versus generic-artifact labels. Browser checks assert dedicated viewport overflow bounds at 390px and exercise fit, collapse, layout sizing, evidence folds, history views and exact cursors. A comprehensive WCAG conformance audit is not claimed.
+
+The existing test database on localhost:27029 and dedicated non-reused ports were used. Fixtures are loaded only by the test assembly. The real incident excerpt preserves original IDs/timestamps/outcomes; its test DB receives new global sequences while retaining relative order. Separate deterministic fixtures supply retry/rework paths and do not constitute live external execution evidence. Initial fixture/selector failures were corrected without changing production invariants: computed specialist plans, unique idempotency/project identity and Ant Design's visible option element are respected. jsdom emits known CSS/pseudo-element limitations; browser rendering passes. One intermediate successful browser run logged a transient SignalR proxy disconnect; final full verification passed with live/polling recovery intact.
+
+Host dependencies were already installed and unchanged. No new package or lockfile changes were needed. Regression-generated historical screenshot updates were archived under `/tmp/aep-execution-ui-regression-captures/`; only the five new intentional execution review images are included. No live OpenAI/GitHub App cycle, real executor work, production deployment, automatic resume, delivery approval or merge was performed for this UI milestone.
