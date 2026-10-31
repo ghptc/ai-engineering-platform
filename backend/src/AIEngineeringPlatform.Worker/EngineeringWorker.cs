@@ -48,6 +48,13 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                         await store.AppendAsync(new() { Kind = "instructionVersion", Name = definition.Id, Content = System.Text.Json.JsonSerializer.Serialize(definition), Metadata = new() { ["migration"] = "greenfield-implementation-handoff" } }, stoppingToken);
                         await store.SaveAgentAsync(definition with { SystemInstructions = definition.SystemInstructions + AgentCatalog.ImplementationInstructions, InstructionVersion = definition.InstructionVersion + 1 }, stoppingToken);
                     }
+                    foreach (var definition in await store.AgentsAsync(stoppingToken))
+                    {
+                        var tools = definition.Role is AgentRole.FrontendEngineer or AgentRole.TestEngineer ? definition.AllowedTools.Union(new[] { "PrepareFrontendLock" }).ToArray() : definition.AllowedTools;
+                        if (tools.Length == definition.AllowedTools.Length && definition.SystemInstructions.Contains(AgentCatalog.ApprovedBootstrapInstructions, StringComparison.Ordinal)) continue;
+                        await store.AppendAsync(new() { Kind = "instructionVersion", Name = definition.Id, Content = System.Text.Json.JsonSerializer.Serialize(definition), Metadata = new() { ["migration"] = "approved-greenfield-bootstrap" } }, stoppingToken);
+                        await store.SaveAgentAsync(definition with { AllowedTools = tools, SystemInstructions = definition.SystemInstructions + AgentCatalog.ApprovedBootstrapInstructions, InstructionVersion = definition.InstructionVersion + 1 }, stoppingToken);
+                    }
                     initialized = true;
                 }
                 foreach (var entry in await store.FlushOutboxAsync(stoppingToken)) await publisher.PublishAsync(entry, stoppingToken);
