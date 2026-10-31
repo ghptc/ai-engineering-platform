@@ -366,3 +366,25 @@ Tested source SHA-256 (unchanged after successful tests):
 32ade5b470fb9ea1c194faabceecc60416468404be8d0f32478f20866d9f9aa5  backend/src/AIEngineeringPlatform.Infrastructure/EngineeringTool.cs
 fbf18d6fefdc44d33188dc50f7eb30a2d3ed963dc9dece0ec3901b834f6f10d8  backend/tests/AIEngineeringPlatform.Integration.Tests/ExecutorRecoveryTests.cs
 ```
+## DevPulse inspection progress and receipt retention — 2026-10-30
+
+The [incident report](devpulse-inspection-loop.md) and [evidence manifest](evidence/devpulse-b09188-inspection.json) bind the investigation to original run version 427, executor fence 426 and canonical source revision `da8c06196bd139ecfaf7d3661e218fff157a63dfe5405bfc2883c14acb3b9389`. The manifest also hashes the final platform source, configuration and test files used for verification (`platformCorrectionFilesSha256`). Subsequent documentation edits do not change those verified source bytes.
+
+| Verification | Result |
+| --- | --- |
+| `dotnet restore backend/AIEngineeringPlatform.sln` | Passed; dependencies current |
+| `dotnet build backend/AIEngineeringPlatform.sln --no-restore -m:1` | Passed; zero warnings/errors |
+| Full backend tests, `TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27029 dotnet test backend/AIEngineeringPlatform.sln --no-restore -m:1` | 270 passed: Application 55, Architecture 2, Domain 18, Integration 168, LocalExecutor 27; eight opt-in tests skipped |
+| Explicit `RUN_LOCAL_EXECUTOR_TESTS=1 EXECUTOR_TEST_IMAGE=sha256:89f6f286a57a6f2a7b09a1e6233e4cd21e0aa3cc4be75d3257d936e4db7f8ba1 dotnet test backend/tests/AIEngineeringPlatform.LocalExecutor.Tests --no-restore -m:1` | 32 passed; one external disposable GitHub repository check skipped. Real Docker isolation, local Git and Unix-daemon behavior verified |
+| `npm run typecheck --prefix frontend` | Passed |
+| `npm test --prefix frontend` | 35 passed |
+| `npm run build --prefix frontend` | Passed; existing large-chunk advisory remains |
+| `TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27029 E2E_API_PORT=15388 E2E_FRONTEND_PORT=15473 npm run e2e --prefix frontend` | Two passed; test-only deterministic host; dedicated non-reused ports |
+| `docker build -t ai-engineering-platform:local .` | Passed; manifest list `sha256:3df5c3fb289bb1e80d251cedde75d0fa5b47c529f46900f0652fa0f187c25560`; no running service replaced |
+| Real diff review and `git diff --check` | Passed; reviewed cache invalidation, bounded recovery-aware detector, scoped configuration, sanitized 409 mapping, receipt replay/fencing preservation and acceptance gaps |
+
+QA regressions cover repeated cached requests, persisted checkpoint reload, feedback then blocking, explicit resume preserving checkpoint identities/model counts and limits, novel memory ranges, changed source/output evidence, implementation/test transitions, invalid configuration, and known-outcome retention rejection with every existing receipt intact and replay still valid. The HTTP adapter regression verifies bounded public code parsing with no retry or secret reflection. Existing lifecycle/rework and architectural suites pass.
+
+Initial sandbox test execution could not open the .NET runner socket; it was rerun with authorized host permissions. A focused integration attempt on the pre-existing isolated MongoDB at port 27028 stalled with server writes pending; only this investigation's three test processes were stopped. No database was reset or owner service stopped. Final verification used the separate existing isolated server on port 27029. Host npm used installed dependencies; Docker's reproducible frontend stage uses npm ci (cached). No frontend dependencies or lockfile changed.
+
+Live OpenAI/GitHub App workflow checks and external repository verification remain unverified/skipped. The platform PR is a proposed correction, not human approval of DevPulse delivery. Original workspace files, receipts, policy, budgets, operation IDs and the paused execution were preserved. Deployment, receipt migration, resumption and M01 completion were not performed.

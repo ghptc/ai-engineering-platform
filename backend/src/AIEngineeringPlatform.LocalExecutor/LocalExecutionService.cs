@@ -37,7 +37,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                 if (saved.Fingerprint != fingerprint) throw new InvalidOperationException("An operation id cannot be reused for different arguments.");
                 return saved.Response;
             }
-            if (Directory.EnumerateFiles(runDirectory, "*.json").Count() > 201) throw new InvalidOperationException("Executor operation retention limit reached for this workspace.");
+            if (Directory.EnumerateFiles(runDirectory, "*.json").Count() > 201) throw new ExecutorFailureException(ExecutorFailureCategory.WorkspaceConflict, request.OperationId, request.Operation, 409, false, ExecutorFailureReason.OperationRetentionLimit);
             var workspace = Path.Combine(runDirectory, "repository");
             if (!Directory.Exists(Path.Combine(workspace, ".git")))
             {

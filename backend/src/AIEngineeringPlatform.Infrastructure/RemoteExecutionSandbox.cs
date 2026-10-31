@@ -25,7 +25,7 @@ public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, st
         {
             var (category, reason) = await ClassifyAsync(response, timeout.Token);
             throw new ExecutorFailureException(category, request.OperationId, request.Operation, (int)response.StatusCode,
-                reason is ExecutorFailureReason.ImageUnavailable or ExecutorFailureReason.ProfileTargetMissing ? false : (int)response.StatusCode >= 500 || (int)response.StatusCode is 408 or 409 or 429, reason);
+                reason is ExecutorFailureReason.ImageUnavailable or ExecutorFailureReason.ProfileTargetMissing or ExecutorFailureReason.OperationRetentionLimit ? false : (int)response.StatusCode >= 500 || (int)response.StatusCode is 408 or 409 or 429, reason);
         }
         await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
         using var buffer = new MemoryStream();
@@ -94,6 +94,7 @@ public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, st
             {
                 if (code.GetString() == "image_unavailable" && (int)response.StatusCode == 503) return (ExecutorFailureCategory.Infrastructure, ExecutorFailureReason.ImageUnavailable);
                 if (code.GetString() == "profile_target_missing" && (int)response.StatusCode == 422) return (ExecutorFailureCategory.ProfileRestriction, ExecutorFailureReason.ProfileTargetMissing);
+                if (code.GetString() == "operation_retention_limit" && (int)response.StatusCode == 409) return (ExecutorFailureCategory.WorkspaceConflict, ExecutorFailureReason.OperationRetentionLimit);
                 category = code.GetString() switch { "repository_access" => ExecutorFailureCategory.RepositoryAccess, "profile_restriction" => ExecutorFailureCategory.ProfileRestriction, _ => category };
             }
         }
