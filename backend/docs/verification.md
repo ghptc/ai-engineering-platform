@@ -408,3 +408,21 @@ Component coverage includes routing and state updates, QA-to-frontend rework, hi
 The existing test database on localhost:27029 and dedicated non-reused ports were used. Fixtures are loaded only by the test assembly. The real incident excerpt preserves original IDs/timestamps/outcomes; its test DB receives new global sequences while retaining relative order. Separate deterministic fixtures supply retry/rework paths and do not constitute live external execution evidence. Initial fixture/selector failures were corrected without changing production invariants: computed specialist plans, unique idempotency/project identity and Ant Design's visible option element are respected. jsdom emits known CSS/pseudo-element limitations; browser rendering passes. One intermediate successful browser run logged a transient SignalR proxy disconnect; final full verification passed with live/polling recovery intact.
 
 Host dependencies were already installed and unchanged. No new package or lockfile changes were needed. Regression-generated historical screenshot updates were archived under `/tmp/aep-execution-ui-regression-captures/`; only the five new intentional execution review images are included. No live OpenAI/GitHub App cycle, real executor work, production deployment, automatic resume, delivery approval or merge was performed for this UI milestone.
+
+## Durable inspection reuse and guard diagnosis — 2026-10-31 UTC
+
+The [investigation](no-progress-016c61-investigation.md) and [complete audit](evidence/no-progress-016c61-audit.json) bind the findings to run `016c61aa0f4c43aaa4672414376bb440`, version 160, guard event sequence 5919, final source revision `3e7a1fc32f7acc1481338064dc4918ff14eab524c49a2a127e9c3d51b4450b77`, all 83 actual tools and 39 model checkpoints. The audit records immutable source/test hashes for the platform correction and preservation hashes for all 62 executor receipts, state.json and seven repository files.
+
+| Verification | Result |
+| --- | --- |
+| `dotnet restore backend/AIEngineeringPlatform.sln` | Passed; dependencies current |
+| `dotnet build backend/AIEngineeringPlatform.sln --no-restore -m:1` | Passed; zero warnings/errors |
+| `TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27029 dotnet test backend/AIEngineeringPlatform.sln --no-restore -m:1` | 273 passed: Application 55, Architecture 2, Domain 18, Integration 171, LocalExecutor 27; eight opt-in tests skipped |
+| Production guard function replay against captured task/tool records | Eight feedback counts and final 12 exactly match persisted events; no threshold change |
+| Focused deterministic recovery and guard regressions | Passed; final full suite includes all three new cases and the existing feedback/block/resume guard test |
+| Receipt/state/source preservation and real diff review | Passed; original hashes unchanged; six added target files/215 lines inspected as data, not executed on the workstation |
+| `git diff --check` and staged secret/artifact review | Passed |
+
+New regressions simulate ownership interruption after a cached inspection and successful source write. They verify the old requesting identity has no new sandbox operation or actual-tool charge, preserves the original source evidence/revision, and a new request sees the changed revision. Two negative cases verify argument mismatch and source-content-hash mismatch fail closed while retaining the invalid checkpoint for reconciliation. Existing guard coverage confirms feedback, bounded blocking, and persistence across explicit resume remain intact. Context-compaction preservation and execution-accounting suites also pass.
+
+Verification uses only isolated MongoDB on localhost:27029 and deterministic test adapters; no real target execution, Docker executor opt-in or live OpenAI/GitHub cycle was performed for this fix. The three historical successful DevPulse builds are reported separately from these platform regressions and are not test/QA evidence. No frontend, browser or image rebuild was needed for this internal checkpoint-only correction. The original execution remains paused with 83 tools, USD 1.9861, 802,425 tokens and unchanged policy; no production record, receipt, budget, instruction revision or operation ID was rewritten.

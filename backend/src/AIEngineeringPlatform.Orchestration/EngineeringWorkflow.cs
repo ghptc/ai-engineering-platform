@@ -289,6 +289,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
         {
             await CheckOwnershipAsync();
             var operationId = Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/{suffix}");
+            var readOnlyInspection = name is "ReadRepository" or "ListFiles" or "ReadFile" or "SearchCode" or "InspectDiff";
             var saved = await store.GetRecordAsync("tool", operationId, ct);
             if (saved != null)
             {
@@ -296,7 +297,23 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 context += ContextBudget.ToolEvidence(operationId, name, previous);
                 return previous;
             }
-            var readOnlyInspection = name is "ReadRepository" or "ListFiles" or "ReadFile" or "SearchCode" or "InspectDiff";
+            var reuseId = "inspection-reuse-" + operationId;
+            var reuse = await store.GetRecordAsync("inspectionReuse", reuseId, ct);
+            if (reuse != null)
+            {
+                var sourceId = reuse.Metadata.GetValueOrDefault("sourceOperationId");
+                var source = sourceId == null ? null : await store.GetRecordAsync("tool", sourceId, ct);
+                if (!readOnlyInspection || reuse.RunId != run.Id || reuse.ProjectId != project.Id || reuse.Name != name
+                    || reuse.Metadata.GetValueOrDefault("argumentsHash") != Key(args.GetRawText())
+                    || source == null || source.RunId != run.Id || source.ProjectId != project.Id || source.Name != name || Key(source.Content) != reuse.Content
+                    || source.Metadata.GetValueOrDefault("argumentsHash") != reuse.Metadata.GetValueOrDefault("argumentsHash"))
+                    throw new ConfigurationException("Persisted inspection reuse does not match its request and original evidence; preserve checkpoints for reconciliation.");
+                var previous = JsonSerializer.Deserialize<ToolResult>(source.Content)!;
+                if (!previous.Success || string.IsNullOrWhiteSpace(previous.WorkspaceRevision))
+                    throw new ConfigurationException("Persisted inspection reuse lacks successful revision-bound evidence; preserve checkpoints for reconciliation.");
+                context += ContextBudget.ToolEvidence(sourceId!, name, previous);
+                return previous;
+            }
             if (!readOnlyInspection)
             {
                 for (var offset = 0; ; offset += 1000)
@@ -312,8 +329,12 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             var inspectionKey = name + "/" + Key(args.GetRawText());
             if (readOnlyInspection && inspections.TryGetValue(inspectionKey, out var cached))
             {
+                // A cache hit completes this request too. Persist its original evidence before
+                // advancing, so checkpoint recovery cannot execute it later at a different revision.
+                await CheckOwnershipAsync();
+                await store.AppendAsync(new() { Id = reuseId, Kind = "inspectionReuse", ProjectId = project.Id, RunId = run.Id, Name = name, Status = "Succeeded", Content = Key(JsonSerializer.Serialize(cached.Result)), Metadata = new() { ["operationId"] = operationId, ["sourceOperationId"] = cached.Id, ["argumentsHash"] = Key(args.GetRawText()), ["agent"] = role.ToString(), ["taskIndex"] = run.TaskIndex.ToString(), ["iteration"] = run.Iteration.ToString(), ["stage"] = run.Status, ["leaseOwner"] = owner, ["fence"] = run.Version.ToString() } }, ct);
                 context += ContextBudget.ToolEvidence(cached.Id, name, cached.Result);
-                await service.EventAsync(run, "InspectionReused", JsonSerializer.Serialize(new { SourceId = cached.Id, name, cached.Result.WorkspaceRevision }), ct);
+                await service.EventAsync(run, "InspectionReused", JsonSerializer.Serialize(new { OperationId = operationId, SourceId = cached.Id, name, cached.Result.WorkspaceRevision }), ct);
                 return cached.Result;
             }
             // Remote reads and memory retrieval do not invalidate local source observations.
@@ -456,7 +477,10 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 if (result.ToolCalls.Length == 0) { await ArtifactAsync(role.ToString(), artifactType, JsonSerializer.Serialize(result)); if (Enum.TryParse<AgentRole>(NextAgent(role), out var target)) RecordTransition(role, target); return result; }
                 var remainingBatch = 0;
                 for (var i = 0; i < result.ToolCalls.Length; i++)
-                    if (await store.GetRecordAsync("tool", Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/{taskId}/tool/{i}"), ct) == null) remainingBatch++;
+                {
+                    var pendingId = Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/{taskId}/tool/{i}");
+                    if (await store.GetRecordAsync("tool", pendingId, ct) == null && await store.GetRecordAsync("inspectionReuse", "inspection-reuse-" + pendingId, ct) == null) remainingBatch++;
+                }
                 if (remainingBatch > run.Policy.MaxToolCalls - run.ToolCalls) throw new ExecutionLimitException("Requested tool batch cannot fit remaining capacity. Model checkpoint saved; approve a limit extension before resuming.");
                 for (var i = 0; i < result.ToolCalls.Length; i++)
                 {
