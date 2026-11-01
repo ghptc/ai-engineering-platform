@@ -14,7 +14,9 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && a
 COPY --from=npm-cache /opt/npm-cache/_cacache/ /opt/npm-cache/
 COPY --from=nuget-cache /opt/nuget-packages/ /opt/nuget-packages/
 COPY --chmod=0555 backend/executor/runtime/runner.py /usr/local/bin/aep-run
+RUN mkdir -p /opt/aep && chmod 0755 /opt/aep
 COPY --chmod=0444 backend/executor/managed/profiles.py /opt/aep/profiles.py
+LABEL io.aep.managed-profiles.version="2"
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 NUGET_PACKAGES=/opt/nuget-packages npm_config_cache=/tmp/npm
 USER 65532:65532
 WORKDIR /workspace

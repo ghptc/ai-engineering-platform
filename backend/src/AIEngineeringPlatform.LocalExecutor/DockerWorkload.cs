@@ -75,10 +75,22 @@ public sealed class DockerWorkload(ExecutorOptions options, ControlledProcess pr
         var mounts = host.GetProperty("Tmpfs");
         if (mounts.EnumerateObject().Count() != 2 || !mounts.TryGetProperty("/workspace", out var workspace) || !mounts.TryGetProperty("/tmp", out var temp) || !workspace.GetString()!.Contains("size=256m", StringComparison.Ordinal) || !temp.GetString()!.Contains("size=256m", StringComparison.Ordinal)) throw new InvalidOperationException("Bounded temporary filesystems are required.");
     }
+    public static int ManagedTestCount(string output, int exitCode, string profile)
+    {
+        var match = Regex.Matches(output, @"(?m)^AEP managed test evidence: executed=(\d+); profiles=([a-z,]*); exit=(-?\d+);\s*$").LastOrDefault();
+        if (match?.Success != true || !int.TryParse(match.Groups[1].Value, out var count) || !int.TryParse(match.Groups[3].Value, out var reportedExit) || reportedExit != exitCode) return 0;
+        var stages = match.Groups[2].Value;
+        if (profile == "all" ? exitCode == 0 && stages != "backend,frontend" || exitCode != 0 && stages is not ("backend" or "backend,frontend" or "") : stages != profile) return 0;
+        return count;
+    }
     public static int TestCount(string output)
     {
         output = Regex.Replace(output, @"\x1B\[[0-9;]*m", "");
         var patterns = new[] { @"(?m)^(?:#|ℹ) tests\s+(\d+)\s*$", @"Total:\s*(\d+)", @"Total tests:\s*(\d+)", @"Ran\s+(\d+)\s+test", @"Tests\s+(\d+)\s+passed" };
-        return patterns.SelectMany(pattern => Regex.Matches(output, pattern, RegexOptions.CultureInvariant).Select(match => int.Parse(match.Groups[1].Value))).DefaultIfEmpty(0).Max();
+        var summary = patterns.SelectMany(pattern => Regex.Matches(output, pattern, RegexOptions.CultureInvariant).Cast<Match>()).OrderBy(match => match.Index).LastOrDefault();
+        var dotnet = Regex.Matches(output, @"Failed:\s*(\d+),\s*Passed:\s*(\d+),\s*Skipped:\s*\d+,\s*Total:\s*\d+").LastOrDefault();
+        if (dotnet != null && (summary == null || dotnet.Index + dotnet.Length >= summary.Index + summary.Length))
+            return int.TryParse(dotnet.Groups[1].Value, out var failed) && int.TryParse(dotnet.Groups[2].Value, out var passed) && (long)failed + passed <= int.MaxValue ? failed + passed : 0;
+        return summary != null && int.TryParse(summary.Groups[1].Value, out var count) ? count : 0;
     }
 }

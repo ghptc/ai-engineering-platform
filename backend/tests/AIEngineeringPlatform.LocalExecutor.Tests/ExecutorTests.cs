@@ -244,6 +244,47 @@ public sealed class ExecutorTests
         var replay = await fixture.Executor.ExecuteAsync(Request("devpulse", "api-write", "WriteFile", new { path = "src/DevPulse.Api/DevPulse.Api.csproj", content = api }), default);
         Assert.Equal(written, replay);
     }
+
+    [DockerFact]
+    public async Task ManagedGreenfieldProfilesExecuteRealBackendAndFrontendTestsOffline()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var image = Environment.GetEnvironmentVariable("EXECUTOR_TEST_IMAGE")!;
+        var profiles = ManagedExecutorConfiguration.ParseRepository("test-owner/aep-fixture@1:main", image).Profiles;
+        fixture.Options.Repositories[0].Profiles = profiles;
+        Task<SandboxResponse> Call(string id, string tool, object args) => fixture.Executor.ExecuteAsync(Request("managed-greenfield", id, tool, args) with { MemoryMb = 1024 }, default);
+        var facts = await Call("initial", "ReadRepository", new { });
+        Assert.Contains("PrepareFrontendLock", facts.Output);
+        var sources = new Dictionary<string, string>
+        {
+            ["backend/src/ApprovedApi/ApprovedApi.csproj"] = "<Project Sdk=\"Microsoft.NET.Sdk.Web\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings></PropertyGroup></Project>",
+            ["backend/src/ApprovedApi/Program.cs"] = "var app=WebApplication.CreateBuilder(args).Build();app.MapGet(\"/api/greeting\",()=>new {message=\"hello\"});app.Run();public partial class Program {}",
+            ["backend/tests/ApprovedApi.Tests/ApprovedApi.Tests.csproj"] = "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><ImplicitUsings>enable</ImplicitUsings></PropertyGroup><ItemGroup><PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.14.1\"/><PackageReference Include=\"xunit\" Version=\"2.9.3\"/><PackageReference Include=\"xunit.runner.visualstudio\" Version=\"3.1.4\"/><PackageReference Include=\"Microsoft.AspNetCore.Mvc.Testing\" Version=\"10.0.8\"/><ProjectReference Include=\"../../src/ApprovedApi/ApprovedApi.csproj\"/></ItemGroup></Project>",
+            ["backend/tests/ApprovedApi.Tests/Routes.cs"] = "using Xunit;using System.Net;using Microsoft.AspNetCore.Mvc.Testing;[assembly:WebApplicationFactoryContentRoot(\"ApprovedApi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null\",\"/workspace/backend/src/ApprovedApi\",\"ApprovedApi.csproj\",\"0\")]public class Routes{[Fact]public async Task Greeting(){await using var f=new WebApplicationFactory<Program>();var r=await f.CreateClient().GetAsync(\"/api/greeting\");r.EnsureSuccessStatusCode();Assert.Contains(\"hello\",await r.Content.ReadAsStringAsync());}[Fact]public async Task Unknown(){await using var f=new WebApplicationFactory<Program>();Assert.Equal(HttpStatusCode.NotFound,(await f.CreateClient().GetAsync(\"/missing\")).StatusCode);}[Fact(Skip=\"Count regression fixture\")]public void Skipped(){}}",
+            ["frontend/package.json"] = ApprovedBootstrapTests.Manifest(split: true).ToJsonString(),
+            ["frontend/index.html"] = "<html><body><div id=\"root\"></div><script type=\"module\" src=\"/src/main.tsx\"></script></body></html>",
+            ["frontend/vite.config.ts"] = "import {defineConfig} from 'vite';import react from '@vitejs/plugin-react';export default defineConfig({plugins:[react()],test:{environment:'jsdom'}});",
+            ["frontend/tsconfig.json"] = "{\"compilerOptions\":{\"target\":\"ES2022\",\"module\":\"ESNext\",\"moduleResolution\":\"Bundler\",\"jsx\":\"react-jsx\",\"lib\":[\"ES2022\",\"DOM\"],\"skipLibCheck\":true},\"include\":[\"src\"]}",
+            ["frontend/src/App.tsx"] = "import {useState} from 'react';import {Button} from 'antd';export function App(){const [n,setN]=useState(0);return <Button onClick={()=>setN(n+1)}>Count {n}</Button>;}",
+            ["frontend/src/main.tsx"] = "import {createRoot} from 'react-dom/client';import {App} from './App';createRoot(document.getElementById('root')!).render(<App/>);",
+            ["frontend/tests/App.test.tsx"] = "import React from 'react';import {afterEach,expect,test} from 'vitest';import {render,screen,cleanup,fireEvent} from '@testing-library/react';import {App} from '../src/App';afterEach(cleanup);test('initial',()=>{render(<App/>);expect(screen.getByRole('button').textContent).toBe('Count 0')});test('click',()=>{render(<App/>);fireEvent.click(screen.getByRole('button'));expect(screen.getByRole('button').textContent).toBe('Count 1')});test('two clicks',()=>{render(<App/>);fireEvent.click(screen.getByRole('button'));fireEvent.click(screen.getByRole('button'));expect(screen.getByRole('button').textContent).toBe('Count 2')});"
+        };
+        var index = 0;
+        foreach (var source in sources) Assert.True((await Call("write-" + index++, "WriteFile", new { path = source.Key, content = source.Value })).Success);
+        var lockReceipt = await Call("lock", "PrepareFrontendLock", new { });
+        Assert.True(lockReceipt.Success); Assert.Equal(lockReceipt, await Call("lock", "PrepareFrontendLock", new { }));
+        var before = (await Call("before-tests", "ReadRepository", new { })).DiffHash;
+        var tests = await Call("real-tests", "RunTests", new { profile = "all" });
+        Assert.True(tests.Success, tests.Output); Assert.Equal(0, tests.ExitCode);
+        Assert.Contains("Executor evidence: tests=5; exit=0;", tests.Output);
+        Assert.Contains("profiles=backend,frontend; exit=0;", tests.Output);
+        Assert.Equal(image, tests.Execution!.Image);
+        Assert.True((await Call("typecheck", "RunCommand", new { profile = "typecheck" })).Success);
+        var build = await Call("build", "RunCommand", new { profile = "build" }); Assert.True(build.Success, build.Output);
+        Assert.Equal(before, (await Call("after-tests", "ReadRepository", new { })).DiffHash);
+        var head = await fixture.Process.RunAsync("/usr/bin/git", ["rev-parse", "HEAD"], fixture.Remote, 10, 10000, default);
+        Assert.Equal(fixture.OriginalHead, head.Output.Trim());
+    }
     private static SandboxRequest Request(string run, string operation, string tool, object args) => new(operation, run, new("test-owner", "aep-fixture", 1), tool, JsonSerializer.SerializeToElement(args), TimeoutSeconds: 120, Fence: 1, LeaseOwner: "test-worker");
     private sealed class Fixture : IAsyncDisposable
     {
