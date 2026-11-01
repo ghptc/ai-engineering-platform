@@ -8,7 +8,7 @@ using AIEngineeringPlatform.Domain;
 
 namespace AIEngineeringPlatform.Application.RuntimeV2;
 
-public enum EngineeringMessageKind { EngineeringTask, EngineeringHandoff, ImplementationResult, TestReport, ReviewResult, ReworkRequest, ClarificationRequest, ApprovalRequest }
+public enum EngineeringMessageKind { EngineeringTask, EngineeringHandoff, ImplementationResult, TestReport, ReviewResult, ReworkRequest, ClarificationRequest, ApprovalRequest, DependencyApprovalRequest }
 public enum EngineeringTaskPurpose { Planning, Implementation, Verification, Review, Research, Diagnostic, NoOp }
 public sealed record ArtifactReference(string Id, string Kind, string? SourceRevision);
 public sealed record EvidenceReference(string OperationId, string RecordId, string? WorkspaceRevision);
@@ -22,6 +22,7 @@ public sealed record TestReportPayload(string Outcome, int ExecutedCount, string
 public sealed record ReviewResultPayload(string Decision, ReviewFinding[] Findings, string[] UnverifiedCriteria);
 public sealed record ReworkRequestPayload(string[] ResponsibleAgents, string Reason, string[] FailedCriteria);
 public sealed record ClarificationRequestPayload(string Question, string[] Options, bool BlocksCurrentTask);
+public sealed record DependencyApprovalPayload(string RequestId, DependencyProposal Proposal);
 public sealed record ApprovalRequestPayload(string Gate, string DecisionArtifactId, string RequestedOwnerAction);
 
 public static class EngineeringMessageContract
@@ -77,6 +78,11 @@ public static class EngineeringMessageContract
         if (message.Kind != EngineeringMessageKind.ApprovalRequest && !Enum.GetNames<AgentRole>().Contains(authorizedSender)) throw Invalid();
         switch (message.Kind)
         {
+            case EngineeringMessageKind.DependencyApprovalRequest:
+                var dependency = Payload<DependencyApprovalPayload>(message);
+                if (!Id(dependency.RequestId) || authorizedSender is not ("Architect" or "BackendEngineer" or "FrontendEngineer" or "TestEngineer" or "InfrastructureEngineer")) throw Invalid();
+                Dependencies.DependencyGovernance.Validate(dependency.Proposal);
+                break;
             case EngineeringMessageKind.EngineeringHandoff:
                 var handoff = Payload<EngineeringHandoffPayload>(message);
                 if (!Text(handoff.Summary, 4000) || !Text(handoff.NextAction, 4000) || !Strings(handoff.CompletedWork, 0, 50, 2000) || !Strings(handoff.Blockers, 0, 20, 2000)) throw Invalid();
@@ -125,7 +131,7 @@ public static class EngineeringMessageContract
             EngineeringMessageKind.EngineeringTask => typeof(EngineeringTaskPayload), EngineeringMessageKind.EngineeringHandoff => typeof(EngineeringHandoffPayload),
             EngineeringMessageKind.ImplementationResult => typeof(ImplementationResultPayload), EngineeringMessageKind.TestReport => typeof(TestReportPayload),
             EngineeringMessageKind.ReviewResult => typeof(ReviewResultPayload), EngineeringMessageKind.ReworkRequest => typeof(ReworkRequestPayload),
-            EngineeringMessageKind.ClarificationRequest => typeof(ClarificationRequestPayload), _ => typeof(ApprovalRequestPayload)
+            EngineeringMessageKind.DependencyApprovalRequest => typeof(DependencyApprovalPayload), EngineeringMessageKind.ClarificationRequest => typeof(ClarificationRequestPayload), _ => typeof(ApprovalRequestPayload)
         };
         schema["properties"]!["payload"] = Json.GetJsonSchemaAsNode(type);
         schema["properties"]!["objective"]!["maxLength"] = 4000;
@@ -161,6 +167,13 @@ public static class EngineeringMessageContract
                 break;
             case EngineeringMessageKind.ReviewResult: payload["decision"]!["enum"] = Values("Approve", "RequestChanges", "Unverified"); payload["findings"]!["maxItems"] = 100; break;
             case EngineeringMessageKind.ReworkRequest: payload["responsibleAgents"]!["minItems"] = 1; payload["responsibleAgents"]!["maxItems"] = 3; payload["failedCriteria"]!["minItems"] = 1; break;
+            case EngineeringMessageKind.DependencyApprovalRequest:
+                payload["requestId"]!["maxLength"] = 128;
+                var dependency = payload["proposal"]!["properties"]!;
+                dependency["version"]!["const"] = 1; dependency["ecosystem"]!["const"] = "npm"; dependency["packageManager"]!["const"] = "npm"; dependency["registry"]!["const"] = "https://registry.npmjs.org";
+                dependency["packages"]!["minItems"] = 1; dependency["packages"]!["maxItems"] = 20;
+                foreach (var name in new[] { "capabilities", "alternatives", "independentTasks", "blockedTasks", "evidenceReferences" }) dependency[name]!["maxItems"] = 20;
+                break;
             case EngineeringMessageKind.ApprovalRequest:
                 properties["sender"]!["const"] = "Orchestrator"; properties["recipient"]!["const"] = "Owner"; payload["gate"]!["enum"] = Values("Delivery", "Security", "ExecutionProfile"); break;
         }

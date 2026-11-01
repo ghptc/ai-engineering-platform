@@ -1,3 +1,4 @@
+using AIEngineeringPlatform.Application.Dependencies;
 using AIEngineeringPlatform.Application.Estimation;
 using AIEngineeringPlatform.Api;
 using AIEngineeringPlatform.Application;
@@ -79,7 +80,10 @@ builder.Services.AddSingleton<IExecutionSandbox>(sp => { var options = sp.GetReq
 builder.Services.AddSingleton<ISourceControl>(sp => new GitHubSourceControl(sp.GetRequiredService<IHttpClientFactory>().CreateClient("github"), builder.Configuration["GITHUB_APP_ID"], builder.Configuration["GITHUB_APP_PRIVATE_KEY_PATH"], builder.Configuration["GITHUB_WEBHOOK_SECRET"]));
 foreach (var role in Enum.GetValues<AgentRole>()) builder.Services.AddSingleton<IEngineeringAgent>(sp => new DispatchedEngineeringAgent(role, sp.GetRequiredService<ILanguageModelProvider>(), sp.GetRequiredService<DurableAgentDispatcher>()));
 builder.Services.AddOptions<SandboxExecutionLimits>().Bind(builder.Configuration.GetSection("SandboxExecution")).Validate(o => o.TimeoutSeconds is >= 1 and <= 120 && o.MemoryMb is >= 128 and <= 4096 && o.CpuLimit is >= 1 and <= 4 && o.OutputLimitBytes is >= 1024 and <= 100000, "Invalid sandbox execution limits.").ValidateOnStart();
-foreach (var name in EngineeringTool.Names) builder.Services.AddSingleton<IAgentTool>(sp => new EngineeringTool(name, sp.GetRequiredService<IExecutionSandbox>(), sp.GetRequiredService<ISourceControl>(), sp.GetRequiredService<IPlatformStore>(), sp.GetRequiredService<IOptions<SandboxExecutionLimits>>().Value));
+foreach (var name in EngineeringTool.Names) builder.Services.AddSingleton<IAgentTool>(sp => new EngineeringTool(name, sp.GetRequiredService<IExecutionSandbox>(), sp.GetRequiredService<ISourceControl>(), sp.GetRequiredService<IPlatformStore>(), sp.GetRequiredService<IOptions<SandboxExecutionLimits>>().Value, sp.GetRequiredService<DependencyGovernance>()));
+builder.Services.AddSingleton<IDependencyApprovalStore>(new MongoDependencyApprovalStore(mongo, builder.Configuration["MONGODB_DATABASE"] ?? "ai_engineering_platform"));
+builder.Services.AddSingleton<IDependencyExecutor>(sp => sp.GetRequiredService<IExecutionSandbox>() as IDependencyExecutor ?? new UnsupportedDependencyExecutor());
+builder.Services.AddSingleton<DependencyGovernance>();
 builder.Services.AddSingleton<GitHubWebhookProcessor>(); builder.Services.AddSingleton<ConversationResponder>(); builder.Services.AddSingleton<PlatformService>(); builder.Services.AddSingleton<ContextBuilder>(); builder.Services.AddSingleton<EngineeringWorkflow>(); builder.Services.AddSingleton<IExecutionPublisher, SignalRPublisher>();
 if (builder.Configuration.GetValue("WORKER_ENABLED", true)) { builder.Services.AddHostedService<EngineeringWorker>(); builder.Services.AddHostedService<IndependentAgentWorkers>(); }
 else builder.Services.AddHostedService<PersistedEventRelay>();
@@ -154,6 +158,7 @@ app.MapGet("/api/v1/auth/me", () => new { name = "owner" }).RequireAuthorization
 app.MapPost("/api/v1/auth/logout", async (HttpContext ctx, OwnerConnections connections) => { var session = ctx.User.FindFirstValue("aep.session"); await ctx.SignOutAsync(); if (session != null) connections.Revoke(session); return Results.NoContent(); }).RequireAuthorization("Owner");
 var api = app.MapGroup("/api/v1").RequireAuthorization("Owner").RequireRateLimiting("api");
 api.MapRequirementIntake();
+api.MapDependencyApprovals();
 api.MapGet("/runtime/contracts/{kind}", (string kind) => Enum.TryParse<EngineeringMessageKind>(kind, false, out var type) && Enum.IsDefined(type) && type.ToString() == kind ? Results.Json(EngineeringMessageContract.Schema(type)) : Results.Problem(statusCode: 400, title: "Unknown engineering message contract"));
 api.MapGet("/projects", async (IPlatformStore s, int? offset, int? limit, CancellationToken ct) => new Page<Project>(await s.ProjectsAsync(Offset(offset), Limit(limit), ct), Offset(offset), Limit(limit)));
 api.MapPost("/projects", async (ProjectInput input, PlatformService s, IOptions<ExecutionDefaults> defaults, CancellationToken ct) => { var p = await s.SaveProjectAsync(input.ToProject() with { ExecutionPolicy = input.ExecutionPolicy ?? defaults.Value.Policy() }, null, ct); return Results.Created($"/api/v1/projects/{p.Id}", p); });

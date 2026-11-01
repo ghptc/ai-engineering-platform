@@ -1,3 +1,4 @@
+import { DependencyApprovals } from "../dependencies/DependencyApprovals";
 import { useState } from "react";
 import {
   App,
@@ -115,6 +116,7 @@ export function Approvals() {
   );
   return (
     <>
+      <DependencyApprovals />
       <Heading
         eyebrow="OWNER DECISIONS"
         title="Approvals"

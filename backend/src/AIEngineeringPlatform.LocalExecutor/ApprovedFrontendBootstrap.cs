@@ -16,7 +16,19 @@ public static class ApprovedFrontendBootstrap
     });
     public static string CatalogHash => Hash(Catalog.Value);
     public static IReadOnlyDictionary<string, string> Dependencies => JsonNode.Parse(Catalog.Value)!["packages"]![""]!["dependencies"]!.AsObject().ToDictionary(x => x.Key, x => x.Value!.GetValue<string>(), StringComparer.Ordinal);
-    public static object Capability => new { Operation = "PrepareFrontendLock", Path = "frontend/package-lock.json", CatalogSha256 = CatalogHash, ApprovedDependencies = Dependencies, AllowedManifestFields = new[] { "name", "version", "private", "type", "scripts", "dependencies", "devDependencies", "description" }, Policy = "Use exactly these pinned direct dependencies across dependencies/devDependencies. No overrides, optional dependencies, workspaces or registry selection. Only a missing lockfile can be created. Availability must still be verified in the configured isolated image." };
+    public static object Capability => new { ExtensionRequest = "RequestDependencyApproval", ExtensionPreparation = "PrepareApprovedDependencies", ExtensionScope = "Owner-approved exact project/run/repository graph; no agent network or install scripts", Operation = "PrepareFrontendLock", Path = "frontend/package-lock.json", CatalogSha256 = CatalogHash, ApprovedDependencies = Dependencies, AllowedManifestFields = new[] { "name", "version", "private", "type", "scripts", "dependencies", "devDependencies", "description" }, Policy = "Use exactly these pinned direct dependencies across dependencies/devDependencies. No overrides, optional dependencies, workspaces or registry selection. Only a missing lockfile can be created. Availability must still be verified in the configured isolated image." };
+    public static bool IsCatalogLock(string content)
+    {
+        try
+        {
+            if (content.Length > 2_000_000) return false;
+            var supplied = JsonNode.Parse(content, documentOptions: new JsonDocumentOptions { MaxDepth = 16 })!.AsObject();
+            var expected = JsonNode.Parse(Catalog.Value)!["packages"]!.AsObject();
+            if (supplied["lockfileVersion"]?.GetValue<int>() != 3 || supplied["packages"] is not JsonObject packages || packages.Count > expected.Count) return false;
+            return packages.Where(x => x.Key != "").All(x => expected.TryGetPropertyValue(x.Key, out var approved) && JsonNode.DeepEquals(x.Value, approved));
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException or ArgumentException) { return false; }
+    }
     public static string Prepare(string workspace)
     {
         var manifestPath = WorkspaceFiles.Resolve(workspace, "frontend/package.json");

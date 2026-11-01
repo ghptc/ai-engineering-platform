@@ -30,6 +30,7 @@ if (new DirectoryInfo(socketDirectory).LinkTarget != null) throw new InvalidOper
 await UnixSocketFiles.RemoveStaleSocketAsync(options.SocketPath); // Ownership lock acquired; non-socket paths are never deleted.
 builder.WebHost.ConfigureKestrel(server => { server.Limits.MaxRequestBodySize = 1_000_000; server.ListenUnixSocket(options.SocketPath); });
 builder.Logging.ClearProviders(); builder.Logging.AddJsonConsole();
+builder.Services.AddSingleton<DependencyExecutor>();
 builder.Services.AddSingleton(options); builder.Services.AddSingleton<ControlledProcess>(); builder.Services.AddSingleton<DockerWorkload>(); builder.Services.AddSingleton<LocalExecutionService>();
 var app = builder.Build();
 app.Use(async (context, next) =>
@@ -42,10 +43,13 @@ app.Use(async (context, next) =>
         var status = exception is ExecutorFailureException failure ? failure.StatusCode ?? 503 : exception is UnauthorizedAccessException ? 403 : exception is ConfigurationException ? 503 : exception is ArgumentException or System.Text.Json.JsonException or FileNotFoundException ? 400 : 409;
         if (exception is ExecutorFailureException diagnostic)
             app.Logger.LogWarning("Executor operation {OperationId} {Operation} rejected with HTTP {Status} category {Category} reason {Reason} outcomeUnknown {OutcomeUnknown}", diagnostic.OperationId, diagnostic.Operation, status, diagnostic.Category, diagnostic.Reason, diagnostic.OutcomeUnknown);
-        await Results.Problem(statusCode: status, title: "Executor rejected operation", detail: "Inspect the operation category and administrator configuration.", extensions: new Dictionary<string, object?> { ["code"] = exception is ExecutorFailureException typed ? typed.Reason switch { ExecutorFailureReason.OperationRetentionLimit => "operation_retention_limit", ExecutorFailureReason.ImageUnavailable => "image_unavailable", ExecutorFailureReason.ProfileTargetMissing => "profile_target_missing", _ => typed.Category switch { ExecutorFailureCategory.ProfileRestriction => "profile_restriction", ExecutorFailureCategory.RepositoryAccess => "repository_access", _ => "executor_rejected" } } : "executor_rejected" }).ExecuteAsync(context);
+        await Results.Problem(statusCode: status, title: "Executor rejected operation", detail: "Inspect the operation category and administrator configuration.", extensions: new Dictionary<string, object?> { ["code"] = exception is ExecutorFailureException typed ? typed.Reason switch { ExecutorFailureReason.DependencyApprovalRequired => "dependency_approval_required", ExecutorFailureReason.OperationRetentionLimit => "operation_retention_limit", ExecutorFailureReason.ImageUnavailable => "image_unavailable", ExecutorFailureReason.ProfileTargetMissing => "profile_target_missing", _ => typed.Category switch { ExecutorFailureCategory.ProfileRestriction => "profile_restriction", ExecutorFailureCategory.RepositoryAccess => "repository_access", _ => "executor_rejected" } } : "executor_rejected" }).ExecuteAsync(context);
     }
 });
 app.MapGet("/health/ready", async (DockerWorkload docker, CancellationToken ct) => { await docker.VerifyHostAsync(ct); return Results.Ok(new { status = "Ready", isolation = "Docker/cgroup-v2/seccomp", network = "none", contractVersion = 2 }); });
+app.MapGet("/v1/dependencies/{id}", async (string id, DependencyExecutor dependencies, CancellationToken ct) => await dependencies.ReadAsync(id, ct) is { } resolution ? Results.Ok(resolution) : Results.NotFound());
+app.MapPost("/v1/dependencies/resolve", (DependencyResolveInput input, DependencyExecutor dependencies, CancellationToken ct) => dependencies.ResolveAsync(input.Request, input.Repository, ct));
+app.MapPost("/v1/dependencies/grant", async (AIEngineeringPlatform.Domain.DependencyGrant grant, DependencyExecutor dependencies, CancellationToken ct) => { await dependencies.GrantAsync(grant, ct); return Results.Ok(new { Applied = true, grant.Id, grant.PlanSha256 }); });
 app.MapPost("/v1/operations", async (SandboxRequest request, HttpContext context, LocalExecutionService executor, CancellationToken ct) =>
 {
     if (context.Request.Headers["Idempotency-Key"] != request.OperationId) return Results.Problem(statusCode: 400, title: "Idempotency key mismatch");
@@ -69,3 +73,5 @@ await app.StartAsync();
 File.SetUnixFileMode(options.SocketPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.GroupWrite);
 await app.WaitForShutdownAsync();
 public partial class ExecutorProgram { }
+
+public sealed record DependencyResolveInput(AIEngineeringPlatform.Domain.DependencyApprovalRequest Request, AIEngineeringPlatform.Domain.RepositoryConnection Repository);

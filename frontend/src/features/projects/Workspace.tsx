@@ -1,3 +1,4 @@
+import { DependencyApprovals } from "../dependencies/DependencyApprovals";
 import { useState } from "react";
 import {
   App,
@@ -128,6 +129,8 @@ export function Workspace() {
             }
           />
           <Tabs
+            size="small"
+            tabBarGutter={12}
             items={[
               {
                 key: "overview",
@@ -281,6 +284,11 @@ export function Workspace() {
                     </Card>
                   </Space>
                 ),
+              },
+              {
+                key: "dependencies",
+                label: "Dependencies",
+                children: <DependencyApprovals projectId={id} />,
               },
               {
                 key: "intake",

@@ -80,11 +80,9 @@ test("owner imports 125 requirements, reviews a version and reconnects without s
     page.getByRole("heading", { name: "Requirements intake & traceability" }),
   ).toBeVisible();
   await expect(page.getByLabel("Search imported requirements")).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBeTruthy();
+  await expect.poll(() => page.evaluate(
+    () => document.documentElement.scrollWidth <= window.innerWidth,
+  )).toBeTruthy();
   await page.screenshot({
     path: "../backend/docs/ux-evidence/m6-intake-mobile.png",
     fullPage: true,

@@ -38,6 +38,14 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                     }
                     foreach (var definition in await store.AgentsAsync(stoppingToken))
                     {
+                        if (definition.Role is not (AgentRole.Architect or AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.TestEngineer or AgentRole.InfrastructureEngineer)) continue;
+                        var tools = definition.AllowedTools.Union(definition.Role == AgentRole.Architect ? new[] { "RequestDependencyApproval" } : new[] { "RequestDependencyApproval", "PrepareApprovedDependencies" }).ToArray();
+                        if (tools.Length == definition.AllowedTools.Length && definition.SystemInstructions.Contains(AgentCatalog.DependencyInstructions, StringComparison.Ordinal)) continue;
+                        await store.AppendAsync(new() { Kind = "instructionVersion", Name = definition.Id, Content = System.Text.Json.JsonSerializer.Serialize(definition), Metadata = new() { ["migration"] = "dependency-governance-v1" } }, stoppingToken);
+                        await store.SaveAgentAsync(definition with { AllowedTools = tools, SystemInstructions = definition.SystemInstructions + AgentCatalog.DependencyInstructions, InstructionVersion = definition.InstructionVersion + 1 }, stoppingToken);
+                    }
+                    foreach (var definition in await store.AgentsAsync(stoppingToken))
+                    {
                         if (definition.SystemInstructions.Contains(AgentCatalog.PlanningInstructions, StringComparison.Ordinal)) continue;
                         await store.AppendAsync(new() { Kind = "instructionVersion", Name = definition.Id, Content = System.Text.Json.JsonSerializer.Serialize(definition), Metadata = new() { ["migration"] = "stage-aware-planning" } }, stoppingToken);
                         await store.SaveAgentAsync(definition with { SystemInstructions = definition.SystemInstructions + AgentCatalog.PlanningInstructions, InstructionVersion = definition.InstructionVersion + 1 }, stoppingToken);
@@ -93,9 +101,9 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
             var current = await store.GetRunAsync(run.Id, stoppingToken);
             if (current is { IsRunnable: true } && current.LeaseOwner == owner)
             {
-                var safeReason = exception is ExecutorFailureException or ExecutorEvidenceException or PersistenceFailureException or ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : "Stage failed; inspect operational diagnostics using the run identifier.";
+                var safeReason = exception is AIEngineeringPlatform.Application.Dependencies.DependencyApprovalPendingException or ExecutorFailureException or ExecutorEvidenceException or PersistenceFailureException or ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : "Stage failed; inspect operational diagnostics using the run identifier.";
                 if (exception is TaskReconciliationException { Outcome: ExecutionOutcome.AwaitingHumanInput } && !safeReason.StartsWith("Human clarification required:", StringComparison.Ordinal)) safeReason = "Human clarification required: " + safeReason;
-                var failed = exception is TaskReconciliationException reconciliation ? current.Transition(RunStage.Paused, safeReason) with { Outcome = reconciliation.Outcome } : exception is ExecutorFailureException or ExecutorEvidenceException or PersistenceFailureException or ConfigurationException or ExecutionLimitException ? current.Transition(RunStage.Paused, safeReason) with { Outcome = ExecutionOutcome.Blocked } : current.Transition(RunStage.Failed, safeReason);
+                var failed = exception is AIEngineeringPlatform.Application.Dependencies.DependencyApprovalPendingException ? current.Transition(RunStage.AwaitingDependencyApproval, safeReason) with { Outcome = ExecutionOutcome.AwaitingHumanInput } : exception is TaskReconciliationException reconciliation ? current.Transition(RunStage.Paused, safeReason) with { Outcome = reconciliation.Outcome } : exception is ExecutorFailureException or ExecutorEvidenceException or PersistenceFailureException or ConfigurationException or ExecutionLimitException ? current.Transition(RunStage.Paused, safeReason) with { Outcome = ExecutionOutcome.Blocked } : current.Transition(RunStage.Failed, safeReason);
                 failed = failed with { FailureCategory = FailureDiagnosis.Category(exception, current.CurrentStage) };
                 if (await store.SaveRunAsync(failed, current.Version, owner, stoppingToken) && (exception is HttpRequestException or TimeoutException or TaskCanceledException) && current.RetriesFor(current.CurrentStage) < current.Policy.MaxRetries)
                 {

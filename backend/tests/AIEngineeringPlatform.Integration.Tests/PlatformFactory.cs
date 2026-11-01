@@ -26,6 +26,7 @@ public sealed class PlatformFactory : WebApplicationFactory<Program>
         builder.UseSetting("OPENAI_DEFAULT_MODEL", "deterministic-test-model");
         builder.ConfigureServices(services =>
         {
+            services.RemoveAll<AIEngineeringPlatform.Application.Dependencies.IDependencyExecutor>(); services.AddSingleton<AIEngineeringPlatform.Application.Dependencies.IDependencyExecutor, DeterministicDependencyExecutor>();
             services.RemoveAll<ILanguageModelProvider>(); services.AddSingleton<ILanguageModelProvider, DeterministicModel>();
             services.RemoveAll<IExecutionSandbox>(); services.AddSingleton<IExecutionSandbox, DeterministicSandbox>();
             services.RemoveAll<ISourceControl>(); services.AddSingleton<ISourceControl, DeterministicSourceControl>();

@@ -12,7 +12,7 @@ public sealed class DockerFactAttribute : FactAttribute
 {
     public DockerFactAttribute() { if (Environment.GetEnvironmentVariable("RUN_LOCAL_EXECUTOR_TESTS") != "1") Skip = "Opt in with RUN_LOCAL_EXECUTOR_TESTS=1 and EXECUTOR_TEST_IMAGE=<pinned image ID>; these tests run real Docker workloads."; }
 }
-public sealed class ExecutorTests
+public sealed partial class ExecutorTests
 {
     [Fact]
     public async Task ReceiptRetentionRejectsNewOperationBeforeWorkspaceAccessButPreservesReplay()

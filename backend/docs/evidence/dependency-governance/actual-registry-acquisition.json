@@ -1,0 +1,46 @@
+{
+  "Fixture": "Disposable local bare Git; no remote repository/model mutation",
+  "RunId": "dependency-source",
+  "ProjectId": "dependency-project",
+  "RequestId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "PlanSha256": "bb58069a6c57793932cf1b5445982145dc9b9cbe27ecb8e21464dbe79f0fc831",
+  "CacheSha256": "14c26088331a2ae5dbed94299296d982ae19d0ae754f6d637125bfa696b82a86",
+  "ResolverImage": "sha256:1db5b24e6061ba6917acdddf05f978e61b5ed5e3413ad621d30dfb1b83c99fde",
+  "Packages": [
+    {
+      "Name": "is-number",
+      "Version": "7.0.0",
+      "Integrity": "sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741\u002BpnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng==",
+      "Source": "https://registry.npmjs.org",
+      "Direct": true,
+      "Development": false,
+      "License": "Unknown",
+      "SecurityStatus": "Unknown \u2014 no vulnerability scan certification",
+      "HasInstallScript": false,
+      "InstallPath": "node_modules/is-number",
+      "Alias": null
+    }
+  ],
+  "PreparationEvidenceId": "local-prepare-dependencies",
+  "ReplayEvidenceId": "local-prepare-dependencies",
+  "SourceRevisionAfterPreparation": "4cc9063da5e47d0906ab2b48f17dd11c7da2d84c4a917206962380f62d27a6ed",
+  "OfflineUseEvidenceId": "local-offline-approved",
+  "ActualExitCode": 0,
+  "Execution": {
+    "Profile": "format",
+    "Command": [
+      "python3",
+      "-c",
+      "import os,subprocess; assert os.environ.get(\u0027OPENAI_API_KEY\u0027) is None; subprocess.run([\u0027npm\u0027,\u0027ci\u0027,\u0027--offline\u0027,\u0027--ignore-scripts\u0027,\u0027--prefix\u0027,\u0027frontend\u0027,\u0027--no-audit\u0027,\u0027--no-fund\u0027],check=True); subprocess.run([\u0027node\u0027,\u0027-e\u0027,\u0022if(!require(\u0027./frontend/node_modules/is-number\u0027)(42))process.exit(1); console.log(\u0027actual offline approved dependency works\u0027)\u0022],check=True)"
+    ],
+    "WorkingDirectory": "/workspace",
+    "Stdout": "\nadded 1 package in 136ms\nactual offline approved dependency works\n",
+    "Stderr": "",
+    "Image": "sha256:1db5b24e6061ba6917acdddf05f978e61b5ed5e3413ad621d30dfb1b83c99fde"
+  },
+  "DefaultHead": "9c0dbe84bc5262fb3056168a2b7aea85546a26fc",
+  "DefaultHeadUnchanged": true,
+  "CrossProjectDenied": true,
+  "UnapprovedPreparationDenied": true,
+  "TamperedLockDenied": true
+}

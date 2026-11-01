@@ -51,16 +51,28 @@ public static class WorkspaceFiles
         }
         return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
-    public static byte[] Archive(string root, int limitMb)
+    public static byte[] Archive(string root, int limitMb, byte[]? dependencyCache = null)
     {
+        if (Enumerate(root, limitMb).Any(x => x.StartsWith(".aep-dependency-cache", StringComparison.Ordinal))) throw new ArgumentException("Repository collides with reserved dependency cache path.");
         using var stream = new MemoryStream();
         using (var writer = new TarWriter(stream, leaveOpen: true))
+        {
             foreach (var path in Enumerate(root, limitMb))
             {
                 using var data = File.OpenRead(Resolve(root, path));
                 var entry = new PaxTarEntry(TarEntryType.RegularFile, path) { DataStream = data, Uid = 65532, Gid = 65532, Mode = UnixFileMode.UserRead | UnixFileMode.UserWrite };
                 writer.WriteEntry(entry);
             }
+            if (dependencyCache != null)
+            {
+                using var cache = new TarReader(new MemoryStream(dependencyCache)); TarEntry? entry;
+                while ((entry = cache.GetNextEntry()) != null)
+                {
+                    var copied = new PaxTarEntry(TarEntryType.RegularFile, ".aep-dependency-cache/" + entry.Name) { DataStream = entry.DataStream, Mode = UnixFileMode.UserRead | UnixFileMode.UserWrite, Uid = 65532, Gid = 65532 };
+                    writer.WriteEntry(copied);
+                }
+            }
+        }
         return stream.ToArray();
     }
     public static void Write(string root, string path, string content)

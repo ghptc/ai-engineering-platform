@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "node tests/e2e-runner.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

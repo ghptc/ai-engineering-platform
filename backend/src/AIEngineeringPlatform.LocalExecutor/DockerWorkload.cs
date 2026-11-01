@@ -6,6 +6,7 @@ namespace AIEngineeringPlatform.LocalExecutor;
 public sealed class DockerWorkload(ExecutorOptions options, ControlledProcess process)
 {
     private bool cleanupFaulted;
+    internal void MarkCleanupFaulted() => cleanupFaulted = true;
     public string OwnershipLabel => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(options.WorkloadOwnershipId ?? options.StateDirectory))).ToLowerInvariant()[..24];
     public async Task RecoverAsync(CancellationToken ct)
     {
@@ -35,7 +36,8 @@ public sealed class DockerWorkload(ExecutorOptions options, ControlledProcess pr
         if (image.ExitCode != 0 || image.Output.Trim() != profile.Image)
             throw new ExecutorFailureException(ExecutorFailureCategory.Infrastructure, request.OperationId, request.Operation, 503, false, ExecutorFailureReason.ImageUnavailable);
         var name = "aep-job-" + Guid.NewGuid().ToString("N");
-        var archive = WorkspaceFiles.Archive(workspace, options.WorkspaceLimitMb);
+        var dependencyCache = await DependencyPreparation.CacheForProfileAsync(options, request, workspace, ct);
+        var archive = WorkspaceFiles.Archive(workspace, options.WorkspaceLimitMb, dependencyCache);
         var memory = Math.Min(profile.MemoryMb, request.MemoryMb);
         var seconds = Math.Min(request.TimeoutSeconds, profile.TimeoutSeconds);
         string[] arguments = ["create", "--pull", "never", "--name", name, "--label", "aep.executor=" + OwnershipLabel, "--label", "aep.run=" + request.RunId,
