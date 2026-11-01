@@ -4,6 +4,7 @@ import { useApi } from "../../components/Common";
 import type { RecordWindow } from "../../hooks/useLiveEvents";
 import { human, parse, text } from "../../lib/engineering";
 import type { Entry, Run } from "../../types";
+import { AgentTasks } from "./AgentTasks";
 import { WorkflowGraph } from "./WorkflowGraph";
 import { ExecutionHistory } from "./ExecutionHistory";
 import { ordered } from "./observability";
@@ -120,6 +121,7 @@ export function ExecutionWorkspace({
           </Button>
         </div>
       )}
+      <AgentTasks key={run.id} runId={run.id} agent={agent} />
       <ExecutionHistory
         run={run}
         selectedAgent={agent}

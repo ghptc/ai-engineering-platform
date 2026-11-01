@@ -18,7 +18,7 @@ public sealed class IndependentAgentDispatchTests
         public Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct)
         { Interlocked.Increment(ref Calls); return invoke?.Invoke(context, ct) ?? Task.FromResult(Result()); }
     }
-    private static ModelExecutionResult Result() => new(new("Source is a proposal until gateway execution and verification", "CONTINUE", [], [], [], [], "Use actual test evidence"), "resp_dispatch_fixture", 10, 10, .01m);
+    private static ModelExecutionResult Result(ToolCall[]? calls = null) => new(new("Source is a proposal until gateway execution and verification", "CONTINUE", [], [], [], calls ?? [], "Use actual test evidence"), "resp_dispatch_fixture", 10, 10, .01m);
     private sealed record Fixture(string Database, MongoPlatformStore Store, MongoAgentDispatchStore Queue, DurableAgentDispatcher Dispatcher, AgentContext Context, IRuntimeContextFrames Frames, IRuntimeInvocationStore Invocations)
     {
         public IndependentAgentTaskProcessor Processor(ILanguageModelProvider provider) => new(Store, Queue, new OpenAIResponsesAgentRuntime(provider, Frames, Invocations));
@@ -28,7 +28,7 @@ public sealed class IndependentAgentDispatchTests
         var db = "aep_dispatch_test_" + Guid.NewGuid().ToString("N");
         var store = new MongoPlatformStore(Connection, db); await store.InitializeAsync(default);
         var project = new Project { Name = "Independent worker fixture" }; await store.SaveProjectAsync(project, null, default);
-        var run = await store.CreateRunAsync(new() { ProjectId = project.Id, ProjectSnapshot = project, AgentRuntimeVersion = 2, CurrentStage = role == AgentRole.BackendEngineer ? RunStage.Implementing : RunStage.GeneratingTests }, default);
+        var run = await store.CreateRunAsync(new() { ProjectId = project.Id, ProjectSnapshot = project, AgentRuntimeVersion = 2, CurrentStage = role switch { AgentRole.BusinessAnalyst => RunStage.Analyzing, AgentRole.Architect => RunStage.Planning, AgentRole.QAEngineer => RunStage.Validating, AgentRole.SecurityEngineer or AgentRole.CodeReviewer => RunStage.Reviewing, AgentRole.TestEngineer => RunStage.GeneratingTests, _ => RunStage.Implementing } }, default);
         run = await store.ClaimAsync("orchestrator-fixture", TimeSpan.FromMinutes(2), default) ?? throw new Exception("Fixture could not claim run");
         var definition = new AgentDefinition(role.ToString(), role, role.ToString(), "Bounded task", "fixture-model", "Use authorized tools", [], ["ReadRepository", "WriteFile"], InputCostPerMillion: 1, OutputCostPerMillion: 2);
         await store.SaveAgentAsync(definition, default);
@@ -49,11 +49,18 @@ public sealed class IndependentAgentDispatchTests
     [Theory]
     [InlineData(AgentRole.BackendEngineer)]
     [InlineData(AgentRole.TestEngineer)]
+    [InlineData(AgentRole.BusinessAnalyst)]
+    [InlineData(AgentRole.Architect)]
+    [InlineData(AgentRole.FrontendEngineer)]
+    [InlineData(AgentRole.QAEngineer)]
+    [InlineData(AgentRole.CodeReviewer)]
+    [InlineData(AgentRole.SecurityEngineer)]
+    [InlineData(AgentRole.InfrastructureEngineer)]
     public async Task SeparateWorkerCompletesBoundedInvocationAndRecoveryDoesNotRecallProvider(AgentRole role)
     {
         var f = await Create(role); using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var pending = f.Dispatcher.ExecuteAsync(f.Context, timeout.Token); var task = await WaitScheduled(f);
-        var provider = new Provider();
+        var provider = new Provider((_, _) => Task.FromResult(Result([new("ReadRepository", JsonSerializer.SerializeToElement(new { }))])));
         // A fresh store/runtime simulates another worker process reading the durable task.
         var queue = new MongoAgentDispatchStore(Connection, f.Database);
         var processor = new IndependentAgentTaskProcessor(f.Store, queue, new OpenAIResponsesAgentRuntime(provider, f.Frames, f.Invocations));
@@ -162,6 +169,50 @@ public sealed class IndependentAgentDispatchTests
         Assert.Equal(1, provider.Calls);
         Assert.False(await f.Processor(provider).ProcessOneAsync(AgentRole.BackendEngineer, "replacement", default));
         Assert.Equal(1, provider.Calls);
+    }
+
+    [Fact]
+    public async Task HistoryUsesScopedStableCursorBoundedSafeDetailsAndPreservesLegacyPayload()
+    {
+        var f = await Create(); using var cancel = new CancellationTokenSource();
+        var pending = f.Dispatcher.ExecuteAsync(f.Context, cancel.Token); var task = await WaitScheduled(f);
+        var collection = new MongoClient(Connection).GetDatabase(f.Database).GetCollection<MongoDB.Bson.BsonDocument>("agent_dispatch_v2");
+        var original = (await collection.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id", task.Id)).FirstAsync())["Data"].AsString;
+        // Model a historical M3 row: additive indexing must leave its original JSON unchanged.
+        await collection.UpdateOneAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id", task.Id), Builders<MongoDB.Bson.BsonDocument>.Update.Unset("CreatedTicks").Unset("RunId").Unset("ProjectId"));
+        var history = new MongoAgentDispatchStore(Connection, f.Database);
+        for (var i = 0; i < 30; i++)
+        {
+            var id = Guid.NewGuid().ToString("N");
+            var request = task.Request with { Task = task.Request.Task with { MessageId = id, Objective = "PASSWORD=fixture-secret Assigned bounded task " + i } };
+            await history.EnqueueAsync(task with { Id = id, Request = request, CreatedAt = task.CreatedAt.AddTicks(i + 1), Deadline = task.CreatedAt.AddMinutes(2) }, default);
+        }
+        var first = await history.HistoryAsync(f.Context.Project.Id, f.Context.Run.Id, null, 25, default);
+        Assert.Equal(25, first.Items.Count); Assert.True(first.HasMore);
+        var second = await history.HistoryAsync(f.Context.Project.Id, f.Context.Run.Id, first.NextBefore, 25, default);
+        Assert.Equal(6, second.Items.Count); Assert.False(second.HasMore);
+        Assert.Empty(first.Items.Select(x => x.Id).Intersect(second.Items.Select(x => x.Id)));
+        Assert.Equal(first.Items.Select(x => x.CreatedAt).OrderDescending(), first.Items.Select(x => x.CreatedAt));
+        var encoded = JsonSerializer.Serialize(first);
+        Assert.DoesNotContain("fixture-secret", encoded); Assert.DoesNotContain("ContextFrame", encoded); Assert.DoesNotContain("SystemInstructions", encoded); Assert.DoesNotContain("Request", encoded);
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => history.HistoryAsync("other-project", f.Context.Run.Id, first.NextBefore, 25, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => history.HistoryAsync(f.Context.Project.Id, f.Context.Run.Id, null, 101, default));
+        Assert.Equal(original, (await collection.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("_id", task.Id)).FirstAsync())["Data"].AsString);
+        cancel.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+    }
+
+    [Fact]
+    public async Task HistoryReflectsExpiredRuntimeCheckpointWithoutWaitingForLongerDispatchDeadline()
+    {
+        var f = await Create(); using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var pending = f.Dispatcher.ExecuteAsync(f.Context, timeout.Token); var task = await WaitScheduled(f);
+        Assert.NotNull(await f.Queue.ClaimAsync(task.Role, "interrupted-worker", default));
+        await f.Invocations.BeginAsync(new(task.Id, RuntimeInvocationIdentity.Fingerprint(task.Request), task.Request.ContextFrameId, "Running", DateTimeOffset.UtcNow.AddSeconds(-10), DateTimeOffset.UtcNow.AddSeconds(-1), "runtime-owner", null, null), default);
+        Assert.True(task.Deadline > DateTimeOffset.UtcNow);
+        var view = Assert.Single((await f.Queue.HistoryAsync(f.Context.Project.Id, f.Context.Run.Id, null, 25, default)).Items);
+        Assert.Equal("OutcomeUnknown", view.Status); Assert.Equal("InvocationDeadlineExpired", view.Failure);
+        await Assert.ThrowsAsync<TaskReconciliationException>(() => pending);
+        Assert.Null(await f.Queue.ClaimNextAsync("replacement-worker", default));
     }
 
 }

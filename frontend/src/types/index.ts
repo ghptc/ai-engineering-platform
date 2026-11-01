@@ -33,6 +33,8 @@ export interface FocusedTask {
   acceptanceCriteria: string[];
   requiresBusinessAnalysis?: boolean;
   requiresArchitecture?: boolean;
+  requiresSecurityReview?: boolean;
+  requiresInfrastructure?: boolean;
   developers?: string[];
 }
 export interface ReworkTransition {
@@ -54,6 +56,7 @@ export interface AgentUsage {
   retriedToolInvocations: number;
 }
 export interface Run {
+  agentRuntimeVersion?: number;
   agentTransitions?: {
     sourceAgent: string | number;
     targetAgent: string | number;
@@ -125,4 +128,24 @@ export interface Settings {
   openAIConfigured: boolean;
   authenticationMode: string;
   mergeRequiresHumanApproval: boolean;
+}
+
+export interface AgentTaskView {
+  id: string;
+  agent: string;
+  stage: string;
+  status: string;
+  objective: string;
+  sourceRevision?: string;
+  attempt: number;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  summary?: string;
+  failure?: string;
+}
+export interface AgentTaskWindow {
+  items: AgentTaskView[];
+  nextBefore?: string;
+  hasMore: boolean;
 }

@@ -21,7 +21,7 @@ export function useApi<T>(
 export function Status({ value }: { value: string }) {
   const color = /Completed|Approved|APPROVE|Succeeded|Healthy/.test(value)
     ? "green"
-    : /Failed|Rejected|REQUEST_CHANGES|Cancelled|Blocked/.test(value)
+    : /Failed|Rejected|REQUEST_CHANGES|Cancelled|Blocked|OutcomeUnknown|Expired/.test(value)
       ? "red"
       : /Paused|Approval|Pending/.test(value)
         ? "gold"

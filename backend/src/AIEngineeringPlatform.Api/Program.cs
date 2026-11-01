@@ -62,6 +62,7 @@ builder.Services.AddOptions<AgentRuntimeOptions>().Configure(o =>
     o.EnableNewRuns = builder.Configuration.GetValue("AGENT_RUNTIME_V2_NEW_RUNS", false);
     o.MaxModelRequests = builder.Configuration.GetValue("AGENT_RUNTIME_TASK_MAX_REQUESTS", 3);
     o.TimeoutSeconds = builder.Configuration.GetValue("AGENT_RUNTIME_TASK_TIMEOUT_SECONDS", 90);
+    o.MaxConcurrentTasks = builder.Configuration.GetValue("AGENT_RUNTIME_MAX_CONCURRENT_TASKS", 2);
 }).Validate(o => o.IsValid, "Invalid independent agent task limits.").ValidateOnStart();
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<AgentRuntimeOptions>>().Value);
 builder.Services.AddSingleton<IAgentDispatchStore>(new MongoAgentDispatchStore(mongo, builder.Configuration["MONGODB_DATABASE"] ?? "ai_engineering_platform"));
@@ -72,9 +73,7 @@ builder.Services.AddHttpClient("github", h => h.Timeout = TimeSpan.FromSeconds(6
 builder.Services.AddOptions<RemoteSandboxOptions>().Configure(o => { o.Provider = builder.Configuration["EXECUTION_SANDBOX_PROVIDER"] ?? "Remote"; o.Endpoint = builder.Configuration["EXECUTION_SANDBOX_ENDPOINT"]; o.Token = builder.Configuration["EXECUTION_SANDBOX_TOKEN_FILE"] is { Length: > 0 } tokenFile ? File.ReadAllText(tokenFile).Trim() : builder.Configuration["EXECUTION_SANDBOX_TOKEN"]; o.SocketPath = builder.Configuration["EXECUTION_SANDBOX_SOCKET_PATH"]; }).Validate(o => o.Provider is "Remote" or "LocalUnix", "Use Remote or LocalUnix sandbox provider.").ValidateOnStart();
 builder.Services.AddSingleton<IExecutionSandbox>(sp => { var options = sp.GetRequiredService<IOptions<RemoteSandboxOptions>>().Value; return options.Provider == "LocalUnix" ? new UnixExecutionSandbox(options.SocketPath ?? "", options.Token ?? "") : new RemoteExecutionSandbox(sp.GetRequiredService<IHttpClientFactory>().CreateClient("sandbox"), options.Endpoint, options.Token); });
 builder.Services.AddSingleton<ISourceControl>(sp => new GitHubSourceControl(sp.GetRequiredService<IHttpClientFactory>().CreateClient("github"), builder.Configuration["GITHUB_APP_ID"], builder.Configuration["GITHUB_APP_PRIVATE_KEY_PATH"], builder.Configuration["GITHUB_WEBHOOK_SECRET"]));
-foreach (var role in Enum.GetValues<AgentRole>()) builder.Services.AddSingleton<IEngineeringAgent>(sp => role is AgentRole.BackendEngineer or AgentRole.TestEngineer
-    ? new DispatchedEngineeringAgent(role, sp.GetRequiredService<ILanguageModelProvider>(), sp.GetRequiredService<DurableAgentDispatcher>())
-    : new EngineeringAgent(role, sp.GetRequiredService<ILanguageModelProvider>()));
+foreach (var role in Enum.GetValues<AgentRole>()) builder.Services.AddSingleton<IEngineeringAgent>(sp => new DispatchedEngineeringAgent(role, sp.GetRequiredService<ILanguageModelProvider>(), sp.GetRequiredService<DurableAgentDispatcher>()));
 builder.Services.AddOptions<SandboxExecutionLimits>().Bind(builder.Configuration.GetSection("SandboxExecution")).Validate(o => o.TimeoutSeconds is >= 1 and <= 120 && o.MemoryMb is >= 128 and <= 4096 && o.CpuLimit is >= 1 and <= 4 && o.OutputLimitBytes is >= 1024 and <= 100000, "Invalid sandbox execution limits.").ValidateOnStart();
 foreach (var name in EngineeringTool.Names) builder.Services.AddSingleton<IAgentTool>(sp => new EngineeringTool(name, sp.GetRequiredService<IExecutionSandbox>(), sp.GetRequiredService<ISourceControl>(), sp.GetRequiredService<IPlatformStore>(), sp.GetRequiredService<IOptions<SandboxExecutionLimits>>().Value));
 builder.Services.AddSingleton<GitHubWebhookProcessor>(); builder.Services.AddSingleton<ConversationResponder>(); builder.Services.AddSingleton<PlatformService>(); builder.Services.AddSingleton<ContextBuilder>(); builder.Services.AddSingleton<EngineeringWorkflow>(); builder.Services.AddSingleton<IExecutionPublisher, SignalRPublisher>();
@@ -196,6 +195,11 @@ api.MapPost("/projects/{id}/runs", async (string id, HttpContext ctx, PlatformSe
 });
 api.MapGet("/projects/{id}/runs", async (string id, IPlatformStore store, int? offset, int? limit, string? status, CancellationToken ct) => new Page<ExecutionRun>(await store.RunsAsync(id == "all" ? null : id, Offset(offset), Limit(limit), ct, status), Offset(offset), Limit(limit)));
 api.MapGet("/runs/{id}", (string id, PlatformService s, CancellationToken ct) => s.RunAsync(id, ct));
+api.MapGet("/runs/{id}/agent-tasks", async (string id, string? before, int? limit, PlatformService service, IAgentDispatchStore dispatches, CancellationToken ct) =>
+{
+    var run = await service.RunAsync(id, ct);
+    return await dispatches.HistoryAsync(run.ProjectId, id, before, limit ?? 25, ct);
+});
 api.MapGet("/runs/{id}/events", (string id, long? after, int? offset, int? limit, IPlatformStore store, CancellationToken ct) => Records("event", null, id, null, after ?? 0, offset, limit, store, ct));
 api.MapGet("/runs/{id}/handoffs", (string id, int? offset, int? limit, IPlatformStore store, CancellationToken ct) => Records("handoff", null, id, null, 0, offset, limit, store, ct));
 api.MapGet("/runs/{id}/artifacts", (string id, int? offset, int? limit, IPlatformStore store, CancellationToken ct) => Records("artifact", null, id, null, 0, offset, limit, store, ct));
