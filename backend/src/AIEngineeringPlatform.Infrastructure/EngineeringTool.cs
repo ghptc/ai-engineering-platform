@@ -3,14 +3,19 @@ using AIEngineeringPlatform.Domain;
 using System.Text.Json;
 namespace AIEngineeringPlatform.Infrastructure;
 
-public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISourceControl source, IPlatformStore store, SandboxExecutionLimits? limits = null) : IAgentTool
+public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISourceControl source, IPlatformStore store, SandboxExecutionLimits? limits = null, AIEngineeringPlatform.Application.Dependencies.DependencyGovernance? dependencies = null) : IAgentTool
 {
     public string Name => name;
-    public static readonly string[] Names = ["ReadRepository", "ReconcileRepository", "SelectBranch", "ListFiles", "SearchCode", "ReadFile", "ApplyPatch", "WriteFile", "PrepareFrontendLock", "RunCommand", "RunTests", "InspectDiff", "CreateBranch", "CreateCommit", "PushBranch", "CreatePullRequest", "ReadPullRequest", "SubmitCodeReview", "ReadProjectMemory", "SaveArtifact"];
+    public static readonly string[] Names = ["ReadRepository", "ReconcileRepository", "SelectBranch", "ListFiles", "SearchCode", "ReadFile", "ApplyPatch", "WriteFile", "PrepareFrontendLock", "PrepareApprovedDependencies", "RequestDependencyApproval", "RunCommand", "RunTests", "InspectDiff", "CreateBranch", "CreateCommit", "PushBranch", "CreatePullRequest", "ReadPullRequest", "SubmitCodeReview", "ReadProjectMemory", "SaveArtifact"];
     public async Task<ToolResult> ExecuteAsync(AgentContext context, JsonElement args, string operationId, CancellationToken ct)
     {
         if (args.ValueKind != JsonValueKind.Object || args.GetRawText().Length > 100000) throw new ArgumentException("Tool arguments must be a bounded JSON object.");
         if (!context.Definition.AllowedTools.Contains(Name)) throw new UnauthorizedAccessException("Tool is not authorized for this role.");
+        if (Name == "RequestDependencyApproval")
+        {
+            var request = await (dependencies ?? throw new ConfigurationException("Dependency governance is not configured.")).RequestAsync(context, args, operationId, ct);
+            return new(true, JsonSerializer.Serialize(new { request.Id, request.Status, request.Version, OwnerAction = "Review the structured dependency approval. No network or package permission is granted by this request.", OnApproval = "Engineering agent must call PrepareApprovedDependencies {requestId} before editing manifests or lockfiles." }), "dependency-" + request.Id);
+        }
         if (args.TryGetProperty("path", out var path))
         {
             var value = path.GetString() ?? "";
@@ -62,7 +67,11 @@ public sealed class EngineeringTool(string name, IExecutionSandbox sandbox, ISou
         SandboxResponse response;
         try
         {
-            response = await sandbox.ExecuteAsync(new(operationId, context.Run.Id, repository, Name, args, TimeoutSeconds: limits?.TimeoutSeconds ?? 60, CpuLimit: limits?.CpuLimit ?? 1, MemoryMb: limits?.MemoryMb ?? 512, OutputLimitBytes: limits?.OutputLimitBytes ?? 100000, Fence: context.Run.Version, LeaseOwner: context.Run.LeaseOwner, MaxTransientRetries: Math.Clamp(context.Run.Policy.MaxRetries, 0, 2)), ct);
+            response = await sandbox.ExecuteAsync(new(operationId, context.Run.Id, repository, Name, args, TimeoutSeconds: limits?.TimeoutSeconds ?? 60, CpuLimit: limits?.CpuLimit ?? 1, MemoryMb: limits?.MemoryMb ?? 512, OutputLimitBytes: limits?.OutputLimitBytes ?? 100000, Fence: context.Run.Version, LeaseOwner: context.Run.LeaseOwner, MaxTransientRetries: Math.Clamp(context.Run.Policy.MaxRetries, 0, 2), ProjectId: context.Project.Id), ct);
+        }
+        catch (ExecutorFailureException failure) when (failure.Reason == ExecutorFailureReason.DependencyApprovalRequired && !failure.OutcomeUnknown)
+        {
+            return new(false, "Dependency approval required before this profile may execute. Inspect frontend/package.json once and emit RequestDependencyApproval with exact names/versions and reasons. Do not retry the build or repeat architecture while waiting; no workload/network/install was started.");
         }
         catch (ExecutorFailureException failure) when (Name == "PrepareFrontendLock" && failure.Operation == Name && failure.OperationId == operationId && failure.Category == ExecutorFailureCategory.InvalidArguments && failure.StatusCode == 400 && !failure.OutcomeUnknown)
         {

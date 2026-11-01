@@ -21,9 +21,10 @@ public sealed class RuntimeMessageContractTests
             Message(EngineeringMessageKind.ReviewResult, new ReviewResultPayload("Unverified", [], ["Missing tests"]), "CodeReviewer"),
             Message(EngineeringMessageKind.ReworkRequest, new ReworkRequestPayload(["BackendEngineer"], "A verified test failed", ["Endpoint behavior"]), "QAEngineer") with { Evidence = [new("operation-one", "operation-one", Revision)] },
             Message(EngineeringMessageKind.ClarificationRequest, new ClarificationRequestPayload("Which scope is authorized?", ["Local", "Remote"], true), "Architect"),
-            Message(EngineeringMessageKind.ApprovalRequest, new ApprovalRequestPayload("Delivery", "decision-artifact", "Review the draft delivery"), "Orchestrator", "Owner")
+            Message(EngineeringMessageKind.ApprovalRequest, new ApprovalRequestPayload("Delivery", "decision-artifact", "Review the draft delivery"), "Orchestrator", "Owner"),
+            Message(EngineeringMessageKind.DependencyApprovalRequest, new DependencyApprovalPayload("dependency-id", DependencyGovernanceTests.Proposal), "Architect")
         };
-        Assert.Equal(8, messages.Length);
+        Assert.Equal(Enum.GetValues<EngineeringMessageKind>().Length, messages.Length);
         foreach (var message in messages)
         {
             var result = EngineeringMessageContract.Parse(EngineeringMessageContract.Serialize(message), message.Sender, new HashSet<string> { message.Recipient });

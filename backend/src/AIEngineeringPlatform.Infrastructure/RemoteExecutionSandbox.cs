@@ -3,8 +3,12 @@ using AIEngineeringPlatform.Application;
 namespace AIEngineeringPlatform.Infrastructure;
 
 public sealed class RemoteSandboxOptions { public string Provider { get; set; } = "Remote"; public string? Endpoint { get; set; } public string? Token { get; set; } public string? SocketPath { get; set; } }
-public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, string? token, bool unixTransport = false) : IExecutionSandbox
+public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, string? token, bool unixTransport = false) : IExecutionSandbox, AIEngineeringPlatform.Application.Dependencies.IDependencyExecutor
 {
+    private AIEngineeringPlatform.Application.Dependencies.IDependencyExecutor Dependencies => Configured ? new DependencyControlClient(http, endpoint!, token!) : throw new ConfigurationException("Secure dependency executor is not configured.");
+    public Task<AIEngineeringPlatform.Domain.DependencyResolution> ResolveAsync(AIEngineeringPlatform.Domain.DependencyApprovalRequest request, AIEngineeringPlatform.Domain.RepositoryConnection repository, CancellationToken ct) => Dependencies.ResolveAsync(request, repository, ct);
+    public Task<AIEngineeringPlatform.Domain.DependencyResolution?> ResolutionAsync(string id, CancellationToken ct) => Dependencies.ResolutionAsync(id, ct);
+    public Task GrantAsync(AIEngineeringPlatform.Domain.DependencyGrant grant, CancellationToken ct) => Dependencies.GrantAsync(grant, ct);
     public bool Configured => Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) && (uri.Scheme == "https" || unixTransport && endpoint == "http://local-executor.invalid/") && string.IsNullOrEmpty(uri.UserInfo) && !string.IsNullOrWhiteSpace(token);
     public async Task<SandboxResponse> ExecuteAsync(SandboxRequest request, CancellationToken ct)
     {
@@ -92,6 +96,7 @@ public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, st
             if (json.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return (category, ExecutorFailureReason.Unspecified);
             if (json.RootElement.TryGetProperty("code", out var code) && code.ValueKind == System.Text.Json.JsonValueKind.String)
             {
+                if (code.GetString() == "dependency_approval_required" && (int)response.StatusCode == 422) return (ExecutorFailureCategory.ProfileRestriction, ExecutorFailureReason.DependencyApprovalRequired);
                 if (code.GetString() == "image_unavailable" && (int)response.StatusCode == 503) return (ExecutorFailureCategory.Infrastructure, ExecutorFailureReason.ImageUnavailable);
                 if (code.GetString() == "profile_target_missing" && (int)response.StatusCode == 422) return (ExecutorFailureCategory.ProfileRestriction, ExecutorFailureReason.ProfileTargetMissing);
                 if (code.GetString() == "operation_retention_limit" && (int)response.StatusCode == 409) return (ExecutorFailureCategory.WorkspaceConflict, ExecutorFailureReason.OperationRetentionLimit);

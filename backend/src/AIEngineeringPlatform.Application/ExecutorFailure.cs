@@ -3,7 +3,7 @@ namespace AIEngineeringPlatform.Application;
 public enum ExecutorFailureCategory { InvalidArguments, Authorization, RepositoryAccess, ProfileRestriction, WorkspaceConflict, Timeout, RateLimited, Infrastructure }
 
 // Contains only locally authored messages and bounded protocol metadata, never remote response text.
-public enum ExecutorFailureReason { Unspecified, ImageUnavailable, ProfileTargetMissing, ReconciliationRequired, OperationRetentionLimit }
+public enum ExecutorFailureReason { Unspecified, ImageUnavailable, ProfileTargetMissing, ReconciliationRequired, OperationRetentionLimit, DependencyApprovalRequired }
 
 public sealed class ExecutorFailureException(ExecutorFailureCategory category, string operationId, string operation, int? statusCode, bool outcomeUnknown, ExecutorFailureReason reason = ExecutorFailureReason.Unspecified)
     : Exception($"Executor {operation} failed ({category}, HTTP {statusCode?.ToString() ?? "unavailable"}, operation {operationId}). {Guidance(category, outcomeUnknown, reason)}")

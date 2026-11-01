@@ -5,6 +5,7 @@ public static class FailureDiagnosis
 {
     public static string Category(Exception error, RunStage stage)
     {
+        if (error is Dependencies.DependencyApprovalPendingException) return "DependencyApprovalRequired";
         if (error is ExecutorEvidenceException evidence) return "Executor" + evidence.Failure.Category;
         if (error is PersistenceFailureException) return "Persistence";
         if (error is ExecutorFailureException executor) return "Executor" + executor.Category;

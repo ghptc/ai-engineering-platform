@@ -1332,3 +1332,12 @@ body {
 .scope-history { width: 100%; min-width: 0; }
 .scope-history > .ant-space-item { min-width: 0; max-width: 100%; }
 .scope-history .ant-btn-link { height: auto; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+
+.dependency-approval { min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--border-color, #354154); }
+.dependency-approval .ant-alert { margin: 8px 0; }
+.dependency-approval .ant-collapse p { overflow-wrap: anywhere; }
+.dependency-approval pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; }
+
+.dependency-approval { max-width: 100%; overflow-wrap: anywhere; }
+.dependency-approval .ant-space, .dependency-approval .ant-space-item { min-width: 0; max-width: 100%; }
+.dependency-approval .ant-typography, .dependency-approval .ant-descriptions-item-content { overflow-wrap: anywhere; word-break: break-word; }

@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json;
 namespace AIEngineeringPlatform.Orchestration;
 
-public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService service, ContextBuilder contextBuilder, IEnumerable<IEngineeringAgent> agents, IEnumerable<IAgentTool> tools, IExecutionSandbox sandbox, InspectionProgressOptions? progressOptions = null)
+public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService service, ContextBuilder contextBuilder, IEnumerable<IEngineeringAgent> agents, IEnumerable<IAgentTool> tools, IExecutionSandbox sandbox, InspectionProgressOptions? progressOptions = null, AIEngineeringPlatform.Application.Dependencies.IDependencyApprovalStore? dependencyApprovals = null)
 {
     private readonly InspectionProgressOptions progress = progressOptions ?? new();
     private static string Key(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
@@ -367,7 +367,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
             var startedAt = DateTimeOffset.UtcNow;
             var toolStarted = System.Diagnostics.Stopwatch.StartNew();
             ToolResult result;
-            try { result = await tools.Single(x => x.Name == name).ExecuteAsync(new(project, run, context, definition), args, operationId, ct); }
+            try { result = await tools.Single(x => x.Name == name).ExecuteAsync(new(project, run, context, definition, suffix.Split('/')[0]), args, operationId, ct); }
             catch (ExecutorFailureException failure)
             {
                 await CheckOwnershipAsync();
@@ -493,6 +493,15 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                     await store.AppendAsync(new() { Id = messageId, Kind = "message", ProjectId = project.Id, RunId = run.Id, ConversationId = conversationId, Name = role.ToString(), Content = JsonSerializer.Serialize(response.Output), Metadata = new() { ["responseId"] = response.ResponseId } }, ct);
                     await service.EventAsync(run, "AgentMessageCreated", JsonSerializer.Serialize(new { messageId, role = role.ToString() }), ct);
                 }
+                if (saved != null && run.ResumeStage == run.CurrentStage && result.ToolCalls.Length == 0 && (result.Decision is "BLOCKED" or "AWAITING_HUMAN_INPUT"))
+                {
+                    // A blocked model proposal is not a completed stage. An explicit owner resume may
+                    // obtain a new bounded assessment, preserving the original checkpoint and usage.
+                    await service.EventAsync(run, "BlockedCheckpointRetainedForOwnerResume", JsonSerializer.Serialize(new { SourceTaskId = taskId, role, OwnerResumeStage = run.ResumeStage, InstructionVersion = definition.InstructionVersion }), ct);
+                    context += "\nOwner-resumed blocked checkpoint " + taskId + " remains preserved and charged. Produce a fresh bounded assessment with current authorized tools. Dependency gaps use RequestDependencyApproval; no permission or success is inferred from the previous summary.";
+                    continue;
+                }
+                if (result.ToolCalls.Length == 1 && result.ToolCalls[0].Name == "RequestDependencyApproval") result = result with { Decision = "CONTINUE" };
                 if (result.Decision is "BLOCKED" or "AWAITING_HUMAN_INPUT") throw new TaskReconciliationException(result.Decision == "BLOCKED" ? ExecutionOutcome.Blocked : ExecutionOutcome.AwaitingHumanInput, result.Summary);
                 if (result.ToolCalls.Length == 0) { await ArtifactAsync(role.ToString(), artifactType, JsonSerializer.Serialize(result)); if (Enum.TryParse<AgentRole>(NextAgent(role), out var target)) RecordTransition(role, target); return result; }
                 var remainingBatch = 0;
@@ -505,7 +514,14 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 for (var i = 0; i < result.ToolCalls.Length; i++)
                 {
                     var call = result.ToolCalls[i];
-                    await ToolAsync(call.Name, taskId + "/tool/" + i, call.Arguments, role);
+                    var completedTool = await ToolAsync(call.Name, taskId + "/tool/" + i, call.Arguments, role);
+                    if (call.Name == "RequestDependencyApproval" && completedTool.Success)
+                    {
+                        using var requested = JsonDocument.Parse(completedTool.Output);
+                        var dependency = await (dependencyApprovals ?? throw new ConfigurationException("Dependency approval store is unavailable.")).GetAsync(requested.RootElement.GetProperty("Id").GetString()!, ct) ?? throw new ConfigurationException("Dependency request is missing.");
+                        if (dependency.Status is DependencyApprovalStatus.Pending or DependencyApprovalStatus.Resolving or DependencyApprovalStatus.ReadyForReview or DependencyApprovalStatus.ResolutionFailed) throw new AIEngineeringPlatform.Application.Dependencies.DependencyApprovalPendingException(dependency.Id);
+                        context += "\nVerified owner dependency decision: " + JsonSerializer.Serialize(new { dependency.Id, dependency.Status, OwnerDecision = dependency.Audit.LastOrDefault(x => x.Action is "Approve" or "Reject" or "RequestChanges"), PlanSha256 = dependency.Resolution?.PlanSha256, Action = dependency.Status == DependencyApprovalStatus.Approved ? "Call PrepareApprovedDependencies {requestId} before changing package manifests or locks; only the approved graph is permitted." : "Propose an alternative within existing permissions. Do not resubmit the rejected package set." });
+                    }
                 }
             }
             throw new InvalidOperationException("Agent tool loop exceeded the configured limit.");

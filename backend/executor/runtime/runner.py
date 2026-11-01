@@ -29,6 +29,10 @@ try:
     # index into bounded tmpfs; never mount the owner's cache or credentials.
     if pathlib.Path('/opt/npm-cache').is_dir():
         shutil.copytree('/opt/npm-cache', '/tmp/npm/_cacache', dirs_exist_ok=True)
+    approved = root / '.aep-dependency-cache'
+    if approved.is_dir():
+        shutil.copytree(approved, '/tmp/npm/_cacache', dirs_exist_ok=True)
+        shutil.rmtree(approved)
     os.umask(0o077)
     os.execvpe(sys.argv[1], sys.argv[1:], os.environ)
 except Exception as error:

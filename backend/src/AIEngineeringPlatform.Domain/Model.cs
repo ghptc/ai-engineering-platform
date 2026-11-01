@@ -1,7 +1,7 @@
 namespace AIEngineeringPlatform.Domain;
 
 public sealed class ExecutionLimitException(string message) : InvalidOperationException(message);
-public enum RunStage { Pending, Analyzing, Planning, PreparingContext, Implementing, GeneratingTests, RunningTests, Validating, Reviewing, AwaitingHumanApproval, PreparingDelivery, Completed, Failed, Paused, Cancelled }
+public enum RunStage { Pending, Analyzing, Planning, PreparingContext, Implementing, GeneratingTests, RunningTests, Validating, Reviewing, AwaitingHumanApproval, PreparingDelivery, Completed, Failed, Paused, Cancelled, AwaitingDependencyApproval }
 public enum ExecutionOutcome { Implemented, AlreadySatisfied, AwaitingHumanInput, Blocked, Failed }
 public enum AgentRole { BusinessAnalyst, Architect, BackendEngineer, FrontendEngineer, TestEngineer, QAEngineer, CodeReviewer, SecurityEngineer, InfrastructureEngineer }
 public enum ArtifactType { Requirements, ArchitectureDecision, DevelopmentContext, CodeDiff, TestReport, ValidationReport, CodeReview, PullRequest, Commit, ExecutionLog, NextContext }
@@ -100,12 +100,12 @@ public sealed record ExecutionRun
     public long Version { get; init; }
     public string? LeaseOwner { get; init; }
     public DateTimeOffset LeaseExpiry { get; init; }
-    public bool IsRunnable => CurrentStage is not (RunStage.Completed or RunStage.Failed or RunStage.Paused or RunStage.Cancelled or RunStage.AwaitingHumanApproval);
+    public bool IsRunnable => CurrentStage is not (RunStage.Completed or RunStage.Failed or RunStage.Paused or RunStage.Cancelled or RunStage.AwaitingHumanApproval or RunStage.AwaitingDependencyApproval);
     public ExecutionRun Transition(RunStage target, string? reason = null)
     {
-        var control = IsRunnable && target is RunStage.Paused or RunStage.Cancelled or RunStage.Failed;
-        var resume = CurrentStage is RunStage.Paused or RunStage.Failed && target == ResumeStage;
-        var cancel = CurrentStage is RunStage.Paused or RunStage.Failed or RunStage.AwaitingHumanApproval && target == RunStage.Cancelled;
+        var control = IsRunnable && target is RunStage.Paused or RunStage.Cancelled or RunStage.Failed or RunStage.AwaitingDependencyApproval;
+        var resume = CurrentStage is RunStage.Paused or RunStage.Failed or RunStage.AwaitingDependencyApproval && target == ResumeStage;
+        var cancel = CurrentStage is RunStage.Paused or RunStage.Failed or RunStage.AwaitingHumanApproval or RunStage.AwaitingDependencyApproval && target == RunStage.Cancelled;
         var forward = (CurrentStage, target) switch
         {
             (RunStage.Pending, RunStage.Planning) when CurrentTask is { RequiresBusinessAnalysis: false, RequiresArchitecture: true } => true,

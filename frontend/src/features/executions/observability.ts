@@ -88,6 +88,7 @@ const stageMap: Record<string, StageId> = {
   PreparingDelivery: "pr",
   Completed: "delivery",
   Paused: "control",
+  AwaitingDependencyApproval: "control",
   Failed: "control",
   Cancelled: "control",
 };
@@ -230,17 +231,23 @@ export function recordedPaths(run: Run, events: Entry[]): PathRecord[] {
 export function nodeStatus(id: StageId, run: Run, entries: Entry[]) {
   if (
     id === "control" &&
-    ["Paused", "Failed", "Cancelled"].includes(run.currentStage)
+    ["Paused", "Failed", "Cancelled", "AwaitingDependencyApproval"].includes(
+      run.currentStage,
+    )
   )
     return run.currentStage;
   const active = stageId(
-    ["Paused", "Failed", "Cancelled"].includes(run.currentStage)
+    ["Paused", "Failed", "Cancelled", "AwaitingDependencyApproval"].includes(
+      run.currentStage,
+    )
       ? run.resumeStage
       : run.currentStage,
   );
   if (active === id) {
     if (id === "delivery" && run.currentStage === "Completed")
       return "Completed · run state";
+    if (run.currentStage === "AwaitingDependencyApproval")
+      return "Awaiting owner dependency approval";
     if (run.currentStage === "Paused")
       return run.failureReason ? "Blocked" : "Paused";
     if (["Failed", "Cancelled", "Completed"].includes(run.currentStage))
@@ -304,7 +311,11 @@ export function stageInterval(entry: Entry, entries: Entry[]) {
     ? {
         ms,
         stage,
-        waiting: ["Paused", "AwaitingHumanApproval"].includes(stage),
+        waiting: [
+          "Paused",
+          "AwaitingHumanApproval",
+          "AwaitingDependencyApproval",
+        ].includes(stage),
         end: end.createdAt,
       }
     : undefined;

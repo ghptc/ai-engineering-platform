@@ -2,7 +2,7 @@ using AIEngineeringPlatform.Application;
 using System.Net.Sockets;
 namespace AIEngineeringPlatform.Infrastructure;
 
-public sealed class UnixExecutionSandbox : IExecutionSandbox, IDisposable
+public sealed class UnixExecutionSandbox : IExecutionSandbox, AIEngineeringPlatform.Application.Dependencies.IDependencyExecutor, IDisposable
 {
     private readonly string socketPath;
     private readonly HttpClient client;
@@ -27,6 +27,10 @@ public sealed class UnixExecutionSandbox : IExecutionSandbox, IDisposable
         // Transport is exclusively the validated Unix socket; this URI is never resolved on a network.
         adapter = new RemoteExecutionSandbox(client, "http://local-executor.invalid/", token, unixTransport: true);
     }
+    private AIEngineeringPlatform.Application.Dependencies.IDependencyExecutor Dependencies => new DependencyControlClient(client, "http://local-executor.invalid/", client.DefaultRequestHeaders.Authorization!.Parameter!);
+    public Task<AIEngineeringPlatform.Domain.DependencyResolution> ResolveAsync(AIEngineeringPlatform.Domain.DependencyApprovalRequest request, AIEngineeringPlatform.Domain.RepositoryConnection repository, CancellationToken ct) => Dependencies.ResolveAsync(request, repository, ct);
+    public Task<AIEngineeringPlatform.Domain.DependencyResolution?> ResolutionAsync(string id, CancellationToken ct) => Dependencies.ResolutionAsync(id, ct);
+    public Task GrantAsync(AIEngineeringPlatform.Domain.DependencyGrant grant, CancellationToken ct) => Dependencies.GrantAsync(grant, ct);
     public bool Configured => File.Exists(socketPath);
     public Task<SandboxResponse> ExecuteAsync(SandboxRequest request, CancellationToken ct) => Configured ? adapter.ExecuteAsync(request, ct) : throw new ConfigurationException("Local executor socket is unavailable. Start the host daemon.");
     public async Task<bool> IsReadyAsync(CancellationToken ct)

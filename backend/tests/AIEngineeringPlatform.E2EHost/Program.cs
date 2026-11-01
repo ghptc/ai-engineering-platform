@@ -42,5 +42,19 @@ if (Environment.GetEnvironmentVariable("E2E_SEED_UX_HISTORY") == "1")
     var seconds = new[] { 0, 5, 6, 10, 12, 72, 75 };
     for (var i = 0; i < transitions.Length; i++) await store.AppendAsync(new() { Id = "ux-retry-event-" + i, Kind = "event", Name = "StageChanged", ProjectId = reworkProject.Id, RunId = pausedRework.Id, Content = transitions[i], CreatedAt = DateTimeOffset.Parse("2026-10-30T12:00:00Z").AddSeconds(seconds[i]) }, default);
 }
+if (Environment.GetEnvironmentVariable("E2E_SEED_UX_HISTORY") == "1")
+{
+    var repository = new RepositoryConnection("test-owner", "aep-fixture", 1);
+    var project = new Project { Id = "ux-dependency-project", Name = "Dependency approval contract fixture", RepositoryConnection = repository, OriginalContext = "Deterministic browser fixture; not live package or model evidence." };
+    await store.SaveProjectAsync(project, null, default);
+    var run = new ExecutionRun { Id = "ux-dependency-run", ProjectId = project.Id, ProjectSnapshot = project, IdempotencyKey = "dependency-ui-fixture", CurrentStage = RunStage.Planning, Cost = 0.2m, ToolCalls = 26, Policy = new(MaxToolCalls: 100) };
+    await store.CreateRunAsync(run.Transition(RunStage.AwaitingDependencyApproval), default);
+    var proposal = new DependencyProposal(1, "npm", "npm", "https://registry.npmjs.org", [new("is-number", "7.0.0", false, "Numeric validation in a deterministic fixture")], [], "Unknown licensing/security review; install scripts prohibited", ["Built-in validation"], ["Backend contracts"], ["Frontend numeric validation"], []);
+    var id = new string('e', 64);
+    var approvals = factory.Services.GetRequiredService<AIEngineeringPlatform.Application.Dependencies.IDependencyApprovalStore>();
+    var request = new DependencyApprovalRequest(id, project.Id, run.Id, RunStage.Planning, AgentRole.Architect, "fixture-origin-task", "fixture-origin-operation", 0, proposal, DependencyApprovalStatus.Resolving, 1, DateTimeOffset.UtcNow, [new("Resolve", "fixture-owner", DateTimeOffset.UtcNow, [], true, "Deterministic prior decision; no network call")], ExecutionDeadline: run.StartedAt.AddMinutes(run.Policy.MaxDurationMinutes));
+    var resolution = await factory.Services.GetRequiredService<AIEngineeringPlatform.Application.Dependencies.IDependencyExecutor>().ResolveAsync(request, repository, default);
+    await approvals.SaveAsync(request with { Status = DependencyApprovalStatus.ReadyForReview, Version = 2, Resolution = resolution }, null, default);
+}
 Console.WriteLine($"E2E fixture ready on http://localhost:{port}; adapters are deterministic test fixtures only.");
 await Task.Delay(Timeout.InfiniteTimeSpan);

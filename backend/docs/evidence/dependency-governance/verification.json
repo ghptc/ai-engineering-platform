@@ -1,0 +1,199 @@
+{
+  "recordedAtUtc": "2026-11-01T14:34:01.585687+00:00",
+  "baseline": "5ae8fc9",
+  "branch": "feat/dependency-governance",
+  "sourceContentSha256": {
+    "backend/executor/managed/dependencies.py": "d20af85f922d10399f5991aacdb1e07bcd6e4f87756e0064ef477ea967b84c16",
+    "backend/executor/managed/runtime.Dockerfile": "1a9a418829960636eaef3acc736081e862327e853b3a2a000ed6ea36a55bd380",
+    "backend/executor/runtime/runner.py": "7ed0c482b4780ccc09e896d9eea073756e1962816deb967010ac044efeeda74b",
+    "backend/src/AIEngineeringPlatform.Agents/EngineeringAgents.cs": "10a506db02bf15e67a5ce8384978e3746cff180564a32ddba6c01000ba1a1ce2",
+    "backend/src/AIEngineeringPlatform.Api/DependencyApprovalEndpoints.cs": "7b6e5f98aba1d5fd804b2b4739959fe0200929705277a813e7c922487dee426a",
+    "backend/src/AIEngineeringPlatform.Api/Program.cs": "39b69e4d0d6c9b2c0e939984dbf1db7db98abf68cb6de083b77c4b4182b94e2d",
+    "backend/src/AIEngineeringPlatform.Application/Contracts.cs": "342498f30aa9b09489fb31a2384c73a31c5ab237681b2b26c3f3a4878182b4c2",
+    "backend/src/AIEngineeringPlatform.Application/Dependencies/DependencyGovernance.cs": "5fa335934031e83558b4dba1dabc756bea6dc5323ab1ec7c6da80c8739e48615",
+    "backend/src/AIEngineeringPlatform.Application/ExecutorFailure.cs": "fdaa1afaea5dcd25cf083388666898621753c90c408fdf36e3209be7d45ad0e3",
+    "backend/src/AIEngineeringPlatform.Application/FailureDiagnosis.cs": "00d571e1de25d59905013fcee6492c1d4ec42ff083c23b34339cdaa9c227a757",
+    "backend/src/AIEngineeringPlatform.Application/InspectionProgress.cs": "c6523caed37ca0d7793795c9a14d813b99a6a5a119ca78da518b15e2470a59d3",
+    "backend/src/AIEngineeringPlatform.Application/RuntimeV2/EngineeringMessages.cs": "d78f5b003c6e783b83a7d2d9a33b498293a1f2909681754604c1787c2b8a923d",
+    "backend/src/AIEngineeringPlatform.Domain/DependencyApproval.cs": "2db74b2484a57f77046781524e2765f2fda87120cea6eb7be2872d6db9236efe",
+    "backend/src/AIEngineeringPlatform.Domain/Model.cs": "17dac424672b0eef1a0171e068e48000774cedcbedcae6606acac5826448ada8",
+    "backend/src/AIEngineeringPlatform.Infrastructure/DependencyControlClient.cs": "7a1ba1e042843a48f513325b2e3b9eb2fed96f25be90093c71c2ea6a2e6a5dff",
+    "backend/src/AIEngineeringPlatform.Infrastructure/EngineeringTool.cs": "079b0ef58d994338c52d7ffe2c726a90dd0644e9bc9d2a0a618e6ce76807d8bd",
+    "backend/src/AIEngineeringPlatform.Infrastructure/MongoDependencyApprovalStore.cs": "47b3aef9ed005199bd20efe16cb5b78583855ca2080b29af2da28a9872ebd9e9",
+    "backend/src/AIEngineeringPlatform.Infrastructure/RemoteExecutionSandbox.cs": "4f88da9e9bb98155d083961ab51bbdfcd596653785f72f01649f5825f7028103",
+    "backend/src/AIEngineeringPlatform.Infrastructure/UnixExecutionSandbox.cs": "448fb15b3d1ede89aa448828e0e845b063f026008db191ee11c74a957e5b6812",
+    "backend/src/AIEngineeringPlatform.LocalExecutor/ApprovedFrontendBootstrap.cs": "9cb5daa91c93f70f5c785441bd6091d286222af867edce518f6d8ae7700b4738",
+    "backend/src/AIEngineeringPlatform.LocalExecutor/DependencyExecutor.cs": "5bc12c6e2cf75a42a50ce31d9d1bbb2c72fe239501db2e3d24527e27346f8f0d",
+    "backend/src/AIEngineeringPlatform.LocalExecutor/DependencyPreparation.cs": "48d27a82d24cc488e240358b270a818bff15df2b9108ca6cd0d9baaae1071aca",
+    "backend/src/AIEngineeringPlatform.LocalExecutor/DockerWorkload.cs": "8a591f1d2104653b7d0761eeb054e06a9e9432c7f38c5c3e44545188c8e2eed3",
+    "backend/src/AIEngineeringPlatform.LocalExecutor/LocalExecutionService.cs": "33e2b5eaa87285744d6149c2954bda58b7c0aa2ca9eacbb2d13ce8f72b636b2c",
+    "backend/src/AIEngineeringPlatform.LocalExecutor/Program.cs": "69b1b53dfff3fe4c178774b74ae60ae8cd6c91a6f5feeaa92defe34b075a36fa",
+    "backend/src/AIEngineeringPlatform.LocalExecutor/WorkspaceFiles.cs": "11d94a594db5a680c9d9e61b2728fcff1e614efee54910c95e604e99787a12ed",
+    "backend/src/AIEngineeringPlatform.Orchestration/EngineeringWorkflow.cs": "742896e2e323756aa4f69f40e6feeec130ac0438df306582419a3cba28d3241b",
+    "backend/src/AIEngineeringPlatform.Worker/EngineeringWorker.cs": "2b01032a47eab0998e2ee411a8ac1cac04cbc3fc47c24ab08526b79d4013f1d5",
+    "backend/tests/AIEngineeringPlatform.Application.Tests/DependencyGovernanceTests.cs": "e3120b324591d187e7d93f528602a7b3e665379c80b6b305afe13f2d4920f8c2",
+    "backend/tests/AIEngineeringPlatform.Application.Tests/RuntimeMessageContractTests.cs": "39091a3ed6b09be620ebd83a93cc183f692b298a1a7ac61fc5fb2b28c120f0ea",
+    "backend/tests/AIEngineeringPlatform.E2EHost/Program.cs": "bd0085ff753d6b266865d42c127ea88fafbcb92368366927ac39131ff90c0af2",
+    "backend/tests/AIEngineeringPlatform.Integration.Tests/DependencyApprovalFlowTests.cs": "2e2919138e049064450dc7afa0fbf054fb0ab1dbe256a1f99c2e98dfa972aed1",
+    "backend/tests/AIEngineeringPlatform.Integration.Tests/DeterministicDependencyExecutor.cs": "ea5d6cd633b9e0542a5167ee51b24cdbae9a612999a157fad3e5c0143ee8071b",
+    "backend/tests/AIEngineeringPlatform.Integration.Tests/PlatformFactory.cs": "0e09a07d90d1b5a2964591666e738724e44e6927ccb711428fe236bf92467191",
+    "backend/tests/AIEngineeringPlatform.LocalExecutor.Tests/DependencyExecutorTests.cs": "a1bf09a49c90f577e871f380faef6f8d023639a5f6d394461a1cc80a69390b14",
+    "backend/tests/AIEngineeringPlatform.LocalExecutor.Tests/ExecutorTests.cs": "384f4fb3afc3aa65c9ab4daca4c5a5614c6e54174e60a8d93631d6d71deb9182",
+    "frontend/package.json": "1c62d59564ed52af1d46fbbfa88a1d057839df2910a0c662a3c938069685472e",
+    "frontend/src/features/dependencies/DependencyApprovals.tsx": "9bd01a237079317b6e876a7f714e28732045cea27021e197656c2ea200787034",
+    "frontend/src/features/executions/observability.ts": "eff046d01771aba3f96eba0f0fe268b7ebcd449ecd3ee888c3cf206456662fec",
+    "frontend/src/features/projects/Workspace.tsx": "6ec58acaf07c822ef7d78e738c7aafe392b87a6e1bfa9da41bbf9578098c4638",
+    "frontend/src/features/reviews/Approvals.tsx": "1424ea50bcaa44165a3fb5ac5be3ceed7627cf5b8a5c9a1f2716294642afb2bc",
+    "frontend/src/lib/engineering.ts": "c54a3bbf85477305950c39dd3167f4210bd664462a29ab386d94119412ed00b5",
+    "frontend/src/styles/app.css": "0cfe45c21b673bb37f9d693adb5efbeb696661c111e552417f0fc0509b9e1f40",
+    "frontend/tests/dependency-approvals.test.tsx": "ae7db92f37e91857ae8147ab481718249e042e83aa2052d27339be5c0464f066",
+    "frontend/tests/e2e-runner.mjs": "ace310c8cf431b3e37ad919218e31fda4bc42b8de175794892081f195324f2a7",
+    "frontend/tests/e2e/dependencies.spec.ts": "4e94087423904651019494a99c2d321051cbfaf54fc7d1b75b370bd5c051248d",
+    "frontend/tests/e2e/requirements.spec.ts": "1c0e662adeb0202defb5261720c281ab2786b75bb8e66ec26c1dd29982acf146"
+  },
+  "backend": [
+    {
+      "assembly": "aiengineeringplatform.application.tests.dll",
+      "report": "/tmp/aep-dependency-evidence/release-regression/_arch_2026-11-01_11_26_51.trx",
+      "sha256": "6f605ff51b2f56a39a573792170481b4e9e34ee934a45b8a2f439db62c70c1ae",
+      "total": 91,
+      "passed": 91,
+      "failed": 0,
+      "skipped": 0,
+      "skippedTests": []
+    },
+    {
+      "assembly": "aiengineeringplatform.architecture.tests.dll",
+      "report": "/tmp/aep-dependency-evidence/release-regression/_arch_2026-11-01_11_26_53.trx",
+      "sha256": "d8ff286d9c965dc90fbf4133da6ef4ffb61e8cabad15ebf2fa714bcd7bc740d8",
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "skippedTests": []
+    },
+    {
+      "assembly": "aiengineeringplatform.domain.tests.dll",
+      "report": "/tmp/aep-dependency-evidence/release-regression/_arch_2026-11-01_11_26_53[1].trx",
+      "sha256": "cb9565aa3ad92f47b522f6994c1f473f924f472bcd653158d4e0302f56b91f35",
+      "total": 19,
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "skippedTests": []
+    },
+    {
+      "assembly": "aiengineeringplatform.integration.tests.dll",
+      "report": "/tmp/aep-dependency-evidence/release-regression/_arch_2026-11-01_11_26_54.trx",
+      "sha256": "28cafcf51ce75f84ac4bcbec1b710ef39837373cf9b5626f955234b2ba00f336",
+      "total": 246,
+      "passed": 244,
+      "failed": 0,
+      "skipped": 2,
+      "skippedTests": [
+        "AIEngineeringPlatform.Integration.Tests.LiveAgentCycleTests.RealAgentsDeliverPullRequestOnlyInAuthorizedDisposableRepository",
+        "AIEngineeringPlatform.Integration.Tests.LiveAgentCycleTests.RealOpenAIProducesStructuredOutputAndUsage"
+      ]
+    },
+    {
+      "assembly": "aiengineeringplatform.localexecutor.tests.dll",
+      "report": "/tmp/aep-dependency-evidence/release-regression/_arch_2026-11-01_11_29_08.trx",
+      "sha256": "023b4c5e20d4d81bcca2be8111cbf6033529d3aeae2a3177dc52e1076d9909e0",
+      "total": 79,
+      "passed": 78,
+      "failed": 0,
+      "skipped": 1,
+      "skippedTests": [
+        "AIEngineeringPlatform.LocalExecutor.Tests.DisposableRepositoryTests.ExistingDisposableDefaultRevisionPassesNodeTestsWithoutNewDelivery"
+      ]
+    }
+  ],
+  "backendTotals": {
+    "total": 437,
+    "passed": 434,
+    "failed": 0,
+    "skipped": 3
+  },
+  "frontend": {
+    "typecheck": "Passed",
+    "unitTests": 62,
+    "unitFailures": 0,
+    "productionBuild": "Passed; existing chunk-size warning"
+  },
+  "playwright": [
+    {
+      "report": "frontend/test-results/reports/batch-1.json",
+      "sha256": "a370ba746d56c1bd80e9f46e9a683669f581e4a3557be8913872556c01fc5131",
+      "stats": {
+        "startTime": "2026-11-01T14:26:15.241Z",
+        "duration": 26053.011,
+        "expected": 5,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      }
+    },
+    {
+      "report": "frontend/test-results/reports/batch-2.json",
+      "sha256": "f3079f369bf42275043a01496e5d638b6ec5cc92b8e43d20c3afc704df346b79",
+      "stats": {
+        "startTime": "2026-11-01T14:26:41.504Z",
+        "duration": 7709.911999999999,
+        "expected": 2,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      }
+    }
+  ],
+  "images": {
+    "platform": "sha256:28f65462d8c3761705bb0cf0ea900475970ef224fc48ee675be3b634feb5fcfb",
+    "executor": "sha256:e32784d25d5fd33662a700802ae2c8ebb31992b52e7289d8f18e1a2a7da3f82b",
+    "runtime": "sha256:1db5b24e6061ba6917acdddf05f978e61b5ed5e3413ad621d30dfb1b83c99fde"
+  },
+  "compose": "config --quiet passed with a non-secret validation-only owner credential placeholder; no deployment",
+  "logsSha256": {
+    "/tmp/aep-dependency-release-build.log": "cc767208c80ae96a02ac4705a256201ff5991298b3e21006f277af8640f32f8f",
+    "/tmp/aep-dependency-release-backend.log": "a5a018453465625045cfffe0d00c7dad223cbc053b1e5e35ea296b63f4957f13",
+    "/tmp/aep-dependency-release-e2e.log": "7ae6a8443acc66db1ad69fe811c9b26ffe3b16da59562a8366ce28651d8fa3b0",
+    "/tmp/aep-dependency-release-frontend-build.log": "a8bde4bce1fe2ccf18c5d6872460baba64caf988e1257f6b1004f64937f46641",
+    "/tmp/aep-dependency-release-platform-image.log": "62ac8d5cf6918d3f79d6c19cc9a635bac536a35a0c997c7a5776fcbc09164ac1",
+    "/tmp/aep-dependency-release-executor-image.log": "213af7d0e5a5bb68e98b30409c209c51cdd23dfc6313082aa82ea4afb64feccf"
+  },
+  "actualRegistryEvidence": {
+    "path": "actual-registry-acquisition.json",
+    "originalReport": "/tmp/aep-dependency-evidence/live-acquisition-20261101T142934591.json",
+    "sha256": "f4be9d5c5caaaebdb1dd0b0e98c1e52667dd4d4ba50da94ab005d2954c2cbc1f"
+  },
+  "screenshotsSha256": {
+    "backend/docs/ux-evidence/dependency-approval-desktop.png": "6fa5b3d1dcbc57e4870b28bacfd2814ca9644658ea8aaed8a76f9a4bea335a37",
+    "backend/docs/ux-evidence/dependency-approval-mobile.png": "2731937d7c61ea2c5216390cc671b901de25b13cea4c267ce10ccb425205de28"
+  },
+  "unverified": [
+    "Live OpenAI/GitHub agent-to-PR certification",
+    "Production migration/deployment",
+    "Physical Mongo/container power-loss injection",
+    "NuGet/Python/private registry adapters",
+    "Vulnerability/signature certification"
+  ],
+  "preserved": [
+    "Owner checkout and Compose overrides",
+    "Production/customer executions and budgets",
+    "Operation receipts and source checkpoints",
+    "Existing runtime images and image pins"
+  ],
+  "commands": [
+    "dotnet build backend/AIEngineeringPlatform.sln --no-restore -m:1",
+    "RUN_LOCAL_EXECUTOR_TESTS=1 RUN_DEPENDENCY_REGISTRY_TESTS=1 EXECUTOR_TEST_IMAGE=<recorded immutable runtime ID> TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27058 dotnet test backend/AIEngineeringPlatform.sln --no-restore --no-build -m:1 --logger trx",
+    "npm run typecheck --prefix frontend",
+    "npm test --prefix frontend",
+    "npm run build --prefix frontend",
+    "E2E_API_PORT=18488 E2E_FRONTEND_PORT=18473 TEST_MONGODB_CONNECTION_STRING=mongodb://127.0.0.1:27058 npm run e2e --prefix frontend",
+    "docker build -t aep-platform:dependency-governance-verified .",
+    "docker build -f backend/executor/managed/Dockerfile -t aep-managed-executor:dependency-governance-verified .",
+    "APPLICATION_OWNER_CREDENTIAL_SECRET=configuration-validation-only docker compose config --quiet"
+  ],
+  "notes": [
+    "Only whitespace changed in the deterministic test adapter after final regression. Production source hashes identify the executed source."
+  ]
+}

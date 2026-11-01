@@ -173,7 +173,9 @@ export function teamState(run: Run, events: Entry[], handoffs: Entry[]) {
   const active =
     start && selected.includes(start.content) && !completed.has(start.content)
       ? start.content
-      : run.currentStage === "Failed" || run.currentStage === "Paused"
+      : ["Failed", "Paused", "AwaitingDependencyApproval"].includes(
+            run.currentStage,
+          )
         ? stageRole[run.resumeStage]
         : currentHandoffs.find(
             (h) => h.status === "Working" && !completed.has(h.name),
@@ -188,24 +190,26 @@ export function teamState(run: Run, events: Entry[], handoffs: Entry[]) {
     state:
       run.currentStage === "Failed" && role === active
         ? "Failed"
-        : run.currentStage === "Paused" && role === active
-          ? "Blocked"
-          : run.currentStage === "AwaitingHumanApproval" &&
-              role === active &&
-              !completed.has(role)
+        : run.currentStage === "AwaitingDependencyApproval" && role === active
+          ? "Awaiting owner approval"
+          : run.currentStage === "Paused" && role === active
             ? "Blocked"
-            : completed.has(role)
-              ? "Completed"
-              : role === active && !terminal.has(run.currentStage)
-                ? tool?.name === "ToolInvocationStarted"
-                  ? "Waiting for tool"
-                  : "Working"
-                : run.currentStage === "Pending"
-                  ? "Queued"
-                  : run.currentStage === "Cancelled" ||
-                      run.currentStage === "Completed"
-                    ? "Idle"
-                    : "Queued",
+            : run.currentStage === "AwaitingHumanApproval" &&
+                role === active &&
+                !completed.has(role)
+              ? "Blocked"
+              : completed.has(role)
+                ? "Completed"
+                : role === active && !terminal.has(run.currentStage)
+                  ? tool?.name === "ToolInvocationStarted"
+                    ? "Waiting for tool"
+                    : "Working"
+                  : run.currentStage === "Pending"
+                    ? "Queued"
+                    : run.currentStage === "Cancelled" ||
+                        run.currentStage === "Completed"
+                      ? "Idle"
+                      : "Queued",
   }));
 }
 export function githubUrl(value: unknown): string | undefined {
