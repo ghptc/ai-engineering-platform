@@ -26,6 +26,8 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   executor:
+    # Match the IPC directory group without granting CAP_FSETID or socket access to others.
+    user: "0:1654"
     image: aep-managed-executor:local
     build:
       context: .
