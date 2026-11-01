@@ -58,7 +58,7 @@ public static class InspectionProgress
         return repeated;
     }
 
-    private static bool IsInspection(string name) => name is "ReadRepository" or "ReconcileRepository" or "ListFiles" or "ReadFile" or "SearchCode" or "InspectDiff" or "ReadProjectMemory" or "ReadPullRequest";
+    private static bool IsInspection(string name) => name is "ReadRepository" or "ReconcileRepository" or "ListFiles" or "ReadFile" or "SearchCode" or "InspectDiff" or "ReadProjectMemory" or "ReadPullRequest" or "PrepareFrontendLock";
     private static string Canonical(JsonElement value) => value.ValueKind switch
     {
         JsonValueKind.Object => "{" + string.Join(",", value.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal).Select(x => JsonSerializer.Serialize(x.Name) + ":" + Canonical(x.Value))) + "}",

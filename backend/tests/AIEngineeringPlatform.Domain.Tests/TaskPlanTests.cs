@@ -4,6 +4,15 @@ namespace AIEngineeringPlatform.Domain.Tests;
 public class TaskPlanTests
 {
     [Fact]
+    public void AdditionalSpecialistsRequireExplicitSelectionAndPreserveLegacyRoleIdentities()
+    {
+        Assert.Equal(6, (int)AgentRole.CodeReviewer); Assert.Equal(7, (int)AgentRole.SecurityEngineer); Assert.Equal(8, (int)AgentRole.InfrastructureEngineer);
+        var task = new EngineeringTask("Container readiness", "Implement authorized repository configuration", ["Configuration is reviewed"], RequiresInfrastructure: true, RequiresSecurityReview: true);
+        Assert.Equal(new[] { AgentRole.InfrastructureEngineer, AgentRole.BackendEngineer, AgentRole.TestEngineer, AgentRole.QAEngineer, AgentRole.SecurityEngineer, AgentRole.CodeReviewer }, task.Plan);
+        Assert.DoesNotContain(AgentRole.InfrastructureEngineer, new ExecutionRun().SelectedAgents);
+        Assert.DoesNotContain(AgentRole.SecurityEngineer, new ExecutionRun().SelectedAgents);
+    }
+    [Fact]
     public void SimpleTaskSkipsDesignAndKeepsValidationSpecialists()
     {
         var task = new EngineeringTask("Answer", "Change answer to 2", ["Tests assert 2"]);
@@ -16,7 +25,7 @@ public class TaskPlanTests
     public void DesignTaskIncludesBothDesignSpecialists()
     {
         var task = new EngineeringTask("New app", "Define and implement", ["Approved requirements"], true, true, [AgentRole.BackendEngineer, AgentRole.FrontendEngineer]);
-        Assert.Equal(Enum.GetValues<AgentRole>(), task.Plan);
+        Assert.Equal(new[] { AgentRole.BusinessAnalyst, AgentRole.Architect, AgentRole.BackendEngineer, AgentRole.FrontendEngineer, AgentRole.TestEngineer, AgentRole.QAEngineer, AgentRole.CodeReviewer }, task.Plan);
     }
     [Fact]
     public void AdvancingTaskPreservesCumulativeBudgetsAndRequiresDeliveryStage()

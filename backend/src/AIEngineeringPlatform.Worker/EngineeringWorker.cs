@@ -12,6 +12,9 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var initialized = false;
+        var concurrency = configuration.GetValue("ENGINEERING_CONCURRENT_RUNS", 1);
+        if (concurrency is < 1 or > 4) throw new InvalidOperationException("Engineering concurrency must be 1–4 isolated executions.");
+        var active = new List<Task>();
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -19,10 +22,12 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                 if (!initialized)
                 {
                     await store.InitializeAsync(stoppingToken);
-                    if ((await store.AgentsAsync(stoppingToken)).Count == 0) foreach (var definition in AgentCatalog.Defaults(configuration["OPENAI_DEFAULT_MODEL"] ?? "")) await store.SaveAgentAsync(definition, stoppingToken);
+                    var existingRoles = (await store.AgentsAsync(stoppingToken)).Select(x => x.Role).ToHashSet();
+                    foreach (var definition in AgentCatalog.Defaults(configuration["OPENAI_DEFAULT_MODEL"] ?? ""))
+                        if (!existingRoles.Contains(definition.Role)) await store.SaveAgentAsync(definition, stoppingToken);
                     foreach (var definition in await store.AgentsAsync(stoppingToken))
                     {
-                        var addedTools = definition.Role is AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.TestEngineer
+                        var addedTools = definition.Role is AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.TestEngineer or AgentRole.InfrastructureEngineer
                             ? new[] { "RunCommand", "RunTests", "ReconcileRepository", "ReadPullRequest", "SelectBranch" }
                             : new[] { "ReconcileRepository", "ReadPullRequest" };
                         var tools = definition.AllowedTools.Union(addedTools).ToArray();
@@ -43,49 +48,66 @@ public sealed class EngineeringWorker(IPlatformStore store, EngineeringWorkflow 
                         await store.AppendAsync(new() { Kind = "instructionVersion", Name = definition.Id, Content = System.Text.Json.JsonSerializer.Serialize(definition), Metadata = new() { ["migration"] = "greenfield-implementation-handoff" } }, stoppingToken);
                         await store.SaveAgentAsync(definition with { SystemInstructions = definition.SystemInstructions + AgentCatalog.ImplementationInstructions, InstructionVersion = definition.InstructionVersion + 1 }, stoppingToken);
                     }
+                    foreach (var definition in await store.AgentsAsync(stoppingToken))
+                    {
+                        var tools = definition.Role is AgentRole.FrontendEngineer or AgentRole.TestEngineer ? definition.AllowedTools.Union(new[] { "PrepareFrontendLock" }).ToArray() : definition.AllowedTools;
+                        if (tools.Length == definition.AllowedTools.Length && definition.SystemInstructions.Contains(AgentCatalog.ApprovedBootstrapInstructions, StringComparison.Ordinal)) continue;
+                        await store.AppendAsync(new() { Kind = "instructionVersion", Name = definition.Id, Content = System.Text.Json.JsonSerializer.Serialize(definition), Metadata = new() { ["migration"] = "approved-greenfield-bootstrap" } }, stoppingToken);
+                        await store.SaveAgentAsync(definition with { AllowedTools = tools, SystemInstructions = definition.SystemInstructions + AgentCatalog.ApprovedBootstrapInstructions, InstructionVersion = definition.InstructionVersion + 1 }, stoppingToken);
+                    }
                     initialized = true;
                 }
                 foreach (var entry in await store.FlushOutboxAsync(stoppingToken)) await publisher.PublishAsync(entry, stoppingToken);
                 await webhooks.ProcessPendingAsync(stoppingToken);
                 await ReconcileApprovalsAsync(stoppingToken);
+                foreach (var finished in active.Where(x => x.IsCompleted).ToArray()) { active.Remove(finished); await finished; }
+                if (active.Count >= concurrency) { await Task.Delay(250, stoppingToken); continue; }
                 var owner = Guid.NewGuid().ToString("N");
                 var run = await store.ClaimAsync(owner, TimeSpan.FromMinutes(2), stoppingToken);
                 if (run == null) { await Task.Delay(1000, stoppingToken); continue; }
-                using var execution = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                var heartbeat = HeartbeatAsync(run.Id, owner, execution);
-                try { await workflow.ProcessAsync(run, owner, execution.Token); }
-                catch (ConcurrencyException) { logger.LogInformation("Execution {RunId} ownership or control state changed", run.Id); }
-                catch (OperationCanceledException) when (execution.IsCancellationRequested) { }
-                catch (Exception exception)
-                {
-                    var executorFailure = exception as ExecutorFailureException ?? (exception as ExecutorEvidenceException)?.Failure;
-                    var persistenceFailure = exception as PersistenceFailureException ?? (exception as ExecutorEvidenceException)?.PersistenceFailure;
-                    if (executorFailure != null)
-                        logger.LogWarning("Executor failure for run {RunId}: operation {OperationId}, HTTP {HttpStatus}, category {Category}, reason {Reason}, outcomeUnknown {OutcomeUnknown}; evidencePersistenceFailed {EvidencePersistenceFailed}", run.Id, executorFailure.OperationId, executorFailure.StatusCode, executorFailure.Category, executorFailure.Reason, executorFailure.OutcomeUnknown, exception is ExecutorEvidenceException);
-                    if (persistenceFailure != null)
-                        logger.LogWarning("Persistence failure for run {RunId}: code {Code}, index {Index}, record {RecordId}, kind {Kind}, identityConflict {IdentityConflict}", run.Id, persistenceFailure.Code, persistenceFailure.Index, persistenceFailure.RecordId, persistenceFailure.RecordKind, persistenceFailure.IdentityConflict);
-                    logger.LogWarning("Execution {RunId} stage {Stage} failed with {ErrorType} at {Source}", run.Id, run.Status, exception.GetType().Name, exception.StackTrace);
-                    var current = await store.GetRunAsync(run.Id, stoppingToken);
-                    if (current is { IsRunnable: true } && current.LeaseOwner == owner)
-                    {
-                        var safeReason = exception is ExecutorFailureException or ExecutorEvidenceException or PersistenceFailureException or ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : "Stage failed; inspect operational diagnostics using the run identifier.";
-                        if (exception is TaskReconciliationException { Outcome: ExecutionOutcome.AwaitingHumanInput } && !safeReason.StartsWith("Human clarification required:", StringComparison.Ordinal)) safeReason = "Human clarification required: " + safeReason;
-                        var failed = exception is TaskReconciliationException reconciliation ? current.Transition(RunStage.Paused, safeReason) with { Outcome = reconciliation.Outcome } : exception is ExecutorFailureException or ExecutorEvidenceException or PersistenceFailureException or ConfigurationException or ExecutionLimitException ? current.Transition(RunStage.Paused, safeReason) with { Outcome = ExecutionOutcome.Blocked } : current.Transition(RunStage.Failed, safeReason);
-                        failed = failed with { FailureCategory = FailureDiagnosis.Category(exception, current.CurrentStage) };
-                        if (await store.SaveRunAsync(failed, current.Version, owner, stoppingToken) && (exception is HttpRequestException or TimeoutException or TaskCanceledException) && current.RetriesFor(current.CurrentStage) < current.Policy.MaxRetries)
-                        {
-                            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, current.RetriesFor(current.CurrentStage) + 1)), stoppingToken);
-                            var retryable = await store.GetRunAsync(run.Id, stoppingToken);
-                            if (retryable?.CurrentStage == RunStage.Failed && retryable.LeaseOwner == owner && retryable.Version == current.Version + 1) await store.SaveRunAsync(retryable.Transition(retryable.ResumeStage), retryable.Version, owner, stoppingToken);
-                        }
-                    }
-                }
-                finally { execution.Cancel(); await heartbeat; await store.ReleaseLeaseAsync(run.Id, owner, stoppingToken); }
+                active.Add(ProcessRunAsync(run, owner, stoppingToken));
+
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception exception) { logger.LogWarning("Worker unavailable: {ErrorType}", exception.GetType().Name); await Task.Delay(5000, stoppingToken); }
         }
+        try { await Task.WhenAll(active); }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
     }
+    private async Task ProcessRunAsync(ExecutionRun run, string owner, CancellationToken stoppingToken)
+    {
+        using var execution = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        var heartbeat = HeartbeatAsync(run.Id, owner, execution);
+        try { await workflow.ProcessAsync(run, owner, execution.Token); }
+        catch (ConcurrencyException) { logger.LogInformation("Execution {RunId} ownership or control state changed", run.Id); }
+        catch (OperationCanceledException) when (execution.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            var executorFailure = exception as ExecutorFailureException ?? (exception as ExecutorEvidenceException)?.Failure;
+            var persistenceFailure = exception as PersistenceFailureException ?? (exception as ExecutorEvidenceException)?.PersistenceFailure;
+            if (executorFailure != null)
+                logger.LogWarning("Executor failure for run {RunId}: operation {OperationId}, HTTP {HttpStatus}, category {Category}, reason {Reason}, outcomeUnknown {OutcomeUnknown}; evidencePersistenceFailed {EvidencePersistenceFailed}", run.Id, executorFailure.OperationId, executorFailure.StatusCode, executorFailure.Category, executorFailure.Reason, executorFailure.OutcomeUnknown, exception is ExecutorEvidenceException);
+            if (persistenceFailure != null)
+                logger.LogWarning("Persistence failure for run {RunId}: code {Code}, index {Index}, record {RecordId}, kind {Kind}, identityConflict {IdentityConflict}", run.Id, persistenceFailure.Code, persistenceFailure.Index, persistenceFailure.RecordId, persistenceFailure.RecordKind, persistenceFailure.IdentityConflict);
+            logger.LogWarning("Execution {RunId} stage {Stage} failed with {ErrorType} at {Source}", run.Id, run.Status, exception.GetType().Name, exception.StackTrace);
+            var current = await store.GetRunAsync(run.Id, stoppingToken);
+            if (current is { IsRunnable: true } && current.LeaseOwner == owner)
+            {
+                var safeReason = exception is ExecutorFailureException or ExecutorEvidenceException or PersistenceFailureException or ConfigurationException or InvalidOperationException or ArgumentException ? exception.Message : "Stage failed; inspect operational diagnostics using the run identifier.";
+                if (exception is TaskReconciliationException { Outcome: ExecutionOutcome.AwaitingHumanInput } && !safeReason.StartsWith("Human clarification required:", StringComparison.Ordinal)) safeReason = "Human clarification required: " + safeReason;
+                var failed = exception is TaskReconciliationException reconciliation ? current.Transition(RunStage.Paused, safeReason) with { Outcome = reconciliation.Outcome } : exception is ExecutorFailureException or ExecutorEvidenceException or PersistenceFailureException or ConfigurationException or ExecutionLimitException ? current.Transition(RunStage.Paused, safeReason) with { Outcome = ExecutionOutcome.Blocked } : current.Transition(RunStage.Failed, safeReason);
+                failed = failed with { FailureCategory = FailureDiagnosis.Category(exception, current.CurrentStage) };
+                if (await store.SaveRunAsync(failed, current.Version, owner, stoppingToken) && (exception is HttpRequestException or TimeoutException or TaskCanceledException) && current.RetriesFor(current.CurrentStage) < current.Policy.MaxRetries)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, current.RetriesFor(current.CurrentStage) + 1)), stoppingToken);
+                    var retryable = await store.GetRunAsync(run.Id, stoppingToken);
+                    if (retryable?.CurrentStage == RunStage.Failed && retryable.LeaseOwner == owner && retryable.Version == current.Version + 1) await store.SaveRunAsync(retryable.Transition(retryable.ResumeStage), retryable.Version, owner, stoppingToken);
+                }
+            }
+        }
+        finally { execution.Cancel(); await heartbeat; await store.ReleaseLeaseAsync(run.Id, owner, stoppingToken); }
+    }
+
     private async Task HeartbeatAsync(string id, string owner, CancellationTokenSource execution)
     {
         try

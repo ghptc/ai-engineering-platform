@@ -10,9 +10,9 @@ public sealed class DeterministicModel(bool alreadySatisfied = false) : ILanguag
     {
         ct.ThrowIfCancellationRequested();
         var role = context.Definition.Role;
-        var file = role switch { AgentRole.BackendEngineer => "backend/Feature.cs", AgentRole.FrontendEngineer => "frontend/Feature.tsx", _ => "backend/FeatureTests.cs" };
+        var file = role switch { AgentRole.BackendEngineer => "backend/Feature.cs", AgentRole.FrontendEngineer => "frontend/Feature.tsx", AgentRole.InfrastructureEngineer => "infrastructure/fixture.yaml", _ => "backend/FeatureTests.cs" };
         ToolCall[] calls = [];
-        if (!alreadySatisfied && role is AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.TestEngineer && !context.Context.Contains("written " + file)) calls = [new("WriteFile", JsonSerializer.SerializeToElement(new { path = file, content = "// deterministic test fixture: " + role + " task " + context.Run.TaskIndex }))];
+        if (!alreadySatisfied && role is AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.TestEngineer or AgentRole.InfrastructureEngineer && !context.Context.Contains("written " + file)) calls = [new("WriteFile", JsonSerializer.SerializeToElement(new { path = file, content = "// deterministic test fixture: " + role + " task " + context.Run.TaskIndex }))];
         var evidence = System.Text.RegularExpressions.Regex.Matches(context.Context, "fake-evidence-[a-f0-9]{64}").Select(x => x.Value).Distinct().ToArray();
         var tests = evidence.LastOrDefault() ?? "test-fixture-evidence";
         // Resolve the required-test report from the persisted context, whose JSON escapes still preserve evidence ids.
@@ -27,7 +27,7 @@ public sealed class DeterministicModel(bool alreadySatisfied = false) : ILanguag
         var requirements = role == AgentRole.BusinessAnalyst ? new[] { new RequirementProposal("Fixture requirement", "Deterministic test scenario", "As an owner, I need traceable delivery.", ["Persist and verify the fixture"], 1, [], false) } : [];
         var decisions = role == AgentRole.Architect ? new[] { new ArchitectureDecision("Test architecture", "Test-only context", "Use deterministic adapters", "External calls are not verified", "") } : [];
         var checks = role == AgentRole.QAEngineer ? context.Run.RequirementIds.Select(id => new QualityCheck(id, "Fixture test execution", true, tests, "Deterministic test evidence only")).ToArray() : [];
-        var output = new AgentResult("Deterministic test fixture: " + role, role is AgentRole.QAEngineer or AgentRole.CodeReviewer ? "APPROVE" : "CONTINUE", ["Persist and verify the fixture"], evidence, ["This is test-only simulated model output."], calls, "Next task must use verified artifacts.", requirements, [], checks, [], decisions, Planning: new([], [], [], "Write fixture files", "Test-only adapters; external dependencies unverified", "Deterministic required-test evidence"));
+        var output = new AgentResult("Deterministic test fixture: " + role, role is AgentRole.QAEngineer or AgentRole.CodeReviewer or AgentRole.SecurityEngineer ? "APPROVE" : "CONTINUE", ["Persist and verify the fixture"], evidence, ["This is test-only simulated model output."], calls, "Next task must use verified artifacts.", requirements, [], checks, [], decisions, Planning: new([], [], [], "Write fixture files", "Test-only adapters; external dependencies unverified", "Deterministic required-test evidence"));
         return Task.FromResult(new ModelExecutionResult(output, "fake-response-" + role, 100, 50, 0.001m));
     }
 }
@@ -43,12 +43,12 @@ public sealed class DeterministicSandbox(bool alreadySatisfied = false, bool exi
         ct.ThrowIfCancellationRequested();
         return Task.FromResult(results.GetOrAdd(request.OperationId, _ =>
         {
-            Operations.Add(request.Operation);
+            lock (Operations) Operations.Add(request.Operation);
             var output = "test-only simulated " + request.Operation;
             if (request.Operation == "WriteFile") { var path = request.Arguments.GetProperty("path").GetString()!; files[request.RunId + "/" + path] = request.Arguments.GetProperty("content").GetString()!; output = "written " + path; }
             if (request.Operation == "InspectDiff") output = string.Join('\n', files.Where(x => x.Key.StartsWith(request.RunId + "/")).OrderBy(x => x.Key).Select(x => "diff --git a/" + x.Key + " b/" + x.Key + "\n+" + x.Value));
             if (request.Operation == "ReadRepository") output = JsonSerializer.Serialize(new { HasSourceChanges = !alreadySatisfied, SelectedBranch = existingPr ? "engineering/previous" : null, HeadCommit = new string('a', 40), TestProfiles = new[] { "node" } });
-            if (request.Operation == "RunTests") { tested = true; output = "TEST FIXTURE ONLY: simulated 3 passed, 0 failed"; }
+            if (request.Operation == "RunTests") { tested = true; output = "TEST FIXTURE ONLY: simulated 3 passed, 0 failed\nExecutor evidence: tests=3; exit=0; timeout=False; outputLimit=False"; }
             var revision = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join('\n', files.Where(x => x.Key.StartsWith(request.RunId + "/")).OrderBy(x => x.Key).Select(x => x.Key + "=" + x.Value)))));
             if (tested && revisionMismatch && request.Operation == "InspectDiff") revision = "changed-after-tests";
             return new(true, output, "fake-evidence-" + request.OperationId, 0, request.RunId, revision);

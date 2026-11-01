@@ -15,6 +15,7 @@ public sealed class PlatformService(IPlatformStore store, IExecutionPublisher pu
         foreach (var task in tasks)
         {
             task.Validate();
+            if ((task.RequiresSecurityReview || task.RequiresInfrastructure) && runtimeOptions?.EnableNewRuns != true) throw new ConfigurationException("Specialist security/infrastructure tasks require the V2 runtime for new runs.");
             foreach (var id in task.RequirementIds ?? [])
                 if ((await store.GetRecordAsync("requirement", id, ct))?.ProjectId != projectId) throw new ArgumentException("Task requirements must belong to this project.");
             foreach (var id in task.HumanInstructionIds ?? [])

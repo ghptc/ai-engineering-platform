@@ -9,14 +9,19 @@ public sealed class AgentRuntimeOptions
     public bool EnableNewRuns { get; set; }
     public int MaxModelRequests { get; set; } = 3;
     public int TimeoutSeconds { get; set; } = 90;
-    public bool IsValid => MaxModelRequests is >= 1 and <= 10 && TimeoutSeconds is >= 5 and <= 300;
+    public int MaxConcurrentTasks { get; set; } = 2;
+    public bool IsValid => MaxModelRequests is >= 1 and <= 10 && TimeoutSeconds is >= 5 and <= 300 && MaxConcurrentTasks is >= 1 and <= 4;
 }
-public sealed record AgentDispatch(string Id, AgentRole Role, AgentRuntimeRequest Request, string Status, DateTimeOffset CreatedAt, DateTimeOffset Deadline, string? Worker = null, ModelExecutionResult? Result = null, string? Failure = null);
+public sealed record AgentDispatch(string Id, AgentRole Role, AgentRuntimeRequest Request, string Status, DateTimeOffset CreatedAt, DateTimeOffset Deadline, string? Worker = null, ModelExecutionResult? Result = null, string? Failure = null, DateTimeOffset? StartedAt = null, DateTimeOffset? CompletedAt = null);
+public sealed record AgentTaskView(string Id, string Agent, string Stage, string Status, string Objective, string? SourceRevision, int Attempt, DateTimeOffset CreatedAt, DateTimeOffset? StartedAt, DateTimeOffset? CompletedAt, string? Summary, string? Failure);
+public sealed record AgentTaskWindow(IReadOnlyList<AgentTaskView> Items, string? NextBefore, bool HasMore);
 public interface IAgentDispatchStore
 {
     Task<AgentDispatch?> GetAsync(string id, CancellationToken ct);
+    Task<AgentTaskWindow> HistoryAsync(string projectId, string runId, string? before, int limit, CancellationToken ct);
     Task<AgentDispatch> EnqueueAsync(AgentDispatch task, CancellationToken ct);
     Task<AgentDispatch?> ClaimAsync(AgentRole role, string worker, CancellationToken ct);
+    Task<AgentDispatch?> ClaimNextAsync(string worker, CancellationToken ct);
     Task FinishAsync(string id, string worker, ModelExecutionResult? result, string? failure, CancellationToken ct);
 }
 
@@ -25,7 +30,7 @@ public sealed class DurableAgentDispatcher(IPlatformStore store, IAgentDispatchS
 {
     public async Task<ModelExecutionResult> ExecuteAsync(AgentContext context, CancellationToken ct)
     {
-        if (context.Run.AgentRuntimeVersion != 2 || context.Definition.Role is not (AgentRole.BackendEngineer or AgentRole.TestEngineer) || string.IsNullOrWhiteSpace(context.InvocationId)) throw new InvalidOperationException("Independent dispatch requires an authorized V2 role and stable invocation identity.");
+        if (context.Run.AgentRuntimeVersion != 2 || !Enum.IsDefined(context.Definition.Role) || string.IsNullOrWhiteSpace(context.InvocationId)) throw new InvalidOperationException("Independent dispatch requires an authorized V2 role and stable invocation identity.");
         var id = PersistedRuntimeContextFrames.Hash(context.Run.Id + "/" + context.InvocationId + "/" + context.Run.RetriesFor(context.Run.CurrentStage));
         var existing = await dispatches.GetAsync(id, ct);
         if (existing == null)
@@ -35,7 +40,13 @@ public sealed class DurableAgentDispatcher(IPlatformStore store, IAgentDispatchS
             var remaining = context.Run.Policy.MaxBudgetUsd - context.Run.Cost;
             if (remaining <= 0 || context.Run.ToolCalls >= context.Run.Policy.MaxToolCalls) throw new ExecutionLimitException("Independent task has no remaining execution allowance.");
             var frame = await frames.SaveAsync(context.Project.Id, context.Run.Id, id, context.Context, ct);
-            var purpose = context.Definition.Role == AgentRole.TestEngineer ? EngineeringTaskPurpose.Verification : EngineeringTaskPurpose.Implementation;
+            var purpose = context.Definition.Role switch
+            {
+                AgentRole.BusinessAnalyst or AgentRole.Architect => EngineeringTaskPurpose.Planning,
+                AgentRole.QAEngineer => EngineeringTaskPurpose.Verification,
+                AgentRole.CodeReviewer or AgentRole.SecurityEngineer => EngineeringTaskPurpose.Review,
+                _ => EngineeringTaskPurpose.Implementation
+            };
             // Bounded invocation, not a declaration that the feature is implemented or verified.
             var budget = new AgentExecutionBudget(limits.MaxModelRequests, context.Run.Policy.MaxToolCalls - context.Run.ToolCalls, context.Definition.MaxInputTokens, context.Definition.MaxOutputTokens, limits.TimeoutSeconds, remaining);
             var payload = new EngineeringTaskPayload(context.Definition.Role, purpose, purpose == EngineeringTaskPurpose.Implementation, context.Definition.AllowedTools, budget, [], frame.Id);
@@ -81,10 +92,12 @@ public sealed class DurableAgentDispatcher(IPlatformStore store, IAgentDispatchS
 // One bounded model operation per claim. Repository tools remain exclusively in EngineeringWorkflow.
 public sealed class IndependentAgentTaskProcessor(IPlatformStore store, IAgentDispatchStore dispatches, IAgentRuntime runtime)
 {
-    public async Task<bool> ProcessOneAsync(AgentRole role, string worker, CancellationToken ct)
+    public Task<bool> ProcessOneAsync(AgentRole role, string worker, CancellationToken ct) => ProcessAsync(role, worker, ct);
+    public Task<bool> ProcessNextAsync(string worker, CancellationToken ct) => ProcessAsync(null, worker, ct);
+    private async Task<bool> ProcessAsync(AgentRole? role, string worker, CancellationToken ct)
     {
-        if (role is not (AgentRole.BackendEngineer or AgentRole.TestEngineer)) throw new ArgumentException("Role has not migrated to independent dispatch.");
-        var task = await dispatches.ClaimAsync(role, worker, ct);
+        if (role != null && !Enum.IsDefined(role.Value)) throw new ArgumentException("Unknown independent agent role.");
+        var task = role is { } assigned ? await dispatches.ClaimAsync(assigned, worker, ct) : await dispatches.ClaimNextAsync(worker, ct);
         if (task == null) return false;
         using var execution = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var remaining = task.Deadline - DateTimeOffset.UtcNow;

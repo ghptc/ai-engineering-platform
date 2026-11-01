@@ -55,7 +55,8 @@ public static class ManagedExecutorConfiguration
                 ["build"] = Profile(["python3", "/opt/aep/profiles.py", "build"], []),
                 ["typecheck"] = Profile(["python3", "/opt/aep/profiles.py", "typecheck"], ["frontend/package.json", "frontend/package-lock.json"]),
                 ["backend"] = Profile(["python3", "/opt/aep/profiles.py", "backend"], ["backend"]),
-                ["frontend"] = Profile(["python3", "/opt/aep/profiles.py", "frontend"], ["frontend/package.json", "frontend/package-lock.json"])
+                ["frontend"] = Profile(["python3", "/opt/aep/profiles.py", "frontend"], ["frontend/package.json", "frontend/package-lock.json"]),
+                ["all"] = Profile(["python3", "/opt/aep/profiles.py", "all"], ["frontend/package.json", "frontend/package-lock.json"])
             }
         };
         // Backend target discovery is bounded by the trusted profile; directories are not source files.

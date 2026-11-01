@@ -106,6 +106,9 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                         }
                     }
                     output = matches.ToString(); break;
+                case "PrepareFrontendLock":
+                    if (request.Arguments.EnumerateObject().Any()) throw new ArgumentException("PrepareFrontendLock accepts no paths, commands or package arguments.");
+                    output = ApprovedFrontendBootstrap.Prepare(workspace); break;
                 case "WriteFile": WorkspaceFiles.Write(workspace, Argument("path"), Argument("content")); output = "Written " + Argument("path"); break;
                 case "ApplyPatch":
                     // patch is an encoded object to retain the original common tool envelope.
@@ -137,7 +140,8 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
                     output = execution.Output; exitCode = execution.ExitCode; success = exitCode == 0 && !execution.TimedOut && !execution.OutputExceeded;
                     if (request.Operation == "RunTests")
                     {
-                        var count = DockerWorkload.TestCount(output);
+                        var managed = profile.Command.Length == 3 && profile.Command[0] == "python3" && profile.Command[1] == "/opt/aep/profiles.py";
+                        var count = managed ? DockerWorkload.ManagedTestCount(output, exitCode.Value, name) : DockerWorkload.TestCount(output);
                         success &= count > 0;
                         output += $"\nExecutor evidence: tests={count}; exit={exitCode}; timeout={execution.TimedOut}; outputLimit={execution.OutputExceeded}";
                         if (success) state.TestedRevision = WorkspaceFiles.Revision(workspace, options.WorkspaceLimitMb);
@@ -180,7 +184,7 @@ public sealed class LocalExecutionService(ExecutorOptions options, ControlledPro
     }
     public static void ValidateRequest(SandboxRequest request)
     {
-        if (request.Repository is null || request.Operation is not ("ReadRepository" or "SelectBranch" or "CreateBranch" or "ListFiles" or "ReadFile" or "SearchCode" or "WriteFile" or "ApplyPatch" or "InspectDiff" or "RunTests" or "RunCommand" or "CreateCommit" or "PushBranch") || !Regex.IsMatch(request.RunId, "\\A[a-zA-Z0-9-]{1,64}\\z") || !Regex.IsMatch(request.OperationId, "\\A[a-zA-Z0-9-]{1,128}\\z") || request.Arguments.ValueKind != JsonValueKind.Object || request.Arguments.GetRawText().Length > 100000 || request.NetworkEnabled || request.Fence < 1 || string.IsNullOrWhiteSpace(request.LeaseOwner) || request.LeaseOwner.Length > 128 || request.TimeoutSeconds is < 1 or > 120 || request.MemoryMb is < 128 or > 4096 || request.CpuLimit is < 1 or > 4 || request.OutputLimitBytes is < 1024 or > 100000) throw new ArgumentException("Invalid bounded executor request; networking is disabled.");
+        if (request.Repository is null || request.Operation is not ("ReadRepository" or "SelectBranch" or "CreateBranch" or "ListFiles" or "ReadFile" or "SearchCode" or "WriteFile" or "PrepareFrontendLock" or "ApplyPatch" or "InspectDiff" or "RunTests" or "RunCommand" or "CreateCommit" or "PushBranch") || !Regex.IsMatch(request.RunId, "\\A[a-zA-Z0-9-]{1,64}\\z") || !Regex.IsMatch(request.OperationId, "\\A[a-zA-Z0-9-]{1,128}\\z") || request.Arguments.ValueKind != JsonValueKind.Object || request.Arguments.GetRawText().Length > 100000 || request.NetworkEnabled || request.Fence < 1 || string.IsNullOrWhiteSpace(request.LeaseOwner) || request.LeaseOwner.Length > 128 || request.TimeoutSeconds is < 1 or > 120 || request.MemoryMb is < 128 or > 4096 || request.CpuLimit is < 1 or > 4 || request.OutputLimitBytes is < 1024 or > 100000) throw new ArgumentException("Invalid bounded executor request; networking is disabled.");
     }
     private static string Identity(RepositoryConnection repository) => $"{repository.Owner}/{repository.Repository}@{repository.InstallationId}:{repository.DefaultBranch}";
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();

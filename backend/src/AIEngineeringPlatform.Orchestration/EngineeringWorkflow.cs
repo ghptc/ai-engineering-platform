@@ -78,10 +78,11 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                         await service.EventAsync(run, "VerificationPrerequisite", "No applicable tests yet. Engineers may implement with authorized tools/build profiles; Test Engineer must create real tests. Owner approval of fixed test profiles is required before verification. No test or QA acceptance is granted.", ct);
                 await ToolAsync("ReconcileRepository", "git-reconciliation", JsonSerializer.SerializeToElement(new { }), inspectionRole);
                 var before = await ToolAsync("InspectDiff", "pre-implementation", JsonSerializer.SerializeToElement(new { }), inspectionRole);
-                foreach (var developer in correctionTargets.Length > 0 ? correctionTargets : run.SelectedAgents.Where(x => x is AgentRole.BackendEngineer or AgentRole.FrontendEngineer))
+                foreach (var developer in correctionTargets.Length > 0 ? correctionTargets : run.SelectedAgents.Where(x => x is AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.InfrastructureEngineer))
                 {
                     await AgentAsync(developer, ArtifactType.CodeDiff);
-                    await ToolAsync("InspectDiff", "handoff-diff-" + developer, JsonSerializer.SerializeToElement(new { }), developer);
+                    var handoffDiff = await ToolAsync("InspectDiff", "handoff-diff-" + developer, JsonSerializer.SerializeToElement(new { }), developer);
+                    await new AIEngineeringPlatform.Application.RuntimeV2.WorkflowCommunication(store).ImplementationAsync(run, developer, handoffDiff, Key($"{run.Id}/{run.CurrentStage}/{run.Iteration}/handoff-diff-{developer}"), ct);
                 }
                 var after = await ToolAsync("InspectDiff", "post-implementation", JsonSerializer.SerializeToElement(new { }), inspectionRole);
                 if (!before.Success || !after.Success) throw new InvalidOperationException("Cannot establish actual repository changes.");
@@ -99,10 +100,11 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 var profiles = testFactsJson.RootElement.GetProperty("TestProfiles").EnumerateArray().Select(x => x.GetString()!).ToArray();
                 var selectedProfile = profiles.Contains("all") ? "all" : profiles.Length == 1 ? profiles[0] : throw new ConfigurationException("Test verification blocked: owner must approve one applicable fixed test profile or an aggregate profile targeting the real test projects. Test Engineer must create missing test infrastructure first. Preserve the workspace and resume RunningTests after profile approval; no QA or delivery acceptance is granted.");
                 var tests = await ToolAsync("RunTests", "required-tests", JsonSerializer.SerializeToElement(new { profile = selectedProfile }), AgentRole.TestEngineer);
+                await new AIEngineeringPlatform.Application.RuntimeV2.WorkflowCommunication(store).TestReportAsync(run, tests, Key($"{run.Id}/{RunStage.RunningTests}/{run.Iteration}/required-tests"), ct);
                 await ArtifactAsync("test-report", ArtifactType.TestReport, JsonSerializer.Serialize(tests));
                 await service.EventAsync(run, "TestExecutionCompleted", JsonSerializer.Serialize(tests), ct);
                 var testsPassed = tests.Success && tests.EvidenceId != null && tests.WorkspaceRevision != null;
-                if (!testsPassed) run = run with { ReworkPlan = [.. run.ReworkPlan, .. ReworkPlanner.Create(run, AgentRole.TestEngineer, new AgentResult("Required tests failed; inspect persisted test evidence before correction.", "REQUEST_CHANGES", [], tests.EvidenceId == null ? [] : [tests.EvidenceId], [], [], "Repeat tests after correction", ReworkTargets: run.SelectedAgents.Where(x => x is AgentRole.BackendEngineer or AgentRole.FrontendEngineer).Select(x => x.ToString()).ToArray()), tests.WorkspaceRevision)] };
+                if (!testsPassed) run = run with { ReworkPlan = [.. run.ReworkPlan, .. ReworkPlanner.Create(run, AgentRole.TestEngineer, new AgentResult("Required tests failed; inspect persisted test evidence before correction.", "REQUEST_CHANGES", [], tests.EvidenceId == null ? [] : [tests.EvidenceId], [], [], "Repeat tests after correction", ReworkTargets: run.SelectedAgents.Where(x => x is AgentRole.BackendEngineer or AgentRole.FrontendEngineer or AgentRole.InfrastructureEngineer).Select(x => x.ToString()).ToArray()), tests.WorkspaceRevision)] };
                 next = testsPassed ? RunStage.Validating : RunStage.Implementing; break;
             }
             case RunStage.Validating:
@@ -110,11 +112,25 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                 context += "\nRequired test evidence: " + JsonSerializer.Serialize(new { testEvidence.Success, testEvidence.EvidenceId, testEvidence.WorkspaceRevision }) + "\nSelected requirement IDs: " + JsonSerializer.Serialize(run.RequirementIds);
                 var qa = await AgentAsync(AgentRole.QAEngineer, ArtifactType.ValidationReport);
                 var qaPassed = QualityGate.Approves(qa, testEvidence, run.RequirementIds);
+                await new AIEngineeringPlatform.Application.RuntimeV2.WorkflowCommunication(store).ReviewAsync(run, AgentRole.QAEngineer, qa, qaPassed, testEvidence.WorkspaceRevision, ct);
                 if (qaPassed && run.NoSourceChanges) await service.EventAsync(run, "TaskReconciled", JsonSerializer.Serialize(new { State = "CompletedAndVerified", testEvidence.EvidenceId, testEvidence.WorkspaceRevision }), ct);
-                if (qaPassed) RecordTransition(AgentRole.QAEngineer, AgentRole.CodeReviewer);
+                if (qaPassed) RecordTransition(AgentRole.QAEngineer, run.SelectedAgents.Contains(AgentRole.SecurityEngineer) ? AgentRole.SecurityEngineer : AgentRole.CodeReviewer);
                 if (!qaPassed) run = run with { ReworkPlan = [.. run.ReworkPlan, .. ReworkPlanner.Create(run, AgentRole.QAEngineer, qa, testEvidence.WorkspaceRevision)] };
                 next = qaPassed ? RunStage.Reviewing : RunStage.Implementing; break;
             case RunStage.Reviewing:
+                if (run.SelectedAgents.Contains(AgentRole.SecurityEngineer))
+                {
+                    var securityDiff = await ToolAsync("InspectDiff", "security-diff", JsonSerializer.SerializeToElement(new { }), AgentRole.SecurityEngineer);
+                    if (!securityDiff.Success || securityDiff.WorkspaceRevision != (await RequiredTestsAsync()).WorkspaceRevision) throw new InvalidOperationException("Security review requires the tested source revision.");
+                    var security = await AgentAsync(AgentRole.SecurityEngineer, ArtifactType.CodeReview);
+                    await new AIEngineeringPlatform.Application.RuntimeV2.WorkflowCommunication(store).ReviewAsync(run, AgentRole.SecurityEngineer, security, security.Decision == "APPROVE", securityDiff.WorkspaceRevision, ct);
+                    if (security.Decision != "APPROVE")
+                    {
+                        run = run with { ReworkPlan = [.. run.ReworkPlan, .. ReworkPlanner.Create(run, AgentRole.SecurityEngineer, security, securityDiff.WorkspaceRevision)] };
+                        next = RunStage.Implementing; break;
+                    }
+                    RecordTransition(AgentRole.SecurityEngineer, AgentRole.CodeReviewer);
+                }
                 if (!run.Policy.ReviewBeforeCommit && !run.NoSourceChanges)
                 {
                     await RequestApprovalAsync("Create a commit and draft pull request after successful QA, then inspect and publish the review against that PR. This does not authorize merging.");
@@ -159,6 +175,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
                     advanceTask = run.TaskIndex + 1 < run.Tasks.Length;
                     next = RunStage.Completed; break;
                 }
+                await new AIEngineeringPlatform.Application.RuntimeV2.WorkflowCommunication(store).ReviewAsync(run, AgentRole.CodeReviewer, review, review.Decision == "APPROVE", diff.WorkspaceRevision, ct);
                 if (review.Decision != "APPROVE") run = run with { ReworkPlan = [.. run.ReworkPlan, .. ReworkPlanner.Create(run, AgentRole.CodeReviewer, review, diff.WorkspaceRevision)] };
                 next = review.Decision == "APPROVE" ? RunStage.AwaitingHumanApproval : RunStage.Implementing;
                 if (next == RunStage.AwaitingHumanApproval)
@@ -229,7 +246,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
         }
         string NextAgent(AgentRole role)
         {
-            if (role is AgentRole.QAEngineer or AgentRole.CodeReviewer) return ""; // Quality gates decide, not model status.
+            if (role is AgentRole.QAEngineer or AgentRole.CodeReviewer or AgentRole.SecurityEngineer) return ""; // Quality gates decide, not model status.
             var corrections = run.ReworkPlan.Where(x => x.Iteration == run.Iteration).Select(x => x.TargetAgent).ToArray();
             var route = corrections.Length > 0 ? corrections.Concat(new[] { AgentRole.TestEngineer, AgentRole.QAEngineer, AgentRole.CodeReviewer }).ToArray() : run.SelectedAgents;
             return route.SkipWhile(x => x != role).Skip(1).Select(x => x.ToString()).FirstOrDefault() ?? "";
@@ -270,6 +287,7 @@ public sealed class EngineeringWorkflow(IPlatformStore store, PlatformService se
         async Task RequestApprovalAsync(string description)
         {
             await UpsertRecordAsync(new() { Id = Key(run.Id + "/approval/" + run.Iteration), Kind = "approval", RunId = run.Id, ProjectId = run.ProjectId, Name = "Prepare delivery", Content = description, Status = "Pending" });
+            await new AIEngineeringPlatform.Application.RuntimeV2.WorkflowCommunication(store).ApprovalAsync(run, Key(run.Id + "/approval/" + run.Iteration), description, ct);
             await service.EventAsync(run, "ApprovalRequested", "Human delivery approval required.", ct);
         }
         async Task UpsertRecordAsync(RecordEntry record) { if (await store.GetRecordAsync(record.Kind, record.Id, ct) == null) await store.AppendAsync(record, ct); }

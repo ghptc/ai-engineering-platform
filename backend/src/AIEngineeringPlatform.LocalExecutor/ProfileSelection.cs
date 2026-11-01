@@ -6,7 +6,8 @@ public static class ProfileSelection
 {
     public static object Capabilities(string[] files, IReadOnlyDictionary<string, ExecutionProfile> profiles) => new
     {
-        BootstrapOperations = new[] { "WriteFile", "ApplyPatch" },
+        BootstrapOperations = new[] { "WriteFile", "ApplyPatch", "PrepareFrontendLock" },
+        ApprovedFrontend = ApprovedFrontendBootstrap.Capability,
         NetworkEnabled = false,
         DependencyAvailability = "Unverified: configured images and commands do not prove SDK, package cache or browser availability. Verify through approved isolated profiles.",
         Profiles = profiles.OrderBy(x => x.Key).Select(x => new
@@ -28,6 +29,7 @@ public static class ProfileSelection
         if (command.Length == 3 && command[0] == "python3" && command[1] == "/opt/aep/profiles.py")
             return command[2] switch
             {
+                "all" => files.Any(x => x.StartsWith("backend/tests/", StringComparison.Ordinal) && x.EndsWith(".csproj", StringComparison.Ordinal)) && files.Contains("frontend/package.json") && files.Contains("frontend/package-lock.json"),
                 "backend" => files.Any(x => x.StartsWith("backend/tests/", StringComparison.Ordinal) && x.EndsWith(".csproj", StringComparison.Ordinal)),
                 "frontend" or "typecheck" => files.Contains("frontend/package.json") && files.Contains("frontend/package-lock.json"),
                 "build" => files.Any(x => x.StartsWith("backend/", StringComparison.Ordinal) && x.EndsWith(".csproj", StringComparison.Ordinal)) || files.Contains("frontend/package-lock.json"),
