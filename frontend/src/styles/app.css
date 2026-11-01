@@ -1323,3 +1323,12 @@ body {
 .pipeline-viewport svg {
   margin-inline: auto;
 }
+
+.requirement-intake { min-width: 0; }
+.requirement-intake .ant-alert { margin-bottom: 10px; }
+.intake-controls { margin: 10px 0; }
+.requirement-intake input[type="file"] { max-width: min(310px, 72vw); }
+
+.scope-history { width: 100%; min-width: 0; }
+.scope-history > .ant-space-item { min-width: 0; max-width: 100%; }
+.scope-history .ant-btn-link { height: auto; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; }

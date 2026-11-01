@@ -29,6 +29,7 @@ import {
   useApi,
   jsonText,
 } from "../../components/Common";
+import { RequirementIntake } from "./RequirementIntake";
 import { Requirements } from "./Requirements";
 import { Markdown, ReadableEntry } from "../../components/Readable";
 import { EvidenceDrawer } from "../../components/EvidenceDrawer";
@@ -280,6 +281,11 @@ export function Workspace() {
                     </Card>
                   </Space>
                 ),
+              },
+              {
+                key: "intake",
+                label: "Requirements intake",
+                children: <RequirementIntake projectId={id} />,
               },
               {
                 key: "requirements",

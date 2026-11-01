@@ -1,0 +1,283 @@
+{
+  "version": 1,
+  "milestone": "M6.1 initial bounded intake slice",
+  "baseCommit": "ed6ebd9be0d73b6f30a47942593c41b6ca0b5ad2",
+  "m6Complete": false,
+  "m5Resumed": false,
+  "m6LiveProviderRequests": 0,
+  "externalRepositoryMutations": 0,
+  "ownerServicesChanged": false,
+  "supportedFormats": [
+    "UTF-8 Markdown",
+    "UTF-8 TXT",
+    "macro-free DOCX"
+  ],
+  "unsupportedFormats": [
+    "PDF",
+    "OCR",
+    "DOC",
+    "DOCM",
+    "HTML"
+  ],
+  "testEnvironment": {
+    "mongoPort": 27058,
+    "e2eApiPort": 18388,
+    "e2eFrontendPort": 18373,
+    "productionAdaptersReplaced": false,
+    "testAssembliesUseDeterministicAdapters": true
+  },
+  "results": {
+    "solutionBuild": "passed, zero warnings/errors",
+    "fullBackendPassed": 337,
+    "fullBackendSkipped": 9,
+    "finalFocusedBackendPassed": 10,
+    "frontendTestsPassed": 54,
+    "typecheck": "passed",
+    "frontendProductionBuild": "passed; baseline bundle-size warning",
+    "playwrightSuitePassed": 5,
+    "finalHistoryResponsivePlaywrightPassed": 1,
+    "dockerBuild": "passed"
+  },
+  "image": {
+    "tag": "aep-platform:m6-intake-verified",
+    "configSha256": "61a6ace28f1acc63c257410fb091750690444bcf6a3679979627d1f668445a14"
+  },
+  "testReceipts": [
+    {
+      "file": "full-regression/_arch_2026-10-31_20_30_34.trx",
+      "sha256": "0a0d01d4b8cfe9844fae69eac7ca1edbcaf8322b12ffa28798e5a484249db0f7",
+      "counters": {
+        "total": "71",
+        "executed": "71",
+        "passed": "71",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "full-regression/_arch_2026-10-31_20_30_35.trx",
+      "sha256": "5ca80cec753cc8c6a52a9404ee3bb65f9f1f60c10fe5fb76422fcd2f74f36db9",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "full-regression/_arch_2026-10-31_20_30_36.trx",
+      "sha256": "2240c0d251501d89ced18428f86115a18feb104d0945a8c11d138c97a332fbc7",
+      "counters": {
+        "total": "18",
+        "executed": "18",
+        "passed": "18",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "full-regression/_arch_2026-10-31_20_30_36[1].trx",
+      "sha256": "53b182f6f45f68be17a5c1cd3734ca050905d3b3a046fad9b93f8cb9d7953ee4",
+      "counters": {
+        "total": "215",
+        "executed": "213",
+        "passed": "213",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "full-regression/_arch_2026-10-31_20_31_45.trx",
+      "sha256": "9edebbe527ca7578f352c701c870bb0fbae91fc1f498ceddec0f2b34b9d8d132",
+      "counters": {
+        "total": "40",
+        "executed": "33",
+        "passed": "33",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "m6-intake-bounds.trx",
+      "sha256": "5ea2a3295972aac47580e7459bf47a083eb3be2c4e83155d2af456e367e2027e",
+      "counters": {
+        "total": "10",
+        "executed": "10",
+        "passed": "10",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "m6-intake-corrected.trx",
+      "sha256": "544abba7844d674a072bca67ca9d2b24c64b39fc5845080d2ecd8a36ef66ddda",
+      "counters": {
+        "total": "9",
+        "executed": "9",
+        "passed": "8",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "m6-intake-final.trx",
+      "sha256": "cb43862db49a78e94347e0763b91dbbc5837542c6479383181d54f33c7a704db",
+      "counters": {
+        "total": "9",
+        "executed": "9",
+        "passed": "9",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "m6-intake-verified.trx",
+      "sha256": "0bc0e7cdd26336d620ce371564eb4db20435b3f063a3ec19a897f53d69dce61b",
+      "counters": {
+        "total": "10",
+        "executed": "10",
+        "passed": "10",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "sourceSha256": {
+    "backend/src/AIEngineeringPlatform.Api/Program.cs": "aab8d74cfc85889fd8cd10042094ef81c520cbde7e196094069b383ba0f9d0a2",
+    "backend/src/AIEngineeringPlatform.Api/RequirementIntakeEndpoints.cs": "6b853b45861576a7a6fd834bac7095a8b9edb0b7fc0126d56cc44f93a2e77c00",
+    "backend/src/AIEngineeringPlatform.Domain/RequirementScope.cs": "b358dcda8c9dcfeb7c2e52d6283c7f0dcc5b6f18c6742ecf447a9ab1796fd09a",
+    "backend/src/AIEngineeringPlatform.Application/Estimation/RequirementIntake.cs": "6c5d87c49c9e37fe2baca03f169bcbf49a8039adffaf24012b73ce9563be74bd",
+    "backend/src/AIEngineeringPlatform.Infrastructure/RequirementDocumentExtractor.cs": "8112bdee81b7d915d131cbdf83de045332a119d607f57289015a1e70798bf27c",
+    "backend/src/AIEngineeringPlatform.Infrastructure/MongoRequirementScopes.cs": "d8ca677d3e27a19c9623d552310ba5e58ce6325c235fc11c017ed8e6d646c57c",
+    "backend/tests/AIEngineeringPlatform.Integration.Tests/RequirementIntakeTests.cs": "a52350d2900d5c318a1e40b1f35ac413bf4ef395af19712a80bf8191d05f1fb1",
+    "frontend/src/features/projects/Workspace.tsx": "dee1b5f1a75022bd1abfc2e8eefb6b1cb49f3d50b340d0892b48fcb51d8bba80",
+    "frontend/src/features/projects/RequirementIntake.tsx": "195a9f6c29f61a901aed8637b8501644c6f2ffb51da3c684fbe303078f1375ed",
+    "frontend/src/features/projects/requirementScope.ts": "10bb820044ace38b1952847d50b23b4f6b7028284e6d96685332fd4481c3b89b",
+    "frontend/src/styles/app.css": "1fe8fe981dbe768cce5f5b7717a2d041c1ca5e4739f897dd567985beb9629d11",
+    "frontend/tests/requirement-intake.test.tsx": "c11945576f2cbf90d9fca09f420f11f28fde1b6af8c61cdbbcbf075e7e21dd3b",
+    "frontend/tests/e2e/requirements.spec.ts": "75765dc16a17b3c71e3bfb3e0661a8ebc44b402848f90fa8e0a77bdd49b6c32b"
+  },
+  "privateLogSha256": {
+    "aep-m6-backend-tests.log": "33042c5146fdaa62cf230d7208787bbb08c5c929a8fd3712ef89b100f8c078f9",
+    "aep-m6-intake-verified.log": "07613d803d3bec5bb7cd97542b40d1fbd329736fc7326723d447b10c957f6f26",
+    "aep-m6-frontend-verified.log": "713472d1e548d11e6ad84c014c3f0512a01f98bd8d82ffdda4dee8e8c69241c0",
+    "aep-m6-frontend-build-final.log": "914c2e049c44461bb79238d42df9d92b065751cb006ca3719adb84763614f0b6",
+    "aep-m6-e2e.log": "a629bba294ae0df9bac4a11a27c2e864eee0ac7a5bb5241329f9f9597f99092b",
+    "aep-m6-e2e-final.log": "1f85d555f197924173b90da08244338bb060ffed5cc7a672d8e1e8e911089b09",
+    "aep-m6-e2e-verified.log": "d668517ff665e4f8b94d0efa0d9a66ce3f3e4586f5d68455554e397d3c1f8dbe",
+    "aep-m6-image-final.log": "6b71af0d8df708875efb5d53b05170623917cd196f1d7b439ac507df1f44cd13"
+  },
+  "screenshots": {
+    "backend/docs/ux-evidence/m6-intake-desktop.png": "bf9d8e944dcaa248255f8f1f05ebd0273fe15c03d6b4fa4f405cb28733d96032",
+    "backend/docs/ux-evidence/m6-intake-mobile.png": "ef19ee22572763f1066b15a7997182b54503fe53168aae188fbdfb79476130d2"
+  },
+  "limitations": [
+    "No PDF/OCR extraction",
+    "Literal draft parsing rather than semantic BA/Architect assessment",
+    "No repository implementation verification",
+    "No project estimation/price catalog or shared financial enforcement yet",
+    "M6 integrated live certification remains gated on successful M5",
+    "Fresh-store persistence verified; no physical MongoDB failure injected",
+    "500 immutable versions per project; fail-closed ceiling, no automatic history deletion"
+  ]
+}
