@@ -12,18 +12,34 @@ internal sealed class DependencyControlClient(HttpClient http, string endpoint, 
         if (body != null) message.Content = JsonContent.Create(body);
         using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, ct);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return default;
-        if (!response.IsSuccessStatusCode) throw new ConfigurationException("Dependency control operation returned HTTP " + (int)response.StatusCode + "; reconcile its persisted outcome before retrying.");
+
         await using var input = await response.Content.ReadAsStreamAsync(ct); using var bytes = new MemoryStream(); var buffer = new byte[8192]; int n;
         while ((n = await input.ReadAsync(buffer, ct)) > 0) { if (bytes.Length + n > 5_000_000) throw new ConfigurationException("Dependency control response exceeded bound."); bytes.Write(buffer, 0, n); }
+        if (!response.IsSuccessStatusCode)
+        {
+            try
+            {
+                using var problem = JsonDocument.Parse(bytes.ToArray());
+                if (problem.RootElement.ValueKind == JsonValueKind.Object && problem.RootElement.TryGetProperty("dependencyFailure", out var value))
+                {
+                    var diagnostic = value.Deserialize<DependencyFailure>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (diagnostic is { Phase: not null, Code: not null } && System.Text.RegularExpressions.Regex.IsMatch(diagnostic.Phase, "\\A[a-z_]{1,64}\\z") && System.Text.RegularExpressions.Regex.IsMatch(diagnostic.Code, "\\Adependency_[a-z_]{1,80}\\z") && diagnostic.RecoveryAction is "Reconcile" or "RepairConfiguration") throw new DependencyAcquisitionException(diagnostic);
+                }
+            }
+            catch (JsonException) { }
+            throw new ConfigurationException("Dependency control operation returned HTTP " + (int)response.StatusCode + "; reconcile its persisted outcome before retrying.");
+        }
         return bytes.Length == 0 ? default : JsonSerializer.Deserialize<T>(bytes.ToArray(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
     }
     public async Task<DependencyResolution> ResolveAsync(DependencyApprovalRequest request, RepositoryConnection repository, CancellationToken ct) => await SendAsync<DependencyResolution>(HttpMethod.Post, "v1/dependencies/resolve", new { request, repository }, ct) ?? throw new ConfigurationException("Dependency resolution receipt is unavailable.");
     public Task<DependencyResolution?> ResolutionAsync(string id, CancellationToken ct) => SendAsync<DependencyResolution>(HttpMethod.Get, "v1/dependencies/" + Uri.EscapeDataString(id), null, ct);
+    public Task<DependencyResolution?> ReconcileAsync(string id, CancellationToken ct) => SendAsync<DependencyResolution>(HttpMethod.Post, "v1/dependencies/" + Uri.EscapeDataString(id) + "/reconcile", null, ct);
     public async Task GrantAsync(DependencyGrant grant, CancellationToken ct) => await SendAsync<JsonElement>(HttpMethod.Post, "v1/dependencies/grant", grant, ct);
 }
 public sealed class UnsupportedDependencyExecutor : IDependencyExecutor
 {
     public Task<DependencyResolution> ResolveAsync(DependencyApprovalRequest request, RepositoryConnection repository, CancellationToken ct) => throw new ConfigurationException("The configured executor does not implement dependency control v1.");
     public Task<DependencyResolution?> ResolutionAsync(string id, CancellationToken ct) => throw new ConfigurationException("The configured executor does not implement dependency control v1.");
+    public Task<DependencyResolution?> ReconcileAsync(string id, CancellationToken ct) => throw new ConfigurationException("The configured executor does not implement dependency control v1.");
     public Task GrantAsync(DependencyGrant grant, CancellationToken ct) => throw new ConfigurationException("The configured executor does not implement dependency control v1.");
 }

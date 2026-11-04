@@ -20,7 +20,7 @@ public static class DependencyPreparation
             var actual = Convert.ToHexString(SHA512.HashData(entry.DataStream!)).ToLowerInvariant();
             if (actual != expected || !hashes.Add(actual)) throw new InvalidOperationException("Dependency cache content integrity mismatch.");
         }
-        foreach (var package in packages)
+        foreach (var package in packages.Where(p => p.CacheRequired != false && p.RuntimeCached != true))
             if (!hashes.Contains(Convert.ToHexString(Convert.FromBase64String(package.Integrity["sha512-".Length..])).ToLowerInvariant())) throw new InvalidOperationException("Package tarball integrity is absent from the verified cache.");
     }
     public static async Task<string> PrepareAsync(ExecutorOptions options, SandboxRequest request, string workspace, CancellationToken ct)
@@ -84,6 +84,12 @@ public static class DependencyPreparation
         }
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(pointer, ct)); var id = document.RootElement.GetProperty("Id").GetString()!;
         var (plan, cache) = await LoadAsync(options, request, id, ct);
+        if (plan.Packages.Any(p => p.CacheRequired == false || p.RuntimeCached == true))
+        {
+            var repository = options.Repositories.SingleOrDefault(r => r.Owner == request.Repository.Owner && r.Name == request.Repository.Repository && r.InstallationId == request.Repository.InstallationId && r.DefaultBranch == request.Repository.DefaultBranch);
+            if (!request.Arguments.TryGetProperty("profile", out var selected) || repository == null || !repository.Profiles.TryGetValue(selected.GetString() ?? "", out var profile) || profile.Image != plan.ResolverImage)
+                throw new UnauthorizedAccessException("Platform-specific dependency caches require the exact owner-approved resolver image.");
+        }
         var manifest = JsonNode.Parse(await File.ReadAllTextAsync(WorkspaceFiles.Resolve(workspace, "frontend/package.json"), ct))!.AsObject(); DependencyExecutor.ValidateManifest(manifest);
         var expected = JsonNode.Parse(plan.Manifest)!.AsObject();
         foreach (var section in new[] { "dependencies", "devDependencies" })

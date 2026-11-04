@@ -40,14 +40,22 @@ app.Use(async (context, next) =>
     try { await next(); }
     catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException or InvalidOperationException or UnauthorizedAccessException or ConfigurationException or FileNotFoundException or ExecutorFailureException)
     {
+        if (exception is AIEngineeringPlatform.Application.Dependencies.DependencyAcquisitionException dependency)
+        {
+            var dependencyDiagnostic = dependency.Failure;
+            app.Logger.LogWarning("Dependency acquisition phase {Phase} code {Code} started {AcquisitionStarted} known {OutcomeKnown} recovery {RecoveryAction}", dependencyDiagnostic.Phase, dependencyDiagnostic.Code, dependencyDiagnostic.AcquisitionStarted, dependencyDiagnostic.OutcomeKnown, dependencyDiagnostic.RecoveryAction);
+            await Results.Problem(statusCode: 409, title: "Dependency acquisition blocked", extensions: new Dictionary<string, object?> { ["code"] = dependencyDiagnostic.Code, ["dependencyFailure"] = dependencyDiagnostic }).ExecuteAsync(context);
+            return;
+        }
         var status = exception is ExecutorFailureException failure ? failure.StatusCode ?? 503 : exception is UnauthorizedAccessException ? 403 : exception is ConfigurationException ? 503 : exception is ArgumentException or System.Text.Json.JsonException or FileNotFoundException ? 400 : 409;
         if (exception is ExecutorFailureException diagnostic)
             app.Logger.LogWarning("Executor operation {OperationId} {Operation} rejected with HTTP {Status} category {Category} reason {Reason} outcomeUnknown {OutcomeUnknown}", diagnostic.OperationId, diagnostic.Operation, status, diagnostic.Category, diagnostic.Reason, diagnostic.OutcomeUnknown);
         await Results.Problem(statusCode: status, title: "Executor rejected operation", detail: "Inspect the operation category and administrator configuration.", extensions: new Dictionary<string, object?> { ["code"] = exception is ExecutorFailureException typed ? typed.Reason switch { ExecutorFailureReason.DependencyApprovalRequired => "dependency_approval_required", ExecutorFailureReason.OperationRetentionLimit => "operation_retention_limit", ExecutorFailureReason.ImageUnavailable => "image_unavailable", ExecutorFailureReason.ProfileTargetMissing => "profile_target_missing", _ => typed.Category switch { ExecutorFailureCategory.ProfileRestriction => "profile_restriction", ExecutorFailureCategory.RepositoryAccess => "repository_access", _ => "executor_rejected" } } : "executor_rejected" }).ExecuteAsync(context);
     }
 });
-app.MapGet("/health/ready", async (DockerWorkload docker, CancellationToken ct) => { await docker.VerifyHostAsync(ct); return Results.Ok(new { status = "Ready", isolation = "Docker/cgroup-v2/seccomp", network = "none", contractVersion = 2 }); });
+app.MapGet("/health/ready", async (DockerWorkload docker, ExecutorOptions executorOptions, CancellationToken ct) => { await docker.VerifyHostAsync(ct); return Results.Ok(new { dependencyRuntimeImages = executorOptions.Repositories.SelectMany(r => r.Profiles.Values).Select(p => p.Image).Distinct().Order().ToArray(), status = "Ready", isolation = "Docker/cgroup-v2/seccomp", network = "none", contractVersion = 2 }); });
 app.MapGet("/v1/dependencies/{id}", async (string id, DependencyExecutor dependencies, CancellationToken ct) => await dependencies.ReadAsync(id, ct) is { } resolution ? Results.Ok(resolution) : Results.NotFound());
+app.MapPost("/v1/dependencies/{id}/reconcile", async (string id, DependencyExecutor dependencies, CancellationToken ct) => await dependencies.ReconcileAsync(id, ct) is { } resolution ? Results.Ok(resolution) : Results.NotFound());
 app.MapPost("/v1/dependencies/resolve", (DependencyResolveInput input, DependencyExecutor dependencies, CancellationToken ct) => dependencies.ResolveAsync(input.Request, input.Repository, ct));
 app.MapPost("/v1/dependencies/grant", async (AIEngineeringPlatform.Domain.DependencyGrant grant, DependencyExecutor dependencies, CancellationToken ct) => { await dependencies.GrantAsync(grant, ct); return Results.Ok(new { Applied = true, grant.Id, grant.PlanSha256 }); });
 app.MapPost("/v1/operations", async (SandboxRequest request, HttpContext context, LocalExecutionService executor, CancellationToken ct) =>

@@ -14,6 +14,7 @@ public static class ApprovedFrontendBootstrap
         using var stream = typeof(ApprovedFrontendBootstrap).Assembly.GetManifestResourceStream("AEP.ApprovedFrontendLock") ?? throw new InvalidOperationException("Approved dependency catalog is unavailable.");
         using var reader = new StreamReader(stream); return reader.ReadToEnd();
     });
+    public static string ResolutionSeedLock => Catalog.Value;
     public static string CatalogHash => Hash(Catalog.Value);
     public static IReadOnlyDictionary<string, string> Dependencies => JsonNode.Parse(Catalog.Value)!["packages"]![""]!["dependencies"]!.AsObject().ToDictionary(x => x.Key, x => x.Value!.GetValue<string>(), StringComparer.Ordinal);
     public static object Capability => new { ExtensionRequest = "RequestDependencyApproval", ExtensionPreparation = "PrepareApprovedDependencies", ExtensionScope = "Owner-approved exact project/run/repository graph; no agent network or install scripts", Operation = "PrepareFrontendLock", Path = "frontend/package-lock.json", CatalogSha256 = CatalogHash, ApprovedDependencies = Dependencies, AllowedManifestFields = new[] { "name", "version", "private", "type", "scripts", "dependencies", "devDependencies", "description" }, Policy = "Use exactly these pinned direct dependencies across dependencies/devDependencies. No overrides, optional dependencies, workspaces or registry selection. Only a missing lockfile can be created. Availability must still be verified in the configured isolated image." };

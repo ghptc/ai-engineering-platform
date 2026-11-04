@@ -2,7 +2,9 @@
 """Trusted npm resolution helper. Network is absent; HTTPS is brokered by the executor.
 No repository scripts, .npmrc, credentials, arbitrary arguments or source code are loaded.
 """
+import platform
 import base64, hashlib, http.server, io, json, os, pathlib, shutil, subprocess, sys, tarfile, threading
+# AEP_DEPENDENCY_CONTRACT=2
 MAX = 48 * 1024 * 1024
 wire_lock = threading.Lock()
 def send(value):
@@ -51,6 +53,14 @@ try:
     if code != 0: raise ValueError('Bounded npm resolution failed (scripts disabled): ' + log.read_text(errors='replace')[:1500])
     lock = json.loads((root / 'package-lock.json').read_text())
     if len(lock.get('packages', {})) > 500: raise ValueError('Dependency graph exceeds 500 entries')
+    runtime_os = 'linux'
+    runtime_libc = 'glibc' if platform.libc_ver()[0] == 'glibc' else 'musl'
+    runtime_cpu = {'x86_64': 'x64', 'aarch64': 'arm64'}.get(platform.machine(), platform.machine())
+    def permits(values, current):
+        return not values or (current not in [v[1:] for v in values if v.startswith('!')] and (not any(not v.startswith('!') for v in values) or current in values or 'any' in values))
+    def required(package):
+        return not package.get('optional', False) or (permits(package.get('os', []), runtime_os) and permits(package.get('cpu', []), runtime_cpu) and permits(package.get('libc', []), runtime_libc))
+    runtime_cached = set()
     for path, package in lock['packages'].items():
         if not path: continue
         url = package.get('resolved', '')
@@ -60,13 +70,23 @@ try:
             fetch = url
         else: raise ValueError('Only registry tarballs are supported')
         if not package.get('integrity', '').startswith('sha512-'): raise ValueError('SHA-512 integrity is required')
-        with log.open('ab') as out:
-            if subprocess.run(['npm', 'cache', 'add', fetch, '--ignore-scripts'], cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=out, timeout=30).returncode != 0: raise ValueError('Tarball acquisition failed')
         package['resolved'] = 'https://registry.npmjs.org/' + fetch.split(registry, 1)[1]
+        if not required(package): continue
+        digest = base64.b64decode(package['integrity'][7:], validate=True)
+        key = digest.hex()
+        blob = pathlib.Path('/tmp/npm/_cacache/content-v2/sha512') / key[:2] / key[2:4] / key[4:]
+        seed = pathlib.Path('/opt/npm-cache/content-v2/sha512') / key[:2] / key[2:4] / key[4:]
+        if seed.is_file() and not seed.is_symlink() and hashlib.sha512(seed.read_bytes()).digest() == digest:
+            runtime_cached.add(package['integrity']); continue
+        if blob.is_file() and not blob.is_symlink() and hashlib.sha512(blob.read_bytes()).digest() == digest: continue
+        data = broker('/' + fetch.split(registry, 1)[1])
+        if hashlib.sha512(data).digest() != digest: raise ValueError('Tarball integrity mismatch')
+        blob.parent.mkdir(parents=True, exist_ok=True)
+        blob.write_bytes(data)
     # Export content-addressed blobs only. Never export auth headers, npm config, logs or metadata indexes.
     stream = io.BytesIO(); count = total = 0
     cache = pathlib.Path('/tmp/npm/_cacache/content-v2')
-    wanted = {base64.b64decode(p['integrity'][7:]).hex() for k, p in lock['packages'].items() if k}
+    wanted = {base64.b64decode(p['integrity'][7:]).hex() for k, p in lock['packages'].items() if k and required(p) and p['integrity'] not in runtime_cached}
     with tarfile.open(fileobj=stream, mode='w') as archive:
         for path in sorted(cache.rglob('*')):
             if not path.is_file() or path.parts[-4] != 'sha512' or ''.join(path.parts[-3:]) not in wanted: continue
@@ -76,6 +96,6 @@ try:
             item = tarfile.TarInfo('content-v2/' + path.relative_to(cache).as_posix()); item.size = len(data); item.mode = 0o600; item.mtime = 0
             archive.addfile(item, io.BytesIO(data))
     encoded = stream.getvalue()
-    send({'kind': 'result', 'lock': json.dumps(lock, separators=(',', ':')) + '\n', 'cache': base64.b64encode(encoded).decode(), 'cacheSha256': hashlib.sha256(encoded).hexdigest()})
+    send({'kind': 'result', 'runtimeLibc': runtime_libc, 'runtimeCached': sorted(runtime_cached), 'lock': json.dumps(lock, separators=(',', ':')) + '\n', 'cache': base64.b64encode(encoded).decode(), 'cacheSha256': hashlib.sha256(encoded).hexdigest()})
 except Exception as error:
     send({'kind': 'error', 'message': str(error)[:500]}); sys.exit(1)

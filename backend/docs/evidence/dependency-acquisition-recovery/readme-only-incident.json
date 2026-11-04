@@ -1,0 +1,26 @@
+{
+  "Fixture": "Disposable local bare Git repository initialized with README.md only",
+  "Packages": [
+    "pdf-lib@1.17.1",
+    "pdfjs-dist@5.4.624",
+    "@playwright/test@1.56.1"
+  ],
+  "ResolverImage": "sha256:22064d2f3657061599cd34274fbd255e0ba01032f54c1367409e39a18c420ebd",
+  "PlanSha256": "5c8fc5eb74dff505f27593598b69bb1a8d911c696a9ba86f5c4b8d1498477a7d",
+  "CacheSha256": "0e02a1c058fac6383125ee25fd9f8b38ef3d3cedfb0577cc5afd62aad6e32b12",
+  "Acquisition": {
+    "RegistryRequests": 36,
+    "DownloadedBytes": 53447389,
+    "StartedAt": "2026-11-04T00:14:20.773738+00:00",
+    "CompletedAt": "2026-11-04T00:14:30.3588768+00:00",
+    "HelperExitCode": 0
+  },
+  "PackageCount": 223,
+  "ImageCachedCount": 175,
+  "IncompatibleOptionalCount": 35,
+  "OfflineInstallationExitCode": 0,
+  "OfflineSmokeScope": "Three requested packages and their required transitive graph; optional packages omitted",
+  "OfflineMemoryMb": 1024,
+  "OriginalDefaultHead": "7b7edfd9b482ae64f293642d66ea4410af96a8f8",
+  "DefaultHeadAfter": "7b7edfd9b482ae64f293642d66ea4410af96a8f8"
+}

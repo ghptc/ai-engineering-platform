@@ -197,3 +197,27 @@ it("rejection is a persisted decision rather than a chat message", async () => {
     fetcher.mock.calls.some(([url]) => String(url).includes("/messages")),
   ).toBe(false);
 });
+
+it("requires reconciliation and never offers blind acquisition replay", () => {
+  setup({ ...entry, status: "Resolving", diagnostic: "Outcome unknown" });
+  expect(
+    screen.getByRole("button", { name: "Reconcile existing resolution" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /acquisition retry/i }),
+  ).not.toBeInTheDocument();
+});
+
+it("shows known failures without an endless retry prompt", () => {
+  setup({
+    ...entry,
+    status: "ResolutionFailed",
+    diagnostic: "dependency_registry_response_limit",
+  });
+  expect(
+    screen.getByText("Acquisition failed; administrator remediation required"),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /Authorize.*resolution/i }),
+  ).not.toBeInTheDocument();
+});

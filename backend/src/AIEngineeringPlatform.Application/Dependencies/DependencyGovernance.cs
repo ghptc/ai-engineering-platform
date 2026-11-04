@@ -15,6 +15,7 @@ public interface IDependencyExecutor
 {
     Task<DependencyResolution> ResolveAsync(DependencyApprovalRequest request, RepositoryConnection repository, CancellationToken ct);
     Task<DependencyResolution?> ResolutionAsync(string id, CancellationToken ct);
+    Task<DependencyResolution?> ReconcileAsync(string id, CancellationToken ct);
     Task GrantAsync(DependencyGrant grant, CancellationToken ct);
 }
 public sealed class DependencyApprovalPendingException(string requestId) : InvalidOperationException("Dependency approval required: " + requestId) { }
@@ -75,7 +76,7 @@ public sealed partial class DependencyGovernance(IDependencyApprovalStore approv
         var decision = new DependencyDecision(action, owner, DateTimeOffset.UtcNow, packageIds, registryAccess, reason);
         DependencyApprovalStatus status;
         if (action is "Reject" or "RequestChanges") status = action == "Reject" ? DependencyApprovalStatus.Rejected : DependencyApprovalStatus.ChangesRequested;
-        else if ((action == "Resolve" && request.Status is DependencyApprovalStatus.Pending or DependencyApprovalStatus.ResolutionFailed || action == "RetryResolution" && request.Status == DependencyApprovalStatus.Resolving) && registryAccess) status = DependencyApprovalStatus.Resolving;
+        else if ((action == "Resolve" && request.Status is DependencyApprovalStatus.Pending or DependencyApprovalStatus.ResolutionFailed) && registryAccess) status = DependencyApprovalStatus.Resolving;
         else if (action == "Reconcile" && request.Status == DependencyApprovalStatus.Resolving) status = DependencyApprovalStatus.Resolving;
         else if (action == "Approve" && request.Status == DependencyApprovalStatus.ReadyForReview && !registryAccess)
         {
@@ -93,7 +94,7 @@ public sealed partial class DependencyGovernance(IDependencyApprovalStore approv
         {
             try
             {
-                var resolution = action == "Reconcile" ? await executor.ResolutionAsync(id, ct) ?? throw new InvalidOperationException("No completed resolution receipt exists. Do not blindly replay a potentially running acquisition.") : await executor.ResolveAsync(updated, project.RepositoryConnection, ct);
+                var resolution = action == "Reconcile" ? await executor.ReconcileAsync(id, ct) ?? throw new InvalidOperationException("No completed resolution receipt exists. Do not blindly replay a potentially running acquisition.") : await executor.ResolveAsync(updated, project.RepositoryConnection, ct);
                 ValidateResolution(updated, project.RepositoryConnection, resolution);
                 var ready = updated with { Resolution = resolution, Status = DependencyApprovalStatus.ReadyForReview, Version = updated.Version + 1 };
                 if (!await approvals.SaveAsync(ready, updated.Version, ct)) throw new ConcurrencyException(); updated = ready;
@@ -101,7 +102,8 @@ public sealed partial class DependencyGovernance(IDependencyApprovalStore approv
             catch (Exception error) when (error is not OperationCanceledException && error is not ConcurrencyException)
             {
                 // An ambiguous acquisition remains Resolving and can only be reconciled by an explicit owner read.
-                var blocked = updated with { Diagnostic = "Acquisition outcome requires reconciliation; no source permission or network access was granted to agents.", Version = updated.Version + 1 };
+                var known = error is DependencyAcquisitionException { Failure.OutcomeKnown: true };
+                var blocked = updated with { Status = known ? DependencyApprovalStatus.ResolutionFailed : DependencyApprovalStatus.Resolving, Diagnostic = error is DependencyAcquisitionException acquisition ? JsonSerializer.Serialize(acquisition.Failure) : "Acquisition outcome requires reconciliation; no source permission or network access was granted to agents.", Version = updated.Version + 1 };
                 if (await approvals.SaveAsync(blocked, updated.Version, ct)) updated = blocked;
             }
         }
@@ -121,7 +123,7 @@ public sealed partial class DependencyGovernance(IDependencyApprovalStore approv
     public static string ResolutionFingerprint(DependencyResolution resolution) => Hash(JsonSerializer.Serialize(resolution with { PlanSha256 = "" }));
     public static void ValidateResolution(DependencyApprovalRequest request, RepositoryConnection repository, DependencyResolution resolution)
     {
-        if (resolution.PlanSha256 != ResolutionFingerprint(resolution) || resolution.Id != request.Id || resolution.ProjectId != request.ProjectId || resolution.RunId != request.RunId || resolution.Repository != repository || resolution.Packages.Length is < 1 or > 500 || resolution.Manifest.Length > 65536 || resolution.Lock.Length > 2_000_000 || !Regex.IsMatch(resolution.PlanSha256, "\\A[a-f0-9]{64}\\z") || resolution.Packages.Any(p => !PackageName().IsMatch(p.Name) || !ExactVersion().IsMatch(p.Version) || p.Source != "https://registry.npmjs.org" || !Regex.IsMatch(p.Integrity, "\\Asha512-[A-Za-z0-9+/]{86}==\\z"))) throw new InvalidOperationException("Executor resolution does not match the authorized scope or immutable package integrity policy.");
+        if (resolution.PlanSha256 != ResolutionFingerprint(resolution) || resolution.Id != request.Id || resolution.ProjectId != request.ProjectId || resolution.RunId != request.RunId || resolution.Repository != repository || resolution.Packages.Length is < 1 or > 500 || resolution.Manifest.Length > 65536 || resolution.Lock.Length > 2_000_000 || !Regex.IsMatch(resolution.PlanSha256, "\\A[a-f0-9]{64}\\z") || resolution.Packages.Any(p => !PackageName().IsMatch(p.Name) || !ExactVersion().IsMatch(p.Version) || p.Source != "https://registry.npmjs.org" || p.Direct && p.CacheRequired == false || !Regex.IsMatch(p.Integrity, "\\Asha512-[A-Za-z0-9+/]{86}==\\z"))) throw new InvalidOperationException("Executor resolution does not match the authorized scope or immutable package integrity policy.");
         foreach (var direct in request.Proposal.Packages)
             if (!resolution.Packages.Any(x => x.Direct && x.Name == direct.Name && x.Version == direct.Version && x.Development == direct.Development)) throw new InvalidOperationException("Resolved plan omitted or changed a requested direct dependency.");
     }

@@ -30,6 +30,7 @@ public sealed class UnixExecutionSandbox : IExecutionSandbox, AIEngineeringPlatf
     private AIEngineeringPlatform.Application.Dependencies.IDependencyExecutor Dependencies => new DependencyControlClient(client, "http://local-executor.invalid/", client.DefaultRequestHeaders.Authorization!.Parameter!);
     public Task<AIEngineeringPlatform.Domain.DependencyResolution> ResolveAsync(AIEngineeringPlatform.Domain.DependencyApprovalRequest request, AIEngineeringPlatform.Domain.RepositoryConnection repository, CancellationToken ct) => Dependencies.ResolveAsync(request, repository, ct);
     public Task<AIEngineeringPlatform.Domain.DependencyResolution?> ResolutionAsync(string id, CancellationToken ct) => Dependencies.ResolutionAsync(id, ct);
+    public Task<AIEngineeringPlatform.Domain.DependencyResolution?> ReconcileAsync(string id, CancellationToken ct) => Dependencies.ReconcileAsync(id, ct);
     public Task GrantAsync(AIEngineeringPlatform.Domain.DependencyGrant grant, CancellationToken ct) => Dependencies.GrantAsync(grant, ct);
     public bool Configured => File.Exists(socketPath);
     public Task<SandboxResponse> ExecuteAsync(SandboxRequest request, CancellationToken ct) => Configured ? adapter.ExecuteAsync(request, ct) : throw new ConfigurationException("Local executor socket is unavailable. Start the host daemon.");

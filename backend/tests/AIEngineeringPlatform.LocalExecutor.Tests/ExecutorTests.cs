@@ -149,7 +149,7 @@ public sealed partial class ExecutorTests
         var timeout = await fixture.Executor.ExecuteAsync(Request("isolation", "timeout", "RunCommand", new { profile = "lint" }) with { TimeoutSeconds = 1 }, default); Assert.False(timeout.Success); Assert.Equal(124, timeout.ExitCode);
         var flood = await fixture.Executor.ExecuteAsync(Request("isolation", "flood", "RunCommand", new { profile = "format" }) with { OutputLimitBytes = 1024 }, default); Assert.False(flood.Success); Assert.Equal(125, flood.ExitCode);
         await Assert.ThrowsAsync<ExecutorFailureException>(() => fixture.Executor.ExecuteAsync(Request("isolation", "zero-tests", "RunTests", new { profile = "frontend" }), default));
-        var containers = await fixture.Process.RunAsync("/usr/bin/docker", ["ps", "-aq", "--filter", "label=aep.executor"], null, 10, 10000, default); Assert.Equal("", containers.Output.Trim());
+        var containers = await fixture.Process.RunAsync("/usr/bin/docker", ["ps", "-aq", "--filter", "label=aep.executor=" + new DockerWorkload(fixture.Options, fixture.Process).OwnershipLabel], null, 10, 10000, default); Assert.Equal("", containers.Output.Trim());
     }
     [DockerFact]
     public async Task RealUnixDaemonRequiresAuthenticationAndSurvivesRestart()
@@ -198,6 +198,14 @@ public sealed partial class ExecutorTests
             Assert.False(unavailable.OutcomeUnknown); Assert.Equal(ExecutorFailureReason.ImageUnavailable, unavailable.Reason);
             var afterFailure = await client.ExecuteAsync(Request("socket-run", "after-failure", "ReadRepository", new { }), default);
             Assert.Equal(written!.DiffHash, afterFailure.DiffHash);
+            var dependencyProposal = new DependencyProposal(1, "npm", "npm", "https://registry.npmjs.org", [new("is-number", "7.0.0", false, "Transport regression")], [], "Unknown", [], [], [], []);
+            var dependencyRequest = new DependencyApprovalRequest(new string('f', 64), "project", "socket-run", RunStage.Planning, AgentRole.Architect, "task", "op", 0, dependencyProposal,
+                DependencyApprovalStatus.Resolving, 1, DateTimeOffset.UtcNow, [new("Resolve", "owner", DateTimeOffset.UtcNow, [], true, "Explicit fixture authorization")], ExecutionDeadline: DateTimeOffset.UtcNow.AddMinutes(-1));
+            var dependencyError = await Assert.ThrowsAsync<AIEngineeringPlatform.Application.Dependencies.DependencyAcquisitionException>(() => client.ResolveAsync(dependencyRequest, new("test-owner", "aep-fixture", 1), default));
+            Assert.Equal("limits", dependencyError.Failure.Phase); Assert.Equal("dependency_limits_failed", dependencyError.Failure.Code);
+            Assert.False(dependencyError.Failure.AcquisitionStarted); Assert.True(dependencyError.Failure.OutcomeKnown);
+            var reconciledError = await Assert.ThrowsAsync<AIEngineeringPlatform.Application.Dependencies.DependencyAcquisitionException>(() => client.ReconcileAsync(dependencyRequest.Id, default));
+            Assert.Equal(dependencyError.Failure, reconciledError.Failure);
             var replayWrite = await client.ExecuteAsync(Request("socket-run", "write-3", "WriteFile", new { path = "source-3.cs", content = "// preserved source" }), default);
             Assert.Equal(written, replayWrite);
             var unauthorizedError = await Assert.ThrowsAsync<ExecutorFailureException>(() => unauthorized.ExecuteAsync(Request("socket-run", "unauthorized", "ReadRepository", new { }), default));
@@ -289,7 +297,7 @@ public sealed partial class ExecutorTests
     private sealed class Fixture : IAsyncDisposable
     {
         public required string Root; public required string Remote; public required ControlledProcess Process; public required LocalExecutionService Executor; public required string OriginalHead; public required ExecutorOptions Options;
-        public static async Task<Fixture> CreateAsync()
+        public static async Task<Fixture> CreateAsync(bool readmeOnly = false)
         {
             var image = Environment.GetEnvironmentVariable("EXECUTOR_TEST_IMAGE") ?? throw new InvalidOperationException("EXECUTOR_TEST_IMAGE is required for opted-in real tests.");
             var root = Path.Combine(Path.GetTempPath(), "aep-executor-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root); Directory.CreateDirectory(Path.Combine(root, "control-home"));
@@ -310,6 +318,7 @@ public sealed partial class ExecutorTests
             File.WriteAllText(Path.Combine(seed, "fixture.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType></PropertyGroup></Project>");
             File.WriteAllText(Path.Combine(seed, "Feature.cs"), "public static class Feature { public static int Answer() => 1; }");
             File.WriteAllText(Path.Combine(seed, "Program.cs"), "if (Feature.Answer() != 1) throw new System.Exception(\"Assertion failed\"); System.Console.WriteLine(\"C# assertion executed; Total: 1\");");
+            if (readmeOnly) { foreach (var file in Directory.GetFiles(seed)) File.Delete(file); File.WriteAllText(Path.Combine(seed, "README.md"), "Disposable dependency incident reproduction\n"); }
             await Git(seed, "add", "."); await Git(seed, "-c", "user.name=Executor Test", "-c", "user.email=test@localhost", "commit", "-m", "Create disposable test fixture"); await Git(seed, "remote", "add", "origin", remote); await Git(seed, "push", "origin", "main");
             var head = await process.RunAsync("/usr/bin/git", ["rev-parse", "HEAD"], seed, 10, 10000, default);
             return new() { Root = root, Remote = remote, Process = process, Executor = new(options, process, new(options, process)), OriginalHead = head.Output.Trim(), Options = options };

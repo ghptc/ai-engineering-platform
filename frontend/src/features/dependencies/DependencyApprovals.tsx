@@ -32,6 +32,8 @@ interface Package {
   hasInstallScript?: boolean;
   installPath?: string;
   alias?: string;
+  cacheRequired?: boolean;
+  runtimeCached?: boolean;
 }
 export interface DependencyRequest {
   id: string;
@@ -65,6 +67,7 @@ export interface DependencyRequest {
     manifest: string;
     lock: string;
     cacheSha256: string;
+    resolverImage?: string;
   };
   audit: {
     action: string;
@@ -177,7 +180,11 @@ export function DependencyApprovalPanel({
       {entry.diagnostic && (
         <Alert
           type="warning"
-          title="Reconciliation required"
+          title={
+            entry.status === "ResolutionFailed"
+              ? "Acquisition failed; administrator remediation required"
+              : "Reconciliation required"
+          }
           description={entry.diagnostic}
         />
       )}
@@ -289,6 +296,10 @@ export function DependencyApprovalPanel({
             render: (_, p) => (
               <>
                 {p.securityStatus || "Unknown — not scanned"}
+                {p.cacheRequired === false && (
+                  <Tag>Optional package for another runtime</Tag>
+                )}
+                {p.runtimeCached && <Tag>Verified in pinned runtime</Tag>}
                 {p.hasInstallScript && (
                   <Tag color="orange">Install script present; disabled</Tag>
                 )}
@@ -372,6 +383,11 @@ export function DependencyApprovalPanel({
                       <Typography.Paragraph copyable>
                         Cache SHA-256 {entry.resolution.cacheSha256}
                       </Typography.Paragraph>
+                      {entry.resolution.resolverImage && (
+                        <Typography.Paragraph copyable>
+                          Runtime image {entry.resolution.resolverImage}
+                        </Typography.Paragraph>
+                      )}
                       <p>Lock preview (bounded):</p>
                       <pre>{entry.resolution.lock.slice(0, 16000)}</pre>
                     </>
@@ -412,14 +428,6 @@ export function DependencyApprovalPanel({
           <>
             <Button onClick={() => begin("Reconcile")}>
               Reconcile existing resolution
-            </Button>
-            <Button
-              onClick={() => {
-                setNetwork(false);
-                begin("RetryResolution");
-              }}
-            >
-              Authorize reconciled acquisition retry
             </Button>
           </>
         )}

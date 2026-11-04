@@ -68,4 +68,33 @@ public sealed class DependencyGovernanceTests
         await Assert.ThrowsAsync<ArgumentException>(() => service.DecideAsync("id", 0, "Resolve", [], false, "Inspect packages", "owner", default));
         await executor.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default!, default);
     }
+    [Theory]
+    [InlineData(true, DependencyApprovalStatus.ResolutionFailed)]
+    [InlineData(false, DependencyApprovalStatus.Resolving)]
+    public async Task FailuresPersistKnownOutcomeAndUnknownOperationsCannotReplay(bool known, DependencyApprovalStatus expected)
+    {
+        var approvals = Substitute.For<IDependencyApprovalStore>(); var store = Substitute.For<IPlatformStore>(); var executor = Substitute.For<IDependencyExecutor>();
+        var repository = new RepositoryConnection("test-owner", "aep-fixture", 1); var project = new Project { Id = "project", RepositoryConnection = repository };
+        var request = new DependencyApprovalRequest("id", "project", "run", RunStage.Planning, AgentRole.Architect, "task", "op", 0, Proposal, DependencyApprovalStatus.Pending, 0, DateTimeOffset.UtcNow, []);
+        approvals.GetAsync("id", default).Returns(_ => request);
+        approvals.SaveAsync(Arg.Any<DependencyApprovalRequest>(), Arg.Any<long?>(), default).Returns(x => { request = x.Arg<DependencyApprovalRequest>(); return true; });
+        store.GetProjectAsync("project", default).Returns(project);
+        store.GetRunAsync("run", default).Returns(new ExecutionRun { Id = "run", ProjectId = "project", ProjectSnapshot = project, CurrentStage = RunStage.AwaitingDependencyApproval, ResumeStage = RunStage.Planning });
+        executor.ResolveAsync(Arg.Any<DependencyApprovalRequest>(), repository, default).Returns<DependencyResolution>(_ => throw new DependencyAcquisitionException(new("registry_response", "dependency_registry_response_limit", true, known, known ? "RepairConfiguration" : "Reconcile")));
+        var service = new DependencyGovernance(approvals, store, executor);
+        var failed = await service.DecideAsync("id", 0, "Resolve", [], true, "Explicit resolution authorization", "owner", default);
+        Assert.Equal(expected, failed.Status); Assert.Contains("dependency_registry_response_limit", failed.Diagnostic);
+        Assert.Single(failed.Audit); Assert.Equal("owner", failed.Audit[0].Owner);
+        await Assert.ThrowsAsync<ArgumentException>(() => service.DecideAsync("id", failed.Version, "RetryResolution", [], true, "Blind replay denied", "owner", default));
+        await executor.Received(1).ResolveAsync(Arg.Any<DependencyApprovalRequest>(), repository, default);
+        if (!known)
+        {
+            executor.ReconcileAsync("id", default).Returns<DependencyResolution?>(_ => throw new DependencyAcquisitionException(new("reconciliation", "dependency_acquisition_interrupted", true, true, "RepairConfiguration")));
+            var reconciled = await service.DecideAsync("id", failed.Version, "Reconcile", [], false, "Read and reconcile the original attempt", "owner", default);
+            Assert.Equal(DependencyApprovalStatus.ResolutionFailed, reconciled.Status);
+            Assert.Equal(2, reconciled.Audit.Length); Assert.False(reconciled.Audit.Last().RegistryAccess);
+            await executor.Received(1).ResolveAsync(Arg.Any<DependencyApprovalRequest>(), repository, default);
+        }
+        await store.DidNotReceiveWithAnyArgs().SaveRunAsync(default!, default, default, default);
+    }
 }
