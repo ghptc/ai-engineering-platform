@@ -8,6 +8,7 @@ public sealed class RemoteExecutionSandbox(HttpClient http, string? endpoint, st
     private AIEngineeringPlatform.Application.Dependencies.IDependencyExecutor Dependencies => Configured ? new DependencyControlClient(http, endpoint!, token!) : throw new ConfigurationException("Secure dependency executor is not configured.");
     public Task<AIEngineeringPlatform.Domain.DependencyResolution> ResolveAsync(AIEngineeringPlatform.Domain.DependencyApprovalRequest request, AIEngineeringPlatform.Domain.RepositoryConnection repository, CancellationToken ct) => Dependencies.ResolveAsync(request, repository, ct);
     public Task<AIEngineeringPlatform.Domain.DependencyResolution?> ResolutionAsync(string id, CancellationToken ct) => Dependencies.ResolutionAsync(id, ct);
+    public Task<AIEngineeringPlatform.Domain.DependencyResolution?> ReconcileAsync(string id, CancellationToken ct) => Dependencies.ReconcileAsync(id, ct);
     public Task GrantAsync(AIEngineeringPlatform.Domain.DependencyGrant grant, CancellationToken ct) => Dependencies.GrantAsync(grant, ct);
     public bool Configured => Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) && (uri.Scheme == "https" || unixTransport && endpoint == "http://local-executor.invalid/") && string.IsNullOrEmpty(uri.UserInfo) && !string.IsNullOrWhiteSpace(token);
     public async Task<SandboxResponse> ExecuteAsync(SandboxRequest request, CancellationToken ct)

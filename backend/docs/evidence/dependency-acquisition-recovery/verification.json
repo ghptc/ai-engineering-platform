@@ -1,0 +1,145 @@
+{
+  "RecordedAtUtc": "2026-11-04T00:18:06.104883+00:00",
+  "BaseRevision": "e2045ec",
+  "SourceSha256": "7a9c2b39c0c171541d5772161b49866f39ae9a1d290291f56d46cdc34aa1f725",
+  "BackendSuites": [
+    {
+      "Assembly": "AIEngineeringPlatform.Application.Tests.dll",
+      "Passed": 93,
+      "Skipped": 0,
+      "Failed": 0,
+      "Total": 93
+    },
+    {
+      "Assembly": "AIEngineeringPlatform.Architecture.Tests.dll",
+      "Passed": 2,
+      "Skipped": 0,
+      "Failed": 0,
+      "Total": 2
+    },
+    {
+      "Assembly": "AIEngineeringPlatform.Domain.Tests.dll",
+      "Passed": 19,
+      "Skipped": 0,
+      "Failed": 0,
+      "Total": 19
+    },
+    {
+      "Assembly": "AIEngineeringPlatform.Integration.Tests.dll",
+      "Passed": 249,
+      "Skipped": 2,
+      "Failed": 0,
+      "Total": 251
+    },
+    {
+      "Assembly": "AIEngineeringPlatform.LocalExecutor.Tests.dll",
+      "Passed": 87,
+      "Skipped": 1,
+      "Failed": 0,
+      "Total": 88
+    }
+  ],
+  "BackendPassed": 450,
+  "BackendSkipped": 3,
+  "BackendFailed": 0,
+  "FinalLocalExecutorRerun": {
+    "Passed": 87,
+    "Skipped": 1,
+    "Failed": 0,
+    "Reason": "Final diagnostic phase and historical failure-receipt preservation; other backend components unchanged"
+  },
+  "Frontend": {
+    "UnitPassed": 64,
+    "BrowserPassed": 7,
+    "TypecheckPassed": true,
+    "ProductionBuildPassed": true,
+    "ExistingLargeChunkWarning": true
+  },
+  "Images": {
+    "Application": "sha256:09fdfbd7a3304d3e469070763fb1e1ae3b6dd0fd54244b84b252f78789362c27",
+    "Daemon": "sha256:39cf82a058df3b8911d01f00e625e521c83bc8c9dea26a6eadb82e86df227730",
+    "Runtime": "sha256:22064d2f3657061599cd34274fbd255e0ba01032f54c1367409e39a18c420ebd"
+  },
+  "ComposeConfigurationValid": true,
+  "OriginalServicesHealthyAndNotReplaced": true,
+  "ProtectedIncident": {
+    "RunId": "e5a957b89f044c219fb7448adc5e35cb",
+    "RequestId": "e31031feefd2066e1f40dbf3b2408fcf5e821ab3fb8e359d4ae78c11296d2b39",
+    "FileCount": 44,
+    "HashInventorySha256": "b71c20fea53c743f0e986fac92a1fb6753e6d997272dd6679e39e80fcc3802d9",
+    "FinalInventoryEqual": true,
+    "AcquisitionMarkerCount": 5,
+    "RunResumed": false,
+    "RepositoryModified": false
+  },
+  "MongoDiagnosis": {
+    "Failure": "Too many open files",
+    "FailedTestServerSoftLimit": 1024,
+    "ObservedFailedServerDescriptors": [
+      1012,
+      1004
+    ],
+    "CorrectedIsolatedTestPort": 27030,
+    "CorrectedSoftLimit": 65536,
+    "ObservedCorrectedServerDescriptors": 1753,
+    "ExistingProductionSoftLimit": 65536,
+    "FailedTestServersAndVolumesPreserved": true
+  },
+  "VerificationLimits": [
+    "Live OpenAI and GitHub App delivery not opted in",
+    "Remote disposable Git test not opted in; real local bare Git/Docker/npm exercised",
+    "Full bootstrap plus incident package installation exceeded unchanged 256 MB workspace; bounded three-package offline smoke omits optional packages",
+    "512 MB full-install failure had no established OOM cause; successful bounded smoke uses 1024 MB",
+    "No application, daemon or runtime deployment; protected incident not replayed or resumed"
+  ],
+  "Logs": [
+    {
+      "Name": "aep-dependency-final-all-backend.log",
+      "Sha256": "61327bbcab61fd4b51544b5218e744eeb4c1fe5acc815ed82d2c99f0368c31ca"
+    },
+    {
+      "Name": "aep-dependency-final-local-executor.log",
+      "Sha256": "bc49c1787376648089f4f7a2da88355e90b8b3a79b37ee765ac13af7f12d0d9b"
+    },
+    {
+      "Name": "aep-dependency-final-restore.log",
+      "Sha256": "40d104602671164ab3958225da3e1c8cabd55f0251d6df6bc911d9d5a24f44ce"
+    },
+    {
+      "Name": "aep-dependency-final-build.log",
+      "Sha256": "f77a2206e54fc8c1d313c7434aab6c28d46f110867e72e0c7989b4e80b9ca5af"
+    },
+    {
+      "Name": "aep-dependency-final-npm-ci.log",
+      "Sha256": "9e353450984f41863165dc43e4c6a0456ad1a26b6e5973dfd61edd59120b19ff"
+    },
+    {
+      "Name": "aep-dependency-final-typecheck.log",
+      "Sha256": "4d35b5fe574f50746ee32b94246a5ff384af9e601c32882897ceeaca3f4768fb"
+    },
+    {
+      "Name": "aep-dependency-final-frontend-tests.log",
+      "Sha256": "4e06e5e9ce649c636e1829ea16b1f652789da074e8aec0e2e6e90ca891d2ec53"
+    },
+    {
+      "Name": "aep-dependency-final-frontend-build.log",
+      "Sha256": "757e73452698a86e5feaa042493533705b9a6946deafcecade00e6c5b803cfc4"
+    },
+    {
+      "Name": "aep-dependency-final-e2e.log",
+      "Sha256": "76be1170f1a9f2ed0ca711a0373cd244b29f907b533edd36097ca2dc42ac7d34"
+    },
+    {
+      "Name": "aep-dependency-final-platform-image.log",
+      "Sha256": "5e94ab5fd5ebfcc055a7ccbd3b641b5287dbbe15533675dd38e92b8d46d1c231"
+    },
+    {
+      "Name": "aep-dependency-final-executor-image.log",
+      "Sha256": "a340b80a0b34cb49c29dc77d28702286540aa7e112788ea9483c249a123ffb35"
+    },
+    {
+      "Name": "aep-dependency-recovery-runtime.log",
+      "Sha256": "1f7ee9dd90219eb3fb4c45f7412d36a7bc41431c142a9f7d405fd4fc6a791aea"
+    }
+  ]
+}

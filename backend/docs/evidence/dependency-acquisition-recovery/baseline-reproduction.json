@@ -1,0 +1,18 @@
+{
+  "BaselineRevision": "e2045ec",
+  "Fixture": "Disposable local bare Git repository with README.md only",
+  "RequestedPackages": [
+    "pdf-lib@1.17.1",
+    "pdfjs-dist@5.4.624",
+    "@playwright/test@1.56.1"
+  ],
+  "RuntimeImage": "sha256:8d4b66a539000a4357faa7dac83f1f020a0787e24f8be074f4ba3a5e7df5316c",
+  "ExactExceptionType": "System.InvalidOperationException",
+  "ExactExceptionMessage": "Registry response exceeds byte bound.",
+  "ValidatedRegistryPath": "/playwright",
+  "MetadataResponseLimitBytes": 8000000,
+  "BaselineAssertionPassed": true,
+  "Instrumentation": "Validated registry path retained on exception; acquisition behavior unchanged",
+  "LogSha256": "a55d9c4b36a7b02b9efa91ffb3fd570daf3c2dfc6ed2d946a07a3c7c25433f5e",
+  "ProtectedRunOperatedOn": false
+}

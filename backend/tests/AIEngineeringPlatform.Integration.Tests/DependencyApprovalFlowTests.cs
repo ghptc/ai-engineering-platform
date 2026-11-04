@@ -127,6 +127,7 @@ public sealed class DependencyApprovalFlowTests
             return Task.FromResult(plan with { PlanSha256 = DependencyGovernance.ResolutionFingerprint(plan) });
         }
         public Task<DependencyResolution?> ResolutionAsync(string id, CancellationToken ct) => Task.FromResult<DependencyResolution?>(null);
+    public Task<DependencyResolution?> ReconcileAsync(string id, CancellationToken ct) => ResolutionAsync(id, ct);
         public Task GrantAsync(DependencyGrant grant, CancellationToken ct) { Grants++; return Task.CompletedTask; }
     }
 }

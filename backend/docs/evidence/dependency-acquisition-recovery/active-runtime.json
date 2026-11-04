@@ -1,0 +1,15 @@
+{
+  "ExecutorContainer": "aep-executor-1",
+  "ExecutorContainerImage": "sha256:a94afa8020c05a5d7a340baa50b63f15fe832dbab072f7e3042807f37c56ce8e",
+  "ExecutorStartedAtUtc": "2026-11-01T16:54:22.050401682Z",
+  "RuntimeImage": "sha256:8d4b66a539000a4357faa7dac83f1f020a0787e24f8be074f4ba3a5e7df5316c",
+  "Evidence": "All five profiles in protected capability receipts from the current daemon lifetime use the same image ID",
+  "CapabilityReceiptWriteTimesUtc": [
+    "2026-11-01T16:56:20.459208254Z",
+    "2026-11-01T16:57:03.254996579Z"
+  ],
+  "HelperPresentInInspectedExactImage": true,
+  "HelperInputBoundBytes": 33554432,
+  "InspectionMethod": "Read trusted helper from an unstarted disposable container; no workload execution",
+  "ActiveExecutorRestartedOrRepinned": false
+}
